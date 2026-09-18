@@ -57,9 +57,16 @@ public final class LoopCompletionHUDView: BaseHUDView {
 
     public var closedLoopDisallowedLocalizedDescription: String?
 
+    public var lastGlucoseStartDate: Date? {
+        didSet {
+            updateDisplay(nil)
+            assertTimer()
+        }
+    }
+
     public func assertTimer(_ active: Bool = true) {
-        if active && window != nil, let date = lastLoopCompleted {
-            initTimer(date)
+        if active && window != nil, (lastLoopCompleted != nil || lastGlucoseStartDate != nil) {
+            initTimer()
         } else {
             updateTimer = nil
         }
@@ -85,12 +92,11 @@ public final class LoopCompletionHUDView: BaseHUDView {
         self.tintColor = tintColor
     }
 
-    private func initTimer(_ startDate: Date) {
-        let updateInterval = TimeInterval(minutes: 1)
+    private func initTimer() {
+        if updateTimer != nil { return }
 
         let timer = Timer(
-            fireAt: startDate.addingTimeInterval(2),
-            interval: updateInterval,
+            timeInterval: 1.0,
             target: self,
             selector: #selector(updateDisplay(_:)),
             userInfo: nil,
@@ -147,6 +153,13 @@ public final class LoopCompletionHUDView: BaseHUDView {
     }()
 
     @objc private func updateDisplay(_: Timer?) {
+        if let glucoseDate = lastGlucoseStartDate {
+            let elapsed = max(0, -glucoseDate.timeIntervalSinceNow)
+            loopStateView.elapsedTime = elapsed
+        } else {
+            loopStateView.elapsedTime = nil
+        }
+
         lastLoopMessage = ""
         let timeAgoToIncludeTimeStamp: TimeInterval = .minutes(20)
         let timeAgoToIncludeDate: TimeInterval = .hours(4)

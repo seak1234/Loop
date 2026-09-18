@@ -10,7 +10,35 @@ import UIKit
 
 final class LoopStateView: UIView {
     var firstDataUpdate = true
-    
+
+    public let elapsedLabel: UILabel = {
+        let label = UILabel()
+        label.textAlignment = .center
+        label.textColor = .label
+        label.font = UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .bold)
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.65
+        label.text = "–"
+        return label
+    }()
+
+    public var elapsedTime: TimeInterval? {
+        didSet {
+            updateElapsedDisplay()
+        }
+    }
+
+    private func updateElapsedDisplay() {
+        guard let elapsed = elapsedTime else {
+            elapsedLabel.text = "–"
+            return
+        }
+        let totalSeconds = Int(max(0, elapsed))
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        elapsedLabel.text = String(format: "%d:%02d", minutes, seconds)
+    }
+
     override func tintColorDidChange() {
         super.tintColorDidChange()
 
@@ -19,6 +47,7 @@ final class LoopStateView: UIView {
 
     private func updateTintColor() {
         shapeLayer.strokeColor = tintColor.cgColor
+        elapsedLabel.textColor = tintColor
     }
 
     var open = false {
@@ -40,18 +69,19 @@ final class LoopStateView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        shapeLayer.lineWidth = 8
-        shapeLayer.fillColor = UIColor.clear.cgColor
-        updateTintColor()
-
-        shapeLayer.path = drawPath()
+        setupView()
     }
 
     required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
 
+        setupView()
+    }
+
+    private func setupView() {
         shapeLayer.lineWidth = 8
         shapeLayer.fillColor = UIColor.clear.cgColor
+        addSubview(elapsedLabel)
         updateTintColor()
 
         shapeLayer.path = drawPath()
@@ -61,6 +91,7 @@ final class LoopStateView: UIView {
         super.layoutSubviews()
 
         shapeLayer.path = drawPath()
+        elapsedLabel.frame = bounds.insetBy(dx: 4, dy: 4)
     }
 
     private func drawPath(lineWidth: CGFloat? = nil) -> CGPath {
