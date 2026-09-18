@@ -47,7 +47,7 @@ final class LoopStateView: UIView {
 
     private func updateTintColor() {
         shapeLayer.strokeColor = tintColor.cgColor
-        elapsedLabel.textColor = tintColor
+        elapsedLabel.textColor = .label
     }
 
     var open = false {
