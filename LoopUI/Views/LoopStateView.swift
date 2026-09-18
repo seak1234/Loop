@@ -15,9 +15,9 @@ final class LoopStateView: UIView {
         let label = UILabel()
         label.textAlignment = .center
         label.textColor = .label
-        label.font = UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .bold)
+        label.font = UIFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .semibold)
         label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.65
+        label.minimumScaleFactor = 0.7
         label.text = "–"
         return label
     }()
@@ -79,7 +79,7 @@ final class LoopStateView: UIView {
     }
 
     private func setupView() {
-        shapeLayer.lineWidth = 8
+        shapeLayer.lineWidth = 6.5
         shapeLayer.fillColor = UIColor.clear.cgColor
         addSubview(elapsedLabel)
         updateTintColor()
@@ -91,7 +91,7 @@ final class LoopStateView: UIView {
         super.layoutSubviews()
 
         shapeLayer.path = drawPath()
-        elapsedLabel.frame = bounds.insetBy(dx: 4, dy: 4)
+        elapsedLabel.frame = bounds.insetBy(dx: 6, dy: 6)
     }
 
     private func drawPath(lineWidth: CGFloat? = nil) -> CGPath {
@@ -121,11 +121,11 @@ final class LoopStateView: UIView {
                 if animated {
                     let path = CABasicAnimation(keyPath: "path")
                     path.fromValue = shapeLayer.path ?? drawPath()
-                    path.toValue = drawPath(lineWidth: 16)
+                    path.toValue = drawPath(lineWidth: 13)
 
                     let width = CABasicAnimation(keyPath: "lineWidth")
                     width.fromValue = shapeLayer.lineWidth
-                    width.toValue = 10
+                    width.toValue = 8.5
 
                     let group = CAAnimationGroup()
                     group.animations = [path, width]
