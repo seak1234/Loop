@@ -576,13 +576,28 @@ final class StatusTableViewController: LoopChartsTableViewController {
         return statusCharts
     }
 
-    private func updateChartDateRange() {
-        // How far back should we show data? Use the screen size as a guide.
-        let availableWidth = (refreshContext.newSize ?? tableView.bounds.size).width - charts.fixedHorizontalMargin
+    private var selectedHistoryHours: Int {
+        get {
+            let saved = UserDefaults.standard.integer(forKey: "StatusChartsSelectedHistoryHours")
+            return HistoryDurationSelectorControl.availableHours.contains(saved) ? saved : 3
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "StatusChartsSelectedHistoryHours")
+        }
+    }
 
-        let totalHours = floor(Double(availableWidth / LoopConstants.minimumChartWidthPerHour))
-        let futureHours = ceil(deviceManager.doseStore.longestEffectDuration.hours)
-        let historyHours = max(LoopConstants.statusChartMinimumHistoryDisplay.hours, totalHours - futureHours)
+    private func updateHistoryDuration(_ newHours: Int) {
+        guard selectedHistoryHours != newHours else { return }
+        selectedHistoryHours = newHours
+        updateChartDateRange()
+        refreshContext.formUnion(RefreshContext.all)
+        reloadData()
+    }
+
+    private func updateChartDateRange() {
+        let historyHours = Double(selectedHistoryHours)
+        let futureHours: Double = 6.0
+        let totalHours = historyHours + futureHours
 
         let date = Date(timeIntervalSinceNow: -TimeInterval(hours: historyHours))
         let chartStartDate = Calendar.current.nextDate(after: date, matching: DateComponents(minute: 0), matchingPolicy: .strict, direction: .backward) ?? date
@@ -1218,19 +1233,25 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
                 cell.setDotColor(.glucoseTintColor)
                 cell.doesNavigate = automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled
+                cell.configureHistoryDurationSelector(selectedHours: self.selectedHistoryHours) { [weak self] newHours in
+                    self?.updateHistoryDuration(newHours)
+                }
             case .iob:
+                cell.hideHistoryDurationSelector()
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.iobChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Active Insulin", comment: "The title of the Insulin On-Board graph"))
                 cell.setDotColor(.insulinTintColor)
             case .dose:
+                cell.hideHistoryDurationSelector()
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.doseChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Insulin Delivery", comment: "The title of the insulin delivery graph"))
                 cell.setDotColor(.insulinTintColor)
             case .cob:
+                cell.hideHistoryDurationSelector()
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.cobChart(withFrame: frame)?.view
                 })
