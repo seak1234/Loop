@@ -20,14 +20,22 @@ public final class BasalRateHUDView: BaseHUDView {
     @IBOutlet private weak var basalRateLabel: UILabel! {
         didSet {
             basalRateLabel?.text = String(format: basalRateFormatString, "–")
-            basalRateLabel?.textColor = .secondaryLabel
+            basalRateLabel?.textColor = tintColor
+            basalRateLabel?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
 
             accessibilityValue = LocalizedString("Unknown", comment: "Accessibility value for an unknown value")
         }
     }
 
+    public override func awakeFromNib() {
+        super.awakeFromNib()
+        basalRateLabel?.textColor = tintColor
+        basalRateLabel?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    }
+
     public override func tintColorDidChange() {
         super.tintColorDidChange()
+        basalRateLabel?.textColor = tintColor
     }
 
     private lazy var basalRateFormatString = LocalizedString("%@ U", comment: "The format string describing the basal rate.")
@@ -38,6 +46,8 @@ public final class BasalRateHUDView: BaseHUDView {
 
         if let rateString = decimalFormatter.string(from: rate) {
             basalRateLabel?.text = String(format: basalRateFormatString, rateString)
+            basalRateLabel?.textColor = tintColor
+            basalRateLabel?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
             accessibilityValue = String(format: LocalizedString("%1$@ units per hour at %2$@", comment: "Accessibility format string describing the basal rate. (1: localized basal rate value)(2: last updated time)"), rateString, time)
         } else {
             basalRateLabel?.text = nil
