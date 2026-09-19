@@ -10,22 +10,18 @@ import UIKit
 
 // MARK: - Color palette for common elements
 extension UIColor {
-    @nonobjc public static let carbs = UIColor { traitCollection in
-        traitCollection.userInterfaceStyle == .dark
-            ? UIColor(red: 52/255, green: 220/255, blue: 160/255, alpha: 1.0) // Luminous bright emerald
-            : UIColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1.0) // Vibrant emerald
+    @nonobjc public static let carbs = UIColor { _ in
+        UIColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1.0) // Reference emerald green from HTML (#10b981)
     }
     
-    @nonobjc public static let fresh = UIColor(named: "fresh") ?? HIGGreenColor()
+    @nonobjc public static let fresh = carbs
 
     @nonobjc public static let glucose = UIColor { _ in
         UIColor(red: 97/255, green: 192/255, blue: 218/255, alpha: 1.0) // Reference glucose blue (#61c0da)
     }
     
-    @nonobjc public static let insulin = UIColor { traitCollection in
-        traitCollection.userInterfaceStyle == .dark
-            ? UIColor(red: 251/255, green: 176/255, blue: 30/255, alpha: 1.0) // Luminous golden honey amber
-            : UIColor(red: 245/255, green: 158/255, blue: 11/255, alpha: 1.0)  // Radiant warm amber
+    @nonobjc public static let insulin = UIColor { _ in
+        UIColor(red: 245/255, green: 158/255, blue: 11/255, alpha: 1.0) // Reference amber/orange from HTML (#f59e0b)
     }
 
     // The loopAccent color is intended to be use as the app accent color.
