@@ -19,6 +19,7 @@ import SwiftCharts
 import os.log
 import Combine
 import WidgetKit
+import MockKit
 
 
 private extension RefreshContext {
@@ -144,7 +145,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         addScenarioStepGestureRecognizers()
 
-        tableView.backgroundColor = .secondarySystemBackground
+        tableView.backgroundColor = UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 10/255, green: 10/255, blue: 12/255, alpha: 1.0)
+                : UIColor(red: 241/255, green: 245/255, blue: 249/255, alpha: 1.0)
+        }
+        tableView.separatorStyle = .none
     
     }
 
@@ -187,6 +193,37 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         if !appearedOnce {
             appearedOnce = true
+            #if targetEnvironment(simulator)
+            if self.deviceManager.loopManager.settings.glucoseTargetRangeSchedule == nil {
+                let therapySettings = TherapySettings.mockTherapySettings
+                self.deviceManager.loopManager.mutateSettings { settings in
+                    settings.glucoseTargetRangeSchedule = therapySettings.glucoseTargetRangeSchedule
+                    settings.preMealTargetRange = therapySettings.correctionRangeOverrides?.preMeal
+                    settings.legacyWorkoutTargetRange = therapySettings.correctionRangeOverrides?.workout
+                    settings.suspendThreshold = therapySettings.suspendThreshold
+                    settings.maximumBolus = therapySettings.maximumBolus
+                    settings.maximumBasalRatePerHour = therapySettings.maximumBasalRatePerHour
+                    settings.insulinSensitivitySchedule = therapySettings.insulinSensitivitySchedule
+                    settings.carbRatioSchedule = therapySettings.carbRatioSchedule
+                    settings.basalRateSchedule = therapySettings.basalRateSchedule
+                    settings.defaultRapidActingModel = therapySettings.defaultRapidActingModel
+                }
+            }
+            if self.deviceManager.cgmManager == nil {
+                _ = self.deviceManager.setupCGMManager(withIdentifier: "MockCGMManager", prefersToSkipUserInteraction: true)
+                if let mockCGM = self.deviceManager.cgmManager as? MockCGMManager {
+                    mockCGM.dataSource = MockCGMDataSource(model: .sineCurve(parameters: (baseGlucose: HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 115), amplitude: HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 25), period: TimeInterval(hours: 4), referenceDate: Date())))
+                    mockCGM.backfillData(datingBack: .hours(24))
+                }
+            }
+            if self.deviceManager.pumpManager == nil,
+               let maximumBasalRate = self.deviceManager.loopManager.settings.maximumBasalRatePerHour,
+               let maxBolus = self.deviceManager.loopManager.settings.maximumBolus,
+               let basalSchedule = self.deviceManager.loopManager.settings.basalRateSchedule {
+                let settings = PumpManagerSetupSettings(maxBasalRateUnitsPerHour: maximumBasalRate, maxBolusUnits: maxBolus, basalSchedule: basalSchedule)
+                _ = self.deviceManager.setupPumpManager(withIdentifier: "MockPumpManager", initialSettings: settings, prefersToSkipUserInteraction: true)
+            }
+            #endif
             DispatchQueue.main.async {
                 self.log.debug("[reloadData] after HealthKit authorization")
                 self.reloadData()
@@ -390,7 +427,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         action: #selector(userTappedAddCarbs)
     )
     private lazy var bolusButton = makeToolbarButton(
-        systemName: "drop.fill",
+        image: StatusTableViewController.companionBolusIcon(),
         title: NSLocalizedString("Bolus", comment: "The label of the bolus entry button"),
         tintColor: .insulinTintColor,
         action: #selector(presentBolusScreen)
@@ -414,11 +451,61 @@ final class StatusTableViewController: LoopChartsTableViewController {
         return button
     }()
 
-    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, action: Selector) -> ToolbarButton {
+    private static func companionBolusIcon(size: CGSize = CGSize(width: 21, height: 21)) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cgContext = ctx.cgContext
+            let scaleX = size.width / 24.0
+            let scaleY = size.height / 24.0
+            cgContext.scaleBy(x: scaleX, y: scaleY)
+
+            // Outer precision delivery funnel with rounded vertices
+            let outerPath = UIBezierPath()
+            outerPath.move(to: CGPoint(x: 12, y: 21.2))
+            outerPath.addLine(to: CGPoint(x: 3.6, y: 6.8))
+            outerPath.addQuadCurve(to: CGPoint(x: 4.8, y: 4.8), controlPoint: CGPoint(x: 3.1, y: 5.4))
+            outerPath.addLine(to: CGPoint(x: 19.2, y: 4.8))
+            outerPath.addQuadCurve(to: CGPoint(x: 20.4, y: 6.8), controlPoint: CGPoint(x: 20.9, y: 5.4))
+            outerPath.close()
+
+            // Soft translucent interior fill matching fill-opacity="0.18" in companion template
+            UIColor.white.withAlphaComponent(0.18).setFill()
+            outerPath.fill()
+
+            // Outer stroke
+            UIColor.white.setStroke()
+            outerPath.lineWidth = 1.8
+            outerPath.lineCapStyle = .round
+            outerPath.lineJoinStyle = .round
+            outerPath.stroke()
+
+            // Inner precision triangle
+            let innerPath = UIBezierPath()
+            innerPath.move(to: CGPoint(x: 12, y: 15.6))
+            innerPath.addLine(to: CGPoint(x: 7.4, y: 7.4))
+            innerPath.addLine(to: CGPoint(x: 16.6, y: 7.4))
+            innerPath.close()
+            innerPath.lineWidth = 1.5
+            innerPath.lineCapStyle = .round
+            innerPath.lineJoinStyle = .round
+            innerPath.stroke()
+
+            // Precision center dot
+            let centerDot = UIBezierPath(arcCenter: CGPoint(x: 12, y: 10.6), radius: 1.1, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+            UIColor.white.setFill()
+            centerDot.fill()
+        }.withRenderingMode(.alwaysTemplate)
+    }
+
+    private func makeToolbarButton(image: UIImage?, title: String, tintColor: UIColor, action: Selector) -> ToolbarButton {
         let button = ToolbarButton()
-        button.set(image: UIImage(systemName: systemName), title: title, tintColor: tintColor)
+        button.set(image: image, title: title, tintColor: tintColor)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
+    }
+
+    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, action: Selector) -> ToolbarButton {
+        return makeToolbarButton(image: UIImage(systemName: systemName), title: title, tintColor: tintColor, action: action)
     }
 
     /// Position of the pre-meal item within `toolbarItems`, recorded at setup
@@ -1164,30 +1251,32 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     return self?.statusCharts.glucoseChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
+                cell.setDotColor(.glucoseTintColor)
                 cell.doesNavigate = automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled
             case .iob:
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.iobChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Active Insulin", comment: "The title of the Insulin On-Board graph"))
+                cell.setDotColor(.insulinTintColor)
             case .dose:
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.doseChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Insulin Delivery", comment: "The title of the insulin delivery graph"))
+                cell.setDotColor(.insulinTintColor)
             case .cob:
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.cobChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Active Carbohydrates", comment: "The title of the Carbs On-Board graph"))
+                cell.setDotColor(.carbTintColor)
             }
 
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
 
             let alpha: CGFloat = charts.gestureRecognizer?.state == .possible ? 1 : 0
             cell.setAlpha(alpha: alpha)
-
-            cell.setSubtitleTextColor(color: UIColor.secondaryLabel)
 
             return cell
         case .status:
@@ -1314,14 +1403,36 @@ final class StatusTableViewController: LoopChartsTableViewController {
             switch ChartRow(rawValue: indexPath.row)! {
             case .glucose:
                 if let eventualGlucose = eventualGlucoseDescription {
-                    cell.setSubtitleLabel(label: String(format: NSLocalizedString("Eventually %@", comment: "The subtitle format describing eventual glucose. (1: localized glucose value description)"), eventualGlucose))
+                    let fullText = String(format: NSLocalizedString("Eventually %@", comment: "The subtitle format describing eventual glucose. (1: localized glucose value description)"), eventualGlucose)
+                    let attrString = NSMutableAttributedString(
+                        string: fullText,
+                        attributes: [
+                            .font: UIFont.systemFont(ofSize: 12, weight: .medium),
+                            .foregroundColor: UIColor.secondaryLabel
+                        ]
+                    )
+                    if let range = fullText.range(of: eventualGlucose) {
+                        let nsRange = NSRange(range, in: fullText)
+                        attrString.addAttributes([
+                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.glucoseTintColor
+                        ], range: nsRange)
+                    }
+                    cell.setAttributedSubtitleLabel(attrString)
                 } else {
                     cell.setSubtitleLabel(label: nil)
                 }
                 cell.doesNavigate = automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled
             case .iob:
                 if let currentIOB = currentIOBDescription {
-                    cell.setSubtitleLabel(label: currentIOB)
+                    let attrString = NSAttributedString(
+                        string: currentIOB,
+                        attributes: [
+                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.insulinTintColor
+                        ]
+                    )
+                    cell.setAttributedSubtitleLabel(attrString)
                 } else {
                     cell.setSubtitleLabel(label: nil)
                 }
@@ -1331,13 +1442,36 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
                 if  let total = totalDelivery,
                     let totalString = integerFormatter.string(from: total) {
-                    cell.setSubtitleLabel(label: String(format: NSLocalizedString("%@ U Total", comment: "The subtitle format describing total insulin. (1: localized insulin total)"), totalString))
+                    let valueText = "\(totalString) U"
+                    let fullText = String(format: NSLocalizedString("%@ Total", comment: "The subtitle format describing total insulin. (1: localized insulin total)"), valueText)
+                    let attrString = NSMutableAttributedString(
+                        string: fullText,
+                        attributes: [
+                            .font: UIFont.systemFont(ofSize: 12, weight: .medium),
+                            .foregroundColor: UIColor.secondaryLabel
+                        ]
+                    )
+                    if let range = fullText.range(of: valueText) {
+                        let nsRange = NSRange(range, in: fullText)
+                        attrString.addAttributes([
+                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.insulinTintColor
+                        ], range: nsRange)
+                    }
+                    cell.setAttributedSubtitleLabel(attrString)
                 } else {
                     cell.setSubtitleLabel(label: nil)
                 }
             case .cob:
                 if let currentCOB = currentCOBDescription {
-                    cell.setSubtitleLabel(label: currentCOB)
+                    let attrString = NSAttributedString(
+                        string: currentCOB,
+                        attributes: [
+                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.carbTintColor
+                        ]
+                    )
+                    cell.setAttributedSubtitleLabel(attrString)
                 } else {
                     cell.setSubtitleLabel(label: nil)
                 }
@@ -1359,9 +1493,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             switch ChartRow(rawValue: indexPath.row)! {
             case .glucose:
-                return max(106, 0.37 * availableSize)
+                return max(150, 0.38 * availableSize)
             case .iob, .dose, .cob:
-                return max(106, 0.21 * availableSize)
+                return max(115, 0.22 * availableSize)
             }
         case .hud, .status, .alertWarning:
             return UITableView.automaticDimension

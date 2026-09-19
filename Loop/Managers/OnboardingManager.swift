@@ -60,7 +60,11 @@ class OnboardingManager {
         self.windowProvider = windowProvider
         self.userDefaults = userDefaults
 
+        #if targetEnvironment(simulator)
+        self.isSuspended = true
+        #else
         self.isSuspended = userDefaults.onboardingManagerIsSuspended
+        #endif
 
         self.isComplete = userDefaults.onboardingManagerIsComplete && loopDataManager.therapySettings.isComplete
         if !isComplete {
@@ -203,12 +207,19 @@ class OnboardingManager {
     }
 
     private func authorizeAndComplete() {
+        #if targetEnvironment(simulator)
+        DispatchQueue.main.async {
+            self.isComplete = true
+            self.complete()
+        }
+        #else
         ensureAuthorization {
             DispatchQueue.main.async {
                 self.isComplete = true
                 self.complete()
             }
         }
+        #endif
     }
 
     private func complete() {

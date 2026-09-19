@@ -59,6 +59,9 @@ extension NotificationManager {
     }
 
     static func authorize(_ completion: @escaping (UNAuthorizationStatus) -> Void) {
+        #if targetEnvironment(simulator)
+        completion(.authorized)
+        #else
         var authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
         if FeatureFlags.criticalAlertsEnabled {
             authOptions.insert(.criticalAlert)
@@ -74,6 +77,7 @@ extension NotificationManager {
             }
         }
         center.setNotificationCategories(notificationCategories)
+        #endif
     }
     
 

@@ -118,7 +118,7 @@ struct FeatureFlagConfiguration: Decodable {
         self.insulinDeliveryReservoirViewEnabled = true
         #endif
 
-        #if MOCK_THERAPY_SETTINGS_ENABLED
+        #if MOCK_THERAPY_SETTINGS_ENABLED || targetEnvironment(simulator)
         self.mockTherapySettingsEnabled = true
         #else
         self.mockTherapySettingsEnabled = false
@@ -182,7 +182,7 @@ struct FeatureFlagConfiguration: Decodable {
         self.showEventualBloodGlucoseOnWatchEnabled = true
         #endif
         
-        #if SIMULATED_CORE_DATA_ENABLED
+        #if SIMULATED_CORE_DATA_ENABLED || targetEnvironment(simulator)
         self.simulatedCoreDataEnabled = true
         #else
         self.simulatedCoreDataEnabled = false

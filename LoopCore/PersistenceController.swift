@@ -11,14 +11,17 @@ import LoopKit
 extension PersistenceController {
     public class func controllerInAppGroupDirectory(isReadOnly: Bool = false) -> PersistenceController {
         let appGroup = Bundle.main.appGroupSuiteName
-        guard let directoryURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+        let directoryURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        guard let resolvedURL = directoryURL else {
             assertionFailure("Could not get a container directory URL. Please ensure App Groups are set up correctly in entitlements.")
             return self.init(directoryURL: URL(fileURLWithPath: "/"))
         }
 
         let isReadOnly = isReadOnly || Bundle.main.isAppExtension
 
-        return self.init(directoryURL: directoryURL.appendingPathComponent("com.loopkit.LoopKit", isDirectory: true), isReadOnly: isReadOnly)
+        return self.init(directoryURL: resolvedURL.appendingPathComponent("com.loopkit.LoopKit", isDirectory: true), isReadOnly: isReadOnly)
     }
 
     public class func controllerInLocalDirectory() -> PersistenceController {

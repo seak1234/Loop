@@ -201,10 +201,14 @@ final class DeviceDataManager {
 
     /// True if any stores require HealthKit authorization
     var authorizationRequired: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
         return healthStore.authorizationStatus(for: HealthKitSampleStore.glucoseType) == .notDetermined ||
                healthStore.authorizationStatus(for: HealthKitSampleStore.carbType) == .notDetermined ||
                healthStore.authorizationStatus(for: HealthKitSampleStore.insulinQuantityType) == .notDetermined ||
                sleepDataAuthorizationRequired
+        #endif
     }
 
     private(set) var statefulPluginManager: StatefulPluginManager!
@@ -699,6 +703,12 @@ final class DeviceDataManager {
     
     // Get HealthKit authorization for all of the stores
     func authorizeHealthStore(_ completion: @escaping (HKAuthorizationRequestStatus) -> Void) {
+        #if targetEnvironment(simulator)
+        self.carbStore.hkSampleStore?.authorizationIsDetermined()
+        self.doseStore.hkSampleStore?.authorizationIsDetermined()
+        self.glucoseStore.hkSampleStore?.authorizationIsDetermined()
+        completion(.unnecessary)
+        #else
         // Authorize all types at once for simplicity
         healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { (success, error) in
             if success {
@@ -710,6 +720,7 @@ final class DeviceDataManager {
 
             self.getHealthStoreAuthorization(completion)
         }
+        #endif
     }
 }
 

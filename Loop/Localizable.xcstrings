@@ -938,8 +938,12 @@
         }
       }
     },
+    "%@ Total" : {
+      "comment" : "The subtitle format describing total insulin. (1: localized insulin total)"
+    },
     "%@ U Total" : {
       "comment" : "The subtitle format describing total insulin. (1: localized insulin total)",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
