@@ -597,16 +597,29 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func updateChartDateRange() {
         let historyHours = Double(selectedHistoryHours)
         let futureHours: Double = 6.0
-        let totalHours = historyHours + futureHours
 
-        let date = Date(timeIntervalSinceNow: -TimeInterval(hours: historyHours))
-        let chartStartDate = Calendar.current.nextDate(after: date, matching: DateComponents(minute: 0), matchingPolicy: .strict, direction: .backward) ?? date
+        let calendar = Calendar.current
+        let now = Date()
+
+        let earliestDate = now.addingTimeInterval(-TimeInterval(hours: historyHours))
+        let chartStartDate = calendar.nextDate(after: earliestDate, matching: DateComponents(minute: 0), matchingPolicy: .strict, direction: .backward) ?? earliestDate
+
+        let minFutureDate = now.addingTimeInterval(TimeInterval(hours: futureHours))
+        let chartEndDate: Date
+        let minute = calendar.component(.minute, from: minFutureDate)
+        let second = calendar.component(.second, from: minFutureDate)
+        if minute == 0 && second == 0 {
+            chartEndDate = minFutureDate
+        } else {
+            chartEndDate = calendar.nextDate(after: minFutureDate, matching: DateComponents(minute: 0), matchingPolicy: .strict, direction: .forward) ?? minFutureDate
+        }
+
         if charts.startDate != chartStartDate {
             refreshContext.formUnion(RefreshContext.all)
         }
         charts.startDate = chartStartDate
-        charts.maxEndDate = chartStartDate.addingTimeInterval(.hours(totalHours))
-        charts.updateEndDate(charts.maxEndDate)
+        charts.maxEndDate = chartEndDate
+        charts.updateEndDate(chartEndDate)
     }
 
     override func reloadData(animated: Bool = false) {
