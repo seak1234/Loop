@@ -56,7 +56,7 @@ struct SystemActionLink: View {
             case .bolus:
                 active ? Color("insulin") : Color("WidgetSecondaryBackground")
             case .preMeal:
-                active ? Color("fresh") : Color("WidgetSecondaryBackground")
+                active ? Color("glucose") : Color("WidgetSecondaryBackground")
             case .customPreset:
                 active ? Color("glucose") : Color("WidgetSecondaryBackground")
             }

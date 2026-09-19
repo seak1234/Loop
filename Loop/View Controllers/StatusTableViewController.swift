@@ -438,7 +438,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         action: #selector(userTappedAddCarbs)
     )
     private lazy var bolusButton = makeToolbarButton(
-        image: StatusTableViewController.companionBolusIcon(),
+        systemName: "drop.fill",
         title: NSLocalizedString("Bolus", comment: "The label of the bolus entry button"),
         tintColor: .insulinTintColor,
         action: #selector(presentBolusScreen)
@@ -461,52 +461,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
         button.addTarget(self, action: #selector(toggleWorkoutMode(_:)), for: .touchUpInside)
         return button
     }()
-
-    private static func companionBolusIcon(size: CGSize = CGSize(width: 21, height: 21)) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { ctx in
-            let cgContext = ctx.cgContext
-            let scaleX = size.width / 24.0
-            let scaleY = size.height / 24.0
-            cgContext.scaleBy(x: scaleX, y: scaleY)
-
-            // Outer precision delivery funnel with rounded vertices
-            let outerPath = UIBezierPath()
-            outerPath.move(to: CGPoint(x: 12, y: 21.2))
-            outerPath.addLine(to: CGPoint(x: 3.6, y: 6.8))
-            outerPath.addQuadCurve(to: CGPoint(x: 4.8, y: 4.8), controlPoint: CGPoint(x: 3.1, y: 5.4))
-            outerPath.addLine(to: CGPoint(x: 19.2, y: 4.8))
-            outerPath.addQuadCurve(to: CGPoint(x: 20.4, y: 6.8), controlPoint: CGPoint(x: 20.9, y: 5.4))
-            outerPath.close()
-
-            // Soft translucent interior fill matching fill-opacity="0.18" in companion template
-            UIColor.white.withAlphaComponent(0.18).setFill()
-            outerPath.fill()
-
-            // Outer stroke
-            UIColor.white.setStroke()
-            outerPath.lineWidth = 1.8
-            outerPath.lineCapStyle = .round
-            outerPath.lineJoinStyle = .round
-            outerPath.stroke()
-
-            // Inner precision triangle
-            let innerPath = UIBezierPath()
-            innerPath.move(to: CGPoint(x: 12, y: 15.6))
-            innerPath.addLine(to: CGPoint(x: 7.4, y: 7.4))
-            innerPath.addLine(to: CGPoint(x: 16.6, y: 7.4))
-            innerPath.close()
-            innerPath.lineWidth = 1.5
-            innerPath.lineCapStyle = .round
-            innerPath.lineJoinStyle = .round
-            innerPath.stroke()
-
-            // Precision center dot
-            let centerDot = UIBezierPath(arcCenter: CGPoint(x: 12, y: 10.6), radius: 1.1, startAngle: 0, endAngle: .pi * 2, clockwise: true)
-            UIColor.white.setFill()
-            centerDot.fill()
-        }.withRenderingMode(.alwaysTemplate)
-    }
 
     private func makeToolbarButton(image: UIImage?, title: String, tintColor: UIColor, action: Selector) -> ToolbarButton {
         let button = ToolbarButton()
@@ -1313,7 +1267,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     switch override.context {
                     case .preMeal:
                         let symbolAttachment = NSTextAttachment()
-                        symbolAttachment.image = UIImage(named: "Pre-Meal-symbol")?.withTintColor(.carbTintColor)
+                        symbolAttachment.image = UIImage(named: "Pre-Meal-symbol")?.withTintColor(.glucoseTintColor)
 
                         let attributedString = NSMutableAttributedString(attachment: symbolAttachment)
                         attributedString.append(NSAttributedString(string: NSLocalizedString(" Pre-meal Preset", comment: "Status row title for premeal override enabled (leading space is to separate from symbol)")))
@@ -1753,7 +1707,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
 
     private func createPreMealButtonItem(selected: Bool, isEnabled: Bool) -> UIBarButtonItem {
-        let tintColor = selected ? UIColor.carbTintColor : UIColor.secondaryLabel
+        let tintColor = selected ? UIColor.glucoseTintColor : UIColor.secondaryLabel
         preMealButton.set(
             image: UIImage(systemName: "timer.circle.fill"),
             title: NSLocalizedString("Pre-Meal", comment: "The label of the pre-meal mode toggle button"),
