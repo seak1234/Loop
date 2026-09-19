@@ -255,6 +255,17 @@ final class StatusTableViewController: LoopChartsTableViewController {
         super.viewWillTransition(to: size, with: coordinator)
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            for case let cell as ChartTableViewCell in tableView.visibleCells {
+                if let indexPath = tableView.indexPath(for: cell) {
+                    self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
+                }
+            }
+        }
+    }
+
     // MARK: - State
 
     // This reflects whether the application is active 

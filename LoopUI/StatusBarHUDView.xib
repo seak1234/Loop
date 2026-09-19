@@ -260,7 +260,7 @@
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="44U" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="8" adjustsLetterSpacingToFitWidth="YES" translatesAutoresizingMaskIntoConstraints="NO" id="G1b-Pr-JmQ">
                                             <rect key="frame" x="17" y="14.5" width="20.5" height="11"/>
                                             <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="9"/>
-                                            <color key="textColor" systemColor="systemBlueColor"/>
+                                            <color key="textColor" systemColor="labelColor"/>
                                             <nil key="highlightedColor"/>
                                         </label>
                                     </subviews>

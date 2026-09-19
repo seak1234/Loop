@@ -12,7 +12,7 @@ extension GlucoseRangeCategory {
     public var glucoseColor: UIColor {
         switch self {
         case .normal, .high, .low:
-            return .label
+            return .glucoseTintColor
         case .urgentLow, .belowRange:
             return .critical
         case .aboveRange:

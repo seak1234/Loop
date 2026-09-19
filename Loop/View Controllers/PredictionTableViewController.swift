@@ -174,7 +174,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
                     cell.reloadChart()
 
                     if let indexPath = self.tableView.indexPath(for: cell) {
-                        self.tableView(self.tableView, updateTitleFor: cell, at: indexPath)
+                        self.tableView(self.tableView, updateSubtitleFor: cell, at: indexPath)
                     }
                 case let cell as PredictionInputEffectTableViewCell:
                     if let indexPath = self.tableView.indexPath(for: cell) {
@@ -223,8 +223,9 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
                 return self?.charts.chart(atIndex: 0, frame: frame)?.view
             })
 
-            self.tableView(tableView, updateTitleFor: cell, at: indexPath)
-            cell.setTitleTextColor(color: UIColor.secondaryLabel)
+            cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
+            cell.setDotColor(.glucoseTintColor)
+            self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
             cell.selectionStyle = .none
 
             cell.addGestureRecognizer(charts.gestureRecognizer!)
@@ -237,15 +238,30 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         }
     }
 
-    private func tableView(_ tableView: UITableView, updateTitleFor cell: ChartTableViewCell, at indexPath: IndexPath) {
+    private func tableView(_ tableView: UITableView, updateSubtitleFor cell: ChartTableViewCell, at indexPath: IndexPath) {
         guard case .charts? = Section(rawValue: indexPath.section) else {
             return
         }
 
         if let eventualGlucose = eventualGlucoseDescription {
-            cell.setTitleLabelText(label: String(format: NSLocalizedString("Eventually %@", comment: "The subtitle format describing eventual glucose. (1: localized glucose value description)"), eventualGlucose))
+            let fullText = String(format: NSLocalizedString("Eventually %@", comment: "The subtitle format describing eventual glucose. (1: localized glucose value description)"), eventualGlucose)
+            let attrString = NSMutableAttributedString(
+                string: fullText,
+                attributes: [
+                    .font: UIFont.systemFont(ofSize: 12, weight: .medium),
+                    .foregroundColor: UIColor.secondaryLabel
+                ]
+            )
+            if let range = fullText.range(of: eventualGlucose) {
+                let nsRange = NSRange(range, in: fullText)
+                attrString.addAttributes([
+                    .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
+                    .foregroundColor: UIColor.glucoseTintColor
+                ], range: nsRange)
+            }
+            cell.setAttributedSubtitleLabel(attrString)
         } else {
-            cell.setTitleLabelText(label: SettingsTableViewCell.NoValueString)
+            cell.setSubtitleLabel(label: nil)
         }
     }
 

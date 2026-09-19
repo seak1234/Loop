@@ -38,6 +38,10 @@ class CGMStatusHUDViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.statusHighlight)
     }
 
+    func testNormalGlucoseUsesGlucoseTintColor() {
+        XCTAssertEqual(GlucoseRangeCategory.normal.glucoseColor, .glucoseTintColor)
+    }
+
     func testSetGlucoseQuantityCGM() {
         let glucoseDisplay = TestGlucoseDisplay(isStateValid: true,
                                                 trendType: .down,
