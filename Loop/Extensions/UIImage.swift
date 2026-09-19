@@ -32,11 +32,11 @@ extension UIImage {
     }
 
     static func preMealImage(selected: Bool) -> UIImage? {
-        return UIImage(named: selected ? "Pre-Meal Selected" : "Pre-Meal")
+        return UIImage(systemName: "timer.circle.fill")
     }
 
     static func workoutImage(selected: Bool) -> UIImage? {
-        return UIImage(named: selected ? "workout-selected" : "workout")
+        return UIImage(systemName: "figure.run")
     }
 }
 

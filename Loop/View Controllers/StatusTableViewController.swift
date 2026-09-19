@@ -273,38 +273,152 @@ final class StatusTableViewController: LoopChartsTableViewController {
         deviceManager.pumpManagerHUDProvider?.visible = active && onscreen
     }
 
-    private lazy var carbEntryButton = makeToolbarButton(imageNamed: "carbs", tintColor: .carbTintColor, action: #selector(userTappedAddCarbs))
-    private lazy var bolusButton = makeToolbarButton(imageNamed: "bolus", tintColor: .insulinTintColor, action: #selector(presentBolusScreen))
-    private lazy var settingsButton = makeToolbarButton(imageNamed: "settings", tintColor: .secondaryLabel, action: #selector(onSettingsTapped))
+    /// Layout of the items in the bottom toolbar.
+    fileprivate enum ToolbarLayout {
+        static let itemSize = CGSize(width: 60, height: 44)
+    }
 
-    private lazy var workoutButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.tintColor = .glucoseTintColor
-        button.addTarget(self, action: #selector(toggleWorkoutMode(_:)), for: .touchUpInside)
-        button.constrainToToolbarIconSize()
+    /// A custom toolbar button with an icon stacked vertically above a text label,
+    /// sized to fit the 60x44pt toolbar item geometry without text clipping.
+    fileprivate final class ToolbarButton: UIButton {
+        private let iconImageView = UIImageView()
+        private let titleLabelView = UILabel()
+
+        init() {
+            super.init(frame: CGRect(origin: .zero, size: ToolbarLayout.itemSize))
+            setupViews()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            setupViews()
+        }
+
+        private func setupViews() {
+            clipsToBounds = false
+            isAccessibilityElement = true
+
+            iconImageView.translatesAutoresizingMaskIntoConstraints = false
+            iconImageView.contentMode = .scaleAspectFit
+            iconImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+            iconImageView.clipsToBounds = false
+            iconImageView.isUserInteractionEnabled = false
+            iconImageView.isAccessibilityElement = false
+            addSubview(iconImageView)
+
+            titleLabelView.translatesAutoresizingMaskIntoConstraints = false
+            titleLabelView.textAlignment = .center
+            titleLabelView.font = UIFont.systemFont(ofSize: 9.5, weight: .medium)
+            titleLabelView.clipsToBounds = false
+            titleLabelView.isUserInteractionEnabled = false
+            titleLabelView.isAccessibilityElement = false
+            titleLabelView.adjustsFontSizeToFitWidth = true
+            titleLabelView.minimumScaleFactor = 0.8
+            addSubview(titleLabelView)
+
+            let itemSize = ToolbarLayout.itemSize
+
+            let widthConstraint = widthAnchor.constraint(equalToConstant: itemSize.width)
+            widthConstraint.priority = UILayoutPriority(999)
+
+            let heightConstraint = heightAnchor.constraint(equalToConstant: itemSize.height)
+            heightConstraint.priority = UILayoutPriority(999)
+
+            NSLayoutConstraint.activate([
+                widthConstraint,
+                heightConstraint,
+
+                iconImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+                iconImageView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+                iconImageView.widthAnchor.constraint(equalToConstant: 21),
+                iconImageView.heightAnchor.constraint(equalToConstant: 21),
+
+                titleLabelView.centerXAnchor.constraint(equalTo: centerXAnchor),
+                titleLabelView.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 2),
+                titleLabelView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 1),
+                titleLabelView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -1),
+            ])
+
+            setContentHuggingPriority(.required, for: .horizontal)
+            setContentHuggingPriority(.required, for: .vertical)
+            setContentCompressionResistancePriority(.required, for: .horizontal)
+            setContentCompressionResistancePriority(.required, for: .vertical)
+        }
+
+        override var intrinsicContentSize: CGSize {
+            return ToolbarLayout.itemSize
+        }
+
+        func set(image: UIImage?, title: String, tintColor: UIColor) {
+            iconImageView.image = image?.withRenderingMode(.alwaysTemplate)
+            titleLabelView.text = title
+            self.tintColor = tintColor
+            updateColors()
+        }
+
+        private func updateColors() {
+            let color = isEnabled ? tintColor : tintColor.withAlphaComponent(0.35)
+            iconImageView.tintColor = color
+            titleLabelView.textColor = color
+        }
+
+        override var tintColor: UIColor! {
+            didSet {
+                updateColors()
+            }
+        }
+
+        override var isEnabled: Bool {
+            didSet {
+                super.isEnabled = isEnabled
+                updateColors()
+            }
+        }
+
+        override var isHighlighted: Bool {
+            didSet {
+                super.isHighlighted = isHighlighted
+                alpha = isHighlighted ? 0.6 : (isEnabled ? 1.0 : 0.35)
+            }
+        }
+    }
+
+    private lazy var carbEntryButton = makeToolbarButton(
+        systemName: "fork.knife",
+        title: NSLocalizedString("Add Carbs", comment: "The label of the carb entry button"),
+        tintColor: .carbTintColor,
+        action: #selector(userTappedAddCarbs)
+    )
+    private lazy var bolusButton = makeToolbarButton(
+        systemName: "drop.fill",
+        title: NSLocalizedString("Bolus", comment: "The label of the bolus entry button"),
+        tintColor: .insulinTintColor,
+        action: #selector(presentBolusScreen)
+    )
+    private lazy var settingsButton = makeToolbarButton(
+        systemName: "slider.horizontal.3",
+        title: NSLocalizedString("Settings", comment: "The label of the settings button"),
+        tintColor: .secondaryLabel,
+        action: #selector(onSettingsTapped)
+    )
+
+    private lazy var preMealButton: ToolbarButton = {
+        let button = ToolbarButton()
+        button.addTarget(self, action: #selector(premealButtonTapped(_:)), for: .touchUpInside)
         return button
     }()
 
-    private func makeToolbarButton(imageNamed name: String, tintColor: UIColor, action: Selector) -> UIButton {
-        let button = UIButton(type: .system)
-        button.setImage(UIImage(named: name)?.toolbarIcon(), for: .normal)
-        button.tintColor = tintColor
-        button.addTarget(self, action: action, for: .touchUpInside)
-        button.constrainToToolbarIconSize()
+    private lazy var workoutButton: ToolbarButton = {
+        let button = ToolbarButton()
+        button.addTarget(self, action: #selector(toggleWorkoutMode(_:)), for: .touchUpInside)
         return button
-    }
+    }()
 
-    /// Layout of the items in the bottom toolbar.
-    ///
-    /// The icon assets are all drawn on a 40x40pt canvas with their artwork 30pt tall, so
-    /// nothing here sizes them. The one thing left to do is pad each item out to the 44pt
-    /// minimum tap target, with horizontal room between items: on iOS 26 the items share one
-    /// Liquid Glass background and a space item between them would split it, so the gap is
-    /// transparent padding on the image itself.
-    ///
-    /// `fileprivate` so the UIImage helper at the bottom of this file can read it.
-    fileprivate enum ToolbarLayout {
-        static let itemSize = CGSize(width: 60, height: 44)
+    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, action: Selector) -> ToolbarButton {
+        let button = ToolbarButton()
+        button.set(image: UIImage(systemName: systemName), title: title, tintColor: tintColor)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
     }
 
     /// Position of the pre-meal item within `toolbarItems`, recorded at setup
@@ -316,7 +430,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         let bolus = UIBarButtonItem(customView: bolusButton)
         let settings = UIBarButtonItem(customView: settingsButton)
 
-        carbs.title = "Add Meal"
+        carbs.title = "Add Carbs"
 
         let preMeal = createPreMealButtonItem(selected: false, isEnabled: true)
         updateWorkoutButton(selected: false, isEnabled: true)
@@ -350,7 +464,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func updateToolbarItems() {
         let isPumpOnboarded = onboardingManager.isComplete || deviceManager.pumpManager?.isOnboarded == true
 
-        carbEntryButton.accessibilityLabel = NSLocalizedString("Add Meal", comment: "The label of the carb entry button")
+        carbEntryButton.accessibilityLabel = NSLocalizedString("Add Carbs", comment: "The label of the carb entry button")
         carbEntryButton.isEnabled = isPumpOnboarded
         bolusButton.accessibilityLabel = NSLocalizedString("Bolus", comment: "The label of the bolus entry button")
         bolusButton.isEnabled = isPumpOnboarded
@@ -1494,24 +1608,34 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
 
     private func createPreMealButtonItem(selected: Bool, isEnabled: Bool) -> UIBarButtonItem {
-        let item = UIBarButtonItem(image: UIImage.preMealImage(selected: selected)?.toolbarIcon(), style: .plain, target: self, action: #selector(premealButtonTapped(_:)))
-        item.accessibilityLabel = NSLocalizedString("Pre-Meal Targets", comment: "The label of the pre-meal mode toggle button")
+        let tintColor = selected ? UIColor.carbTintColor : UIColor.secondaryLabel
+        preMealButton.set(
+            image: UIImage(systemName: "timer.circle.fill"),
+            title: NSLocalizedString("Pre-Meal", comment: "The label of the pre-meal mode toggle button"),
+            tintColor: tintColor
+        )
+        preMealButton.accessibilityLabel = NSLocalizedString("Pre-Meal Targets", comment: "The label of the pre-meal mode toggle button")
 
         if selected {
-            item.accessibilityTraits.insert(.selected)
-            item.accessibilityHint = NSLocalizedString("Disables", comment: "The action hint of the workout mode toggle button when enabled")
+            preMealButton.accessibilityTraits.insert(.selected)
+            preMealButton.accessibilityHint = NSLocalizedString("Disables", comment: "The action hint of the workout mode toggle button when enabled")
         } else {
-            item.accessibilityHint = NSLocalizedString("Enables", comment: "The action hint of the workout mode toggle button when disabled")
+            preMealButton.accessibilityTraits.remove(.selected)
+            preMealButton.accessibilityHint = NSLocalizedString("Enables", comment: "The action hint of the workout mode toggle button when disabled")
         }
 
-        item.tintColor = UIColor.carbTintColor
-        item.isEnabled = isEnabled
+        preMealButton.isEnabled = isEnabled
 
-        return item
+        return UIBarButtonItem(customView: preMealButton)
     }
     
     private func updateWorkoutButton(selected: Bool, isEnabled: Bool) {
-        workoutButton.setImage(UIImage.workoutImage(selected: selected)?.toolbarIcon(), for: .normal)
+        let tintColor = selected ? UIColor.glucoseTintColor : UIColor.secondaryLabel
+        workoutButton.set(
+            image: UIImage(systemName: "figure.run"),
+            title: NSLocalizedString("Targets", comment: "The label of the workout mode toggle button"),
+            tintColor: tintColor
+        )
         workoutButton.accessibilityLabel = NSLocalizedString("Workout Targets", comment: "The label of the workout mode toggle button")
 
         if selected {
@@ -1523,10 +1647,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
 
         workoutButton.isEnabled = isEnabled
-        workoutButton.sizeToFit()
     }
 
-    @IBAction func premealButtonTapped(_ sender: UIBarButtonItem) {
+    @IBAction func premealButtonTapped(_ sender: Any) {
         togglePreMealMode(confirm: false)
     }
     
@@ -1632,11 +1755,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
         present(vc, animated: true, completion: nil)
     }
 
-    @IBAction func toggleWorkoutMode(_ sender: UIBarButtonItem) {
+    @IBAction func toggleWorkoutMode(_ sender: Any) {
         presentCustomPresets(confirm: false)
     }
     
-    @IBAction func onSettingsTapped(_ sender: UIBarButtonItem) {
+    @IBAction func onSettingsTapped(_ sender: Any) {
         presentSettings()
     }
 
@@ -2110,18 +2233,7 @@ private extension UIButton {
     }
 }
 
-private extension UIImage {
-    /// Centers the icon on a transparent canvas of the toolbar item size. See `ToolbarLayout`.
-    func toolbarIcon() -> UIImage {
-        let canvas = StatusTableViewController.ToolbarLayout.itemSize
-        let origin = CGPoint(x: (canvas.width - size.width) / 2, y: (canvas.height - size.height) / 2)
-        let format = UIGraphicsImageRendererFormat.preferred()
-        format.opaque = false
-        return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
-            draw(in: CGRect(origin: origin, size: size))
-        }.withRenderingMode(.alwaysTemplate)
-    }
-}
+
 
 extension UIAlertController {
     func addActivityIndicator() {

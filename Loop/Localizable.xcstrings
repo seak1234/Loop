@@ -5256,6 +5256,9 @@
         }
       }
     },
+    "Add Carbs" : {
+      "comment" : "The label of the carb entry button"
+    },
     "Add CGM" : {
       "comment" : "Action sheet title selecting CGM\nThe title of the CGM chooser in settings\nTitle text for button to add CGM device\nTitle text for button to set up a CGM",
       "localizations" : {
@@ -5448,6 +5451,7 @@
     },
     "Add Meal" : {
       "comment" : "The label of the carb entry button",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -29980,6 +29984,9 @@
         }
       }
     },
+    "Pre-Meal" : {
+      "comment" : "The label of the pre-meal mode toggle button"
+    },
     "Pre-Meal Targets" : {
       "comment" : "The label of the pre-meal mode toggle button",
       "localizations" : {
@@ -36748,6 +36755,9 @@
           }
         }
       }
+    },
+    "Targets" : {
+      "comment" : "The label of the workout mode toggle button"
     },
     "TestFlight" : {
       "comment" : "Settings app TestFlight section",
