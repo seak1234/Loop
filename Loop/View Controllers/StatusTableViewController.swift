@@ -331,6 +331,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
     fileprivate final class ToolbarButton: UIButton {
         private let iconImageView = UIImageView()
         private let titleLabelView = UILabel()
+        private var baseImage: UIImage?
+        private var customTintColor: UIColor?
 
         init() {
             super.init(frame: CGRect(origin: .zero, size: ToolbarLayout.itemSize))
@@ -345,6 +347,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private func setupViews() {
             clipsToBounds = false
             isAccessibilityElement = true
+            adjustsImageWhenDisabled = false
+            tintAdjustmentMode = .normal
 
             iconImageView.translatesAutoresizingMaskIntoConstraints = false
             iconImageView.contentMode = .scaleAspectFit
@@ -352,6 +356,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             iconImageView.clipsToBounds = false
             iconImageView.isUserInteractionEnabled = false
             iconImageView.isAccessibilityElement = false
+            iconImageView.tintAdjustmentMode = .normal
             addSubview(iconImageView)
 
             titleLabelView.translatesAutoresizingMaskIntoConstraints = false
@@ -398,16 +403,29 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
 
         func set(image: UIImage?, title: String, tintColor: UIColor) {
-            iconImageView.image = image?.withRenderingMode(.alwaysTemplate)
+            self.baseImage = image
+            self.customTintColor = tintColor
             titleLabelView.text = title
             self.tintColor = tintColor
             updateColors()
         }
 
         private func updateColors() {
-            iconImageView.tintColor = tintColor
-            titleLabelView.textColor = tintColor
+            let color = customTintColor ?? tintColor ?? .secondaryLabel
+            iconImageView.image = baseImage?.withTintColor(color, renderingMode: .alwaysOriginal)
+            iconImageView.tintColor = color
+            titleLabelView.textColor = color
             alpha = 1.0
+        }
+
+        override func tintColorDidChange() {
+            super.tintColorDidChange()
+            updateColors()
+        }
+
+        override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+            super.traitCollectionDidChange(previousTraitCollection)
+            updateColors()
         }
 
         override var tintColor: UIColor! {
@@ -519,7 +537,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         carbEntryButton.accessibilityLabel = NSLocalizedString("Add Carbs", comment: "The label of the carb entry button")
         carbEntryButton.isEnabled = isPumpOnboarded
         bolusButton.accessibilityLabel = NSLocalizedString("Bolus", comment: "The label of the bolus entry button")
-        bolusButton.isEnabled = isPumpOnboarded
+        bolusButton.isEnabled = true
         settingsButton.accessibilityLabel = NSLocalizedString("Settings", comment: "The label of the settings button")
 
         toolbarItems![preMealItemIndex] = createPreMealButtonItem(selected: preMealMode == true && preMealModeAllowed, isEnabled: preMealModeAllowed)
