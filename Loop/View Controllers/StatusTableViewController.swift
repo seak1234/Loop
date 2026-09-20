@@ -860,6 +860,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
             self.tableView.beginUpdates()
             if let hudView = self.hudView {
                 // CGM Status
+                self.updateGlucoseTargetRangeHUD()
+                self.updateLoopStatusHUD()
                 if let glucose = self.deviceManager.glucoseStore.latestGlucose {
                     let unit = self.statusCharts.glucose.glucoseUnit
                     hudView.cgmStatusHUD.setGlucoseQuantity(glucose.quantity.doubleValue(for: unit),
@@ -1987,9 +1989,37 @@ final class StatusTableViewController: LoopChartsTableViewController {
         updatePresetModeAvailability(automaticDosingEnabled: automaticDosingEnabled)
         hudView?.loopCompletionHUD.loopIconClosed = automaticDosingEnabled
         hudView?.loopCompletionHUD.closedLoopDisallowedLocalizedDescription = deviceManager.closedLoopDisallowedLocalizedDescription
+        updateLoopStatusHUD()
     }
 
     // MARK: - HUDs
+
+    private func updateGlucoseTargetRangeHUD(at date: Date = Date()) {
+        let unit = statusCharts.glucose.glucoseUnit
+        guard let targetSchedule = deviceManager.loopManager.settings.effectiveGlucoseTargetRangeSchedule() else {
+            hudView?.setGlucoseTargetRangeText(nil)
+            return
+        }
+
+        let targetRange = targetSchedule.quantityRange(at: date)
+        let formatter = QuantityFormatter(for: unit).numberFormatter
+        guard let lowerBound = formatter.string(from: targetRange.lowerBound.doubleValue(for: unit)),
+              let upperBound = formatter.string(from: targetRange.upperBound.doubleValue(for: unit))
+        else {
+            hudView?.setGlucoseTargetRangeText(nil)
+            return
+        }
+
+        let targetText = lowerBound == upperBound ? lowerBound : "\(lowerBound)–\(upperBound)"
+        hudView?.setGlucoseTargetRangeText(targetText)
+    }
+
+    private func updateLoopStatusHUD() {
+        hudView?.setLoopStatus(
+            isClosedLoop: automaticDosingStatus.automaticDosingEnabled,
+            automaticDosingStrategy: deviceManager.loopManager.settings.automaticDosingStrategy
+        )
+    }
 
     @IBOutlet var hudView: StatusBarHUDView? {
         didSet {
@@ -2015,6 +2045,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             hudView.loopCompletionHUD.loopIconClosed = automaticDosingStatus.automaticDosingEnabled
             hudView.loopCompletionHUD.lastLoopCompleted = deviceManager.loopManager.lastLoopCompleted
             hudView.loopCompletionHUD.lastGlucoseStartDate = deviceManager.glucoseStore.latestGlucose?.startDate
+            updateLoopStatusHUD()
 
             hudView.cgmStatusHUD.stateColors = .cgmStatus
             hudView.cgmStatusHUD.tintColor = .label
@@ -2550,6 +2581,10 @@ extension StatusTableViewController: SettingsViewModelDelegate {
         self.deviceManager.loopManager.mutateSettings { settings in
             settings.automaticDosingStrategy = strategy
         }
+        hudView?.setLoopStatus(
+            isClosedLoop: automaticDosingStatus.automaticDosingEnabled,
+            automaticDosingStrategy: strategy
+        )
     }
 
     func didTapIssueReport() {

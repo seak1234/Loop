@@ -85,6 +85,11 @@ import LoopKitUI
             statusHighlightView = StatusHighlightHUDView(frame: self.frame)
         }
     }
+
+    func configureForDashboardCard() {
+        backgroundView.backgroundColor = .clear
+        backgroundView.layer.cornerRadius = 0
+    }
     
     public func presentStatusHighlight(_ statusHighlight: DeviceStatusHighlight?) {
         guard let statusHighlight = statusHighlight else {

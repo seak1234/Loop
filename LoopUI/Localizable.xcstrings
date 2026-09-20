@@ -1410,6 +1410,12 @@
         }
       }
     },
+    "Automatic Basal" : {
+      "comment" : "Dashboard automatic basal dosing mode"
+    },
+    "Automatic Bolus" : {
+      "comment" : "Dashboard automatic bolus dosing mode"
+    },
     "Closed loop" : {
       "comment" : "Accessibility hint describing completion HUD for a closed loop",
       "localizations" : {
@@ -1957,6 +1963,9 @@
         }
       }
     },
+    "Glucose" : {
+      "comment" : "Dashboard glucose card title"
+    },
     "HIGH" : {
       "comment" : "String displayed instead of a glucose value above the CGM range",
       "localizations" : {
@@ -2075,6 +2084,9 @@
           }
         }
       }
+    },
+    "Insulin" : {
+      "comment" : "Dashboard insulin card title"
     },
     "Last completed loop %1$@." : {
       "comment" : "Last loop time completed message (1: last loop time string)",
@@ -2272,6 +2284,12 @@
         }
       }
     },
+    "Loop Off" : {
+      "comment" : "Dashboard title when closed loop is disabled"
+    },
+    "Loop On" : {
+      "comment" : "Dashboard title when closed loop is enabled"
+    },
     "Loop ran %@ ago" : {
       "comment" : "Accessbility format label describing the time interval since the last completion date. (1: The localized date components)",
       "localizations" : {
@@ -2390,6 +2408,9 @@
           }
         }
       }
+    },
+    "Loop Status" : {
+      "comment" : "Dashboard loop status card title"
     },
     "Loop Warning" : {
       "comment" : "Title of yellow loop message",
@@ -2586,6 +2607,9 @@
           }
         }
       }
+    },
+    "Manual Basal" : {
+      "comment" : "Dashboard dosing mode when closed loop is disabled"
     },
     "mg/dL" : {
       "comment" : "The short unit display string for milligrams of glucose per decilter",
@@ -3277,6 +3301,9 @@
           }
         }
       }
+    },
+    "Target: %@" : {
+      "comment" : "Format for the current glucose target range shown on the dashboard card"
     },
     "U" : {
       "comment" : "The short unit display string for international units of insulin",

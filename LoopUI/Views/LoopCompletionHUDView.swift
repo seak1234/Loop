@@ -13,6 +13,10 @@ import LoopCore
 public final class LoopCompletionHUDView: BaseHUDView {
 
     @IBOutlet private weak var loopStateView: LoopStateView!
+
+    private weak var dashboardConnectivityDot: UIView?
+
+    private weak var dashboardConnectivityPulse: UIView?
     
     override public var orderPriority: HUDViewOrderPriority {
         return 2
@@ -75,6 +79,50 @@ public final class LoopCompletionHUDView: BaseHUDView {
     override public func stateColorsDidUpdate() {
         super.stateColorsDidUpdate()
         updateTintColor()
+    }
+
+    override public func tintColorDidChange() {
+        super.tintColorDidChange()
+        updateDashboardConnectivityDotColor()
+    }
+
+    func configureDashboardConnectivityDot(_ dot: UIView, pulse: UIView) {
+        dashboardConnectivityDot = dot
+        dashboardConnectivityPulse = pulse
+        updateDashboardConnectivityDotColor()
+        flashDashboardConnectivityDot()
+    }
+
+    private func updateDashboardConnectivityDotColor() {
+        guard let dot = dashboardConnectivityDot else {
+            return
+        }
+
+        let color = tintColor ?? .secondaryLabel
+        dot.backgroundColor = color
+        dot.layer.shadowColor = color.cgColor
+        dashboardConnectivityPulse?.backgroundColor = color
+    }
+
+    private func flashDashboardConnectivityDot() {
+        guard let pulseView = dashboardConnectivityPulse else {
+            return
+        }
+
+        pulseView.layer.removeAnimation(forKey: "dashboardConnectivityPulse")
+        let scale = CAKeyframeAnimation(keyPath: "transform.scale")
+        scale.values = [1.0, 2.0, 2.0]
+        scale.keyTimes = [0.0, 0.75, 1.0]
+
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [0.75, 0.0, 0.0]
+        fade.keyTimes = [0.0, 0.75, 1.0]
+
+        let pulse = CAAnimationGroup()
+        pulse.animations = [scale, fade]
+        pulse.duration = 1.0
+        pulse.timingFunction = CAMediaTimingFunction(controlPoints: 0.0, 0.0, 0.2, 1.0)
+        pulseView.layer.add(pulse, forKey: "dashboardConnectivityPulse")
     }
 
     private func updateTintColor() {
@@ -159,6 +207,10 @@ public final class LoopCompletionHUDView: BaseHUDView {
         } else {
             loopStateView.elapsedTime = nil
         }
+
+        // Drive the dashboard connectivity pulse from this same one-second
+        // update that advances the elapsed-time label, keeping them in sync.
+        flashDashboardConnectivityDot()
 
         lastLoopMessage = ""
         let timeAgoToIncludeTimeStamp: TimeInterval = .minutes(20)

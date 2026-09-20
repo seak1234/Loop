@@ -18,6 +18,8 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     @IBOutlet public weak var glucoseValueHUD: GlucoseValueHUDView!
     
     @IBOutlet public weak var glucoseTrendHUD: GlucoseTrendHUDView!
+
+    private weak var dashboardTrendLabel: UILabel?
     
     override public var orderPriority: HUDViewOrderPriority {
         return 1
@@ -104,7 +106,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         statusStackView.addArrangedSubview(glucoseValueHUD)
         statusStackView.addArrangedSubview(glucoseTrendHUD)
         glucoseValueHUD.isHidden = false
-        glucoseTrendHUD.isHidden = false
+        glucoseTrendHUD.isHidden = dashboardTrendLabel != nil
     }
         
     public func setGlucoseQuantity(_ glucoseQuantity: Double,
@@ -138,5 +140,34 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     func updateTrendIcon() {
         glucoseTrendHUD.setIcon(viewModel.glucoseTrendIcon)
         glucoseTrendHUD.tintColor = viewModel.glucoseTrendTintColor
+
+        let trend = viewModel.trend
+        dashboardTrendLabel?.text = trend?.dashboardArrowText ?? "→"
+        dashboardTrendLabel?.textColor = .glucoseTintColor
+        dashboardTrendLabel?.alpha = trend == nil ? 0.75 : 1
+        dashboardTrendLabel?.isHidden = false
+    }
+
+    func configureDashboardTrendLabel(_ label: UILabel) {
+        dashboardTrendLabel = label
+        glucoseTrendHUD.isHidden = true
+        updateTrendIcon()
+    }
+}
+
+private extension GlucoseTrend {
+    var dashboardArrowText: String {
+        switch self {
+        case .upUpUp, .upUp:
+            return "↑"
+        case .up:
+            return "↗"
+        case .flat:
+            return "→"
+        case .down:
+            return "↘"
+        case .downDown, .downDownDown:
+            return "↓"
+        }
     }
 }
