@@ -17,6 +17,8 @@ public final class LoopCompletionHUDView: BaseHUDView {
     private weak var dashboardConnectivityDot: UIView?
 
     private weak var dashboardConnectivityPulse: UIView?
+
+    private weak var dashboardAccentView: DashboardAccentView?
     
     override public var orderPriority: HUDViewOrderPriority {
         return 2
@@ -84,6 +86,27 @@ public final class LoopCompletionHUDView: BaseHUDView {
     override public func tintColorDidChange() {
         super.tintColorDidChange()
         updateDashboardConnectivityDotColor()
+        updateDashboardAccentColor()
+    }
+
+    override public func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateDashboardConnectivityDotColor()
+        updateDashboardAccentColor()
+    }
+
+    func configureDashboardAccentView(_ accentView: DashboardAccentView) {
+        dashboardAccentView = accentView
+        updateDashboardAccentColor()
+    }
+
+    private func updateDashboardAccentColor() {
+        guard let accentView = dashboardAccentView else {
+            return
+        }
+
+        let color = tintColor ?? .freshColor
+        accentView.updateColor(color)
     }
 
     func configureDashboardConnectivityDot(_ dot: UIView, pulse: UIView) {
@@ -98,7 +121,7 @@ public final class LoopCompletionHUDView: BaseHUDView {
             return
         }
 
-        let color = tintColor ?? .secondaryLabel
+        let color = tintColor ?? .freshColor
         dot.backgroundColor = color
         dot.layer.shadowColor = color.cgColor
         dashboardConnectivityPulse?.backgroundColor = color

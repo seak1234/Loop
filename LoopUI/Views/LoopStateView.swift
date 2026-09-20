@@ -17,7 +17,7 @@ final class LoopStateView: UIView {
     public let elapsedLabel: UILabel = {
         let label = UILabel()
         label.textAlignment = .center
-        label.textColor = .label
+        label.textColor = .secondaryLabel
         label.font = UIFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold)
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.65
@@ -51,7 +51,7 @@ final class LoopStateView: UIView {
     private func updateTintColor() {
         let tint = tintColor ?? .systemGreen
         shapeLayer.strokeColor = tint.cgColor
-        elapsedLabel.textColor = tint
+        elapsedLabel.textColor = .secondaryLabel
         updateTrackColor()
     }
 

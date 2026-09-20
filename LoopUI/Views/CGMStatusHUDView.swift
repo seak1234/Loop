@@ -20,6 +20,10 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     @IBOutlet public weak var glucoseTrendHUD: GlucoseTrendHUDView!
 
     private weak var dashboardTrendLabel: UILabel?
+    private weak var dashboardTargetLabel: UILabel?
+    private(set) var usesDashboardCardStyle = false
+    public private(set) var isStatusHighlightActive: Bool = false
+    private var statusHighlightConstraints: [NSLayoutConstraint] = []
     
     override public var orderPriority: HUDViewOrderPriority {
         return 1
@@ -53,6 +57,11 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
             self?.updateDisplay()
         })
     }
+
+    override func configureForDashboardCard() {
+        super.configureForDashboardCard()
+        usesDashboardCardStyle = true
+    }
     
     override public func tintColorDidChange() {
         super.tintColorDidChange()
@@ -73,20 +82,36 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
             // when the status highlight is updated, the accessibility string is updated
             accessibilityValue = viewModel.accessibilityString
         }
-        
-        guard statusStackView.arrangedSubviews.contains(glucoseValueHUD),
-            statusStackView.arrangedSubviews.contains(glucoseTrendHUD) else
-        {
+
+        guard usesDashboardCardStyle else {
+            guard statusStackView.arrangedSubviews.contains(glucoseValueHUD),
+                statusStackView.arrangedSubviews.contains(glucoseTrendHUD) else
+            {
+                return
+            }
+            
+            // need to also hide these view, since they will be added back to the stack at some point
+            glucoseValueHUD.isHidden = true
+            glucoseTrendHUD.isHidden = true
+            statusStackView.removeArrangedSubview(glucoseValueHUD)
+            statusStackView.removeArrangedSubview(glucoseTrendHUD)
+            
+            super.presentStatusHighlight()
             return
         }
-        
-        // need to also hide these view, since they will be added back to the stack at some point
-        glucoseValueHUD.isHidden = true
-        glucoseTrendHUD.isHidden = true
-        statusStackView.removeArrangedSubview(glucoseValueHUD)
-        statusStackView.removeArrangedSubview(glucoseTrendHUD)
-        
-        super.presentStatusHighlight()
+
+        if statusStackView.arrangedSubviews.contains(glucoseValueHUD) {
+            glucoseValueHUD.isHidden = true
+            statusStackView.removeArrangedSubview(glucoseValueHUD)
+        }
+        if statusStackView.arrangedSubviews.contains(glucoseTrendHUD) {
+            glucoseTrendHUD.isHidden = true
+            statusStackView.removeArrangedSubview(glucoseTrendHUD)
+        }
+        statusStackView.isHidden = true
+        dashboardTargetLabel?.isHidden = true
+
+        presentCenteredStatusHighlight()
     }
     
     override public func dismissStatusHighlight() {
@@ -96,17 +121,68 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
             // when the status highlight is updated, the accessibility string is updated
             accessibilityValue = viewModel.accessibilityString
         }
-        
-        guard statusStackView.arrangedSubviews.contains(statusHighlightView) else {
+
+        guard usesDashboardCardStyle else {
+            guard statusStackView.arrangedSubviews.contains(statusHighlightView) else {
+                return
+            }
+
+            super.dismissStatusHighlight()
+            
+            statusStackView.addArrangedSubview(glucoseValueHUD)
+            statusStackView.addArrangedSubview(glucoseTrendHUD)
+            glucoseValueHUD.isHidden = false
+            glucoseTrendHUD.isHidden = dashboardTrendLabel != nil
             return
         }
 
-        super.dismissStatusHighlight()
-        
-        statusStackView.addArrangedSubview(glucoseValueHUD)
-        statusStackView.addArrangedSubview(glucoseTrendHUD)
+        guard isStatusHighlightActive else {
+            return
+        }
+
+        dismissCenteredStatusHighlight()
+
+        statusStackView.isHidden = false
+        if !statusStackView.arrangedSubviews.contains(glucoseValueHUD) {
+            statusStackView.addArrangedSubview(glucoseValueHUD)
+        }
+        if !statusStackView.arrangedSubviews.contains(glucoseTrendHUD) {
+            statusStackView.addArrangedSubview(glucoseTrendHUD)
+        }
         glucoseValueHUD.isHidden = false
         glucoseTrendHUD.isHidden = dashboardTrendLabel != nil
+        dashboardTargetLabel?.isHidden = dashboardTargetLabel?.attributedText == nil
+    }
+
+    private func presentCenteredStatusHighlight() {
+        isStatusHighlightActive = true
+
+        if statusHighlightView.superview !== self {
+            statusHighlightView.removeFromSuperview()
+            addSubview(statusHighlightView)
+        }
+        statusHighlightView.translatesAutoresizingMaskIntoConstraints = false
+        statusHighlightView.isHidden = false
+
+        if statusHighlightConstraints.isEmpty {
+            statusHighlightConstraints = [
+                statusHighlightView.centerXAnchor.constraint(equalTo: centerXAnchor),
+                statusHighlightView.centerYAnchor.constraint(equalTo: centerYAnchor),
+                statusHighlightView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 6),
+                statusHighlightView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
+                statusHighlightView.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 6),
+                statusHighlightView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -6),
+            ]
+            NSLayoutConstraint.activate(statusHighlightConstraints)
+        }
+    }
+
+    private func dismissCenteredStatusHighlight() {
+        isStatusHighlightActive = false
+        statusHighlightView.isHidden = true
+        NSLayoutConstraint.deactivate(statusHighlightConstraints)
+        statusHighlightConstraints.removeAll()
+        statusHighlightView.removeFromSuperview()
     }
         
     public func setGlucoseQuantity(_ glucoseQuantity: Double,
@@ -152,6 +228,13 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         dashboardTrendLabel = label
         glucoseTrendHUD.isHidden = true
         updateTrendIcon()
+    }
+
+    func configureDashboardTargetLabel(_ label: UILabel) {
+        dashboardTargetLabel = label
+        if isStatusHighlightActive {
+            dashboardTargetLabel?.isHidden = true
+        }
     }
 }
 

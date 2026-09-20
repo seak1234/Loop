@@ -10,7 +10,7 @@ import UIKit
 import LoopKit
 import LoopKitUI
 
-private final class DashboardAccentView: UIView {
+final class DashboardAccentView: UIView {
 
     private let gradientLayer = CAGradientLayer()
 
@@ -32,6 +32,14 @@ private final class DashboardAccentView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    func updateColor(_ color: UIColor) {
+        gradientLayer.colors = [
+            color.withAlphaComponent(0).cgColor,
+            color.withAlphaComponent(0.95).cgColor,
+            color.withAlphaComponent(0).cgColor,
+        ]
     }
 
     override func layoutSubviews() {
@@ -190,13 +198,14 @@ public class StatusBarHUDView: UIView, NibLoadable {
         titleLabel.isUserInteractionEnabled = false
         titleLabel.accessibilityElementsHidden = true
         view.addSubview(titleLabel)
-        if view === loopCompletionHUD {
-            loopTitleLabel = titleLabel
-        }
-
         let accentView = DashboardAccentView(color: accentColor)
         accentView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(accentView)
+
+        if view === loopCompletionHUD {
+            loopTitleLabel = titleLabel
+            loopCompletionHUD.configureDashboardAccentView(accentView)
+        }
 
         var titleConstraints = [
             titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 7),
@@ -364,6 +373,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         targetLabel.accessibilityElementsHidden = true
         cgmStatusHUD.addSubview(targetLabel)
         glucoseTargetLabel = targetLabel
+        cgmStatusHUD.configureDashboardTargetLabel(targetLabel)
 
         for constraint in cgmStatusHUD.constraints {
             if constraint.firstAttribute == .bottom,
@@ -372,8 +382,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
             {
                 constraint.constant = 24
             } else if constraint.firstAttribute == .bottom,
-                      constraint.secondItem is UIProgressView,
-                      constraint.constant == 8
+                       constraint.secondItem is UIProgressView,
+                       constraint.constant == 8
             {
                 constraint.constant = 3
             }
@@ -411,7 +421,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
             )
         }
         glucoseTargetLabel?.attributedText = attributedText
-        glucoseTargetLabel?.isHidden = false
+        glucoseTargetLabel?.isHidden = cgmStatusHUD.isStatusHighlightActive
     }
 
     private func configureLoopDosingModeLabel() {

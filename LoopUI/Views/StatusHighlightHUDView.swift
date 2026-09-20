@@ -59,11 +59,15 @@ public class StatusHighlightHUDView: UIView, NibLoadable {
 
         // Use AutoLayout to have the stack view fill its entire container.
         NSLayoutConstraint.activate([
-            stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stackView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            stackView.widthAnchor.constraint(equalTo: widthAnchor),
-            stackView.heightAnchor.constraint(equalTo: heightAnchor),
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stackView.topAnchor.constraint(equalTo: topAnchor),
+            stackView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+    }
+
+    override public var intrinsicContentSize: CGSize {
+        return stackView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
     }
     
     public func setIconPosition(_ iconPosition: IconPosition) {
