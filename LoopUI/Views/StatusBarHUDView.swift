@@ -133,9 +133,9 @@ public class StatusBarHUDView: UIView, NibLoadable {
         containerView.isLayoutMarginsRelativeArrangement = true
 
         let cards: [(view: BaseHUDView, title: String, accentColor: UIColor)] = [
-            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .systemTeal),
-            (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .systemGreen),
-            (pumpStatusHUD, LocalizedString("Insulin", comment: "Dashboard insulin card title"), .systemOrange),
+            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .glucoseTintColor),
+            (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .freshColor),
+            (pumpStatusHUD, LocalizedString("Insulin", comment: "Dashboard insulin card title"), .insulinTintColor),
         ]
 
         for card in cards {

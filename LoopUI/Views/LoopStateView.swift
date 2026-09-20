@@ -11,13 +11,16 @@ import UIKit
 final class LoopStateView: UIView {
     var firstDataUpdate = true
 
+    private let trackLayer = CAShapeLayer()
+    private let shapeLayer = CAShapeLayer()
+
     public let elapsedLabel: UILabel = {
         let label = UILabel()
         label.textAlignment = .center
         label.textColor = .label
-        label.font = UIFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .semibold)
+        label.font = UIFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold)
         label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.7
+        label.minimumScaleFactor = 0.65
         label.text = "–"
         return label
     }()
@@ -46,8 +49,25 @@ final class LoopStateView: UIView {
     }
 
     private func updateTintColor() {
-        shapeLayer.strokeColor = tintColor.cgColor
-        elapsedLabel.textColor = .label
+        let tint = tintColor ?? .systemGreen
+        shapeLayer.strokeColor = tint.cgColor
+        elapsedLabel.textColor = tint
+        updateTrackColor()
+    }
+
+    private func updateTrackColor() {
+        let color: UIColor
+        if traitCollection.userInterfaceStyle == .dark {
+            color = UIColor(red: 38 / 255, green: 38 / 255, blue: 38 / 255, alpha: 1.0)
+        } else {
+            color = UIColor(red: 226 / 255, green: 232 / 255, blue: 240 / 255, alpha: 1.0)
+        }
+        trackLayer.strokeColor = color.cgColor
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateTrackColor()
     }
 
     var open = false {
@@ -56,14 +76,6 @@ final class LoopStateView: UIView {
                 shapeLayer.path = drawPath()
             }
         }
-    }
-
-    override class var layerClass : AnyClass {
-        return CAShapeLayer.self
-    }
-
-    private var shapeLayer: CAShapeLayer {
-        return layer as! CAShapeLayer
     }
 
     override init(frame: CGRect) {
@@ -79,19 +91,48 @@ final class LoopStateView: UIView {
     }
 
     private func setupView() {
-        shapeLayer.lineWidth = 6.5
+        trackLayer.lineWidth = 3.5
+        trackLayer.fillColor = UIColor.clear.cgColor
+        trackLayer.lineCap = .round
+        layer.addSublayer(trackLayer)
+
+        shapeLayer.lineWidth = 3.5
         shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineCap = .round
+        layer.addSublayer(shapeLayer)
+
         addSubview(elapsedLabel)
         updateTintColor()
 
+        trackLayer.path = drawTrackPath()
         shapeLayer.path = drawPath()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
 
+        trackLayer.frame = bounds
+        trackLayer.path = drawTrackPath()
+
+        shapeLayer.frame = bounds
         shapeLayer.path = drawPath()
-        elapsedLabel.frame = bounds.insetBy(dx: 6, dy: 6)
+
+        elapsedLabel.frame = bounds.insetBy(dx: 4, dy: 4)
+    }
+
+    private func drawTrackPath() -> CGPath {
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let radius = min(bounds.width / 2, bounds.height / 2) - trackLayer.lineWidth / 2
+
+        let path = UIBezierPath(
+            arcCenter: center,
+            radius: radius,
+            startAngle: 0,
+            endAngle: 2 * CGFloat.pi,
+            clockwise: true
+        )
+
+        return path.cgPath
     }
 
     private func drawPath(lineWidth: CGFloat? = nil) -> CGPath {
@@ -121,11 +162,11 @@ final class LoopStateView: UIView {
                 if animated {
                     let path = CABasicAnimation(keyPath: "path")
                     path.fromValue = shapeLayer.path ?? drawPath()
-                    path.toValue = drawPath(lineWidth: 13)
+                    path.toValue = drawPath(lineWidth: 5.5)
 
                     let width = CABasicAnimation(keyPath: "lineWidth")
                     width.fromValue = shapeLayer.lineWidth
-                    width.toValue = 8.5
+                    width.toValue = 5.0
 
                     let group = CAAnimationGroup()
                     group.animations = [path, width]
@@ -143,4 +184,3 @@ final class LoopStateView: UIView {
         }
     }
 }
-
