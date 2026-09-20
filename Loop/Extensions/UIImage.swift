@@ -32,7 +32,7 @@ extension UIImage {
     }
 
     static func preMealImage(selected: Bool) -> UIImage? {
-        return UIImage(systemName: "timer.circle.fill")
+        return UIImage(systemName: "timer")
     }
 
     static func workoutImage(selected: Bool) -> UIImage? {

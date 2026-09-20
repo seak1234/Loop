@@ -331,8 +331,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
     fileprivate final class ToolbarButton: UIButton {
         private let iconImageView = UIImageView()
         private let titleLabelView = UILabel()
+        private let badgeView = UIView()
         private var baseImage: UIImage?
         private var customTintColor: UIColor?
+        var isBadgeVisible: Bool = false {
+            didSet {
+                badgeView.isHidden = !isBadgeVisible
+            }
+        }
 
         init() {
             super.init(frame: CGRect(origin: .zero, size: ToolbarLayout.itemSize))
@@ -358,6 +364,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
             iconImageView.isAccessibilityElement = false
             iconImageView.tintAdjustmentMode = .normal
             addSubview(iconImageView)
+
+            badgeView.translatesAutoresizingMaskIntoConstraints = false
+            badgeView.isUserInteractionEnabled = false
+            badgeView.clipsToBounds = true
+            badgeView.layer.cornerRadius = 5.5
+            badgeView.layer.borderWidth = 1.5
+            badgeView.isHidden = true
+            badgeView.tintAdjustmentMode = .normal
+            addSubview(badgeView)
 
             titleLabelView.translatesAutoresizingMaskIntoConstraints = false
             titleLabelView.textAlignment = .center
@@ -386,6 +401,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 iconImageView.widthAnchor.constraint(equalToConstant: 21),
                 iconImageView.heightAnchor.constraint(equalToConstant: 21),
 
+                badgeView.widthAnchor.constraint(equalToConstant: 11),
+                badgeView.heightAnchor.constraint(equalToConstant: 11),
+                badgeView.centerXAnchor.constraint(equalTo: iconImageView.trailingAnchor, constant: 1),
+                badgeView.centerYAnchor.constraint(equalTo: iconImageView.topAnchor, constant: 1),
+
                 titleLabelView.centerXAnchor.constraint(equalTo: centerXAnchor),
                 titleLabelView.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 2),
                 titleLabelView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 1),
@@ -402,9 +422,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
             return ToolbarLayout.itemSize
         }
 
-        func set(image: UIImage?, title: String, tintColor: UIColor) {
+        func set(image: UIImage?, title: String, tintColor: UIColor, isBadgeVisible: Bool = false) {
             self.baseImage = image
             self.customTintColor = tintColor
+            self.isBadgeVisible = isBadgeVisible
             titleLabelView.text = title
             self.tintColor = tintColor
             updateColors()
@@ -416,6 +437,13 @@ final class StatusTableViewController: LoopChartsTableViewController {
             iconImageView.tintColor = color
             titleLabelView.textColor = color
             alpha = 1.0
+
+            let isDark = traitCollection.userInterfaceStyle == .dark
+            let borderColor = isDark ? UIColor(white: 0.65, alpha: 1.0) : UIColor(red: 138/255, green: 138/255, blue: 138/255, alpha: 1.0)
+            badgeView.layer.borderColor = borderColor.cgColor
+            badgeView.backgroundColor = isDark
+                ? UIColor(red: 54/255, green: 175/255, blue: 209/255, alpha: 0.55)
+                : UIColor(red: 177/255, green: 231/255, blue: 244/255, alpha: 1.0)
         }
 
         override func tintColorDidChange() {
@@ -1752,9 +1780,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func createPreMealButtonItem(selected: Bool, isEnabled: Bool) -> UIBarButtonItem {
         let tintColor = selected ? UIColor.glucoseTintColor : UIColor.secondaryLabel
         preMealButton.set(
-            image: UIImage(systemName: "timer.circle.fill"),
+            image: UIImage(systemName: "timer"),
             title: NSLocalizedString("Pre-Meal", comment: "The label of the pre-meal mode toggle button"),
-            tintColor: tintColor
+            tintColor: tintColor,
+            isBadgeVisible: selected
         )
         preMealButton.accessibilityLabel = NSLocalizedString("Pre-Meal Targets", comment: "The label of the pre-meal mode toggle button")
 
@@ -1776,7 +1805,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
         workoutButton.set(
             image: UIImage(systemName: "figure.run"),
             title: NSLocalizedString("Targets", comment: "The label of the workout mode toggle button"),
-            tintColor: tintColor
+            tintColor: tintColor,
+            isBadgeVisible: selected
         )
         workoutButton.accessibilityLabel = NSLocalizedString("Workout Targets", comment: "The label of the workout mode toggle button")
 
