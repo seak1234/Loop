@@ -1247,7 +1247,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     return self?.statusCharts.glucoseChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
-                cell.setDotColor(.glucoseTintColor)
                 cell.doesNavigate = automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled
                 cell.configureHistoryDurationSelector(selectedHours: self.selectedHistoryHours) { [weak self] newHours in
                     self?.updateHistoryDuration(newHours)
@@ -1258,21 +1257,18 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     return self?.statusCharts.iobChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Active Insulin", comment: "The title of the Insulin On-Board graph"))
-                cell.setDotColor(.insulinTintColor)
             case .dose:
                 cell.hideHistoryDurationSelector()
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.doseChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Insulin Delivery", comment: "The title of the insulin delivery graph"))
-                cell.setDotColor(.insulinTintColor)
             case .cob:
                 cell.hideHistoryDurationSelector()
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.cobChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Active Carbohydrates", comment: "The title of the Carbs On-Board graph"))
-                cell.setDotColor(.carbTintColor)
             }
 
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)

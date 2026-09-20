@@ -224,7 +224,6 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
             })
 
             cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
-            cell.setDotColor(.glucoseTintColor)
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
             cell.selectionStyle = .none
 
