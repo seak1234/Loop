@@ -11,10 +11,12 @@ import UIKit
 // MARK: - Color palette for common elements
 extension UIColor {
     @nonobjc public static let carbs = UIColor { _ in
-        UIColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1.0) // Reference emerald green from HTML (#10b981)
+        UIColor(red: 241/255, green: 115/255, blue: 110/255, alpha: 1.0) // Reference coral red (#f1736e)
     }
     
-    @nonobjc public static let fresh = carbs
+    @nonobjc public static let fresh = UIColor { _ in
+        UIColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1.0) // Emerald status green (#10b981)
+    }
 
     @nonobjc public static let glucose = UIColor { _ in
         UIColor(red: 54/255, green: 175/255, blue: 209/255, alpha: 1.0) // Balanced Ocean glucose blue (#36afd1)
