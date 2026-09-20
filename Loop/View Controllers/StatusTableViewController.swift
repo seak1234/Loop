@@ -599,20 +599,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
         let futureHours: Double = 6.0
 
         let calendar = Calendar.current
-        let now = Date()
+        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: Date())
+        components.second = 0
+        let now = calendar.date(from: components) ?? Date()
 
-        let earliestDate = now.addingTimeInterval(-TimeInterval(hours: historyHours))
-        let chartStartDate = calendar.nextDate(after: earliestDate, matching: DateComponents(minute: 0), matchingPolicy: .strict, direction: .backward) ?? earliestDate
-
-        let minFutureDate = now.addingTimeInterval(TimeInterval(hours: futureHours))
-        let chartEndDate: Date
-        let minute = calendar.component(.minute, from: minFutureDate)
-        let second = calendar.component(.second, from: minFutureDate)
-        if minute == 0 && second == 0 {
-            chartEndDate = minFutureDate
-        } else {
-            chartEndDate = calendar.nextDate(after: minFutureDate, matching: DateComponents(minute: 0), matchingPolicy: .strict, direction: .forward) ?? minFutureDate
-        }
+        let chartStartDate = now.addingTimeInterval(-TimeInterval(hours: historyHours))
+        let chartEndDate = now.addingTimeInterval(TimeInterval(hours: futureHours))
 
         if charts.startDate != chartStartDate {
             refreshContext.formUnion(RefreshContext.all)
