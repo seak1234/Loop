@@ -26,6 +26,7 @@ public final class LoopCompletionHUDView: BaseHUDView {
 
     private(set) var freshness = LoopCompletionFreshness.stale {
         didSet {
+            loopStateView?.freshness = freshness
             updateTintColor()
         }
     }
@@ -33,6 +34,7 @@ public final class LoopCompletionHUDView: BaseHUDView {
     override public func awakeFromNib() {
         super.awakeFromNib()
 
+        loopStateView?.freshness = freshness
         updateDisplay(nil)
     }
 
@@ -224,17 +226,6 @@ public final class LoopCompletionHUDView: BaseHUDView {
     }()
 
     @objc private func updateDisplay(_: Timer?) {
-        if let glucoseDate = lastGlucoseStartDate {
-            let elapsed = max(0, -glucoseDate.timeIntervalSinceNow)
-            loopStateView.elapsedTime = elapsed
-        } else {
-            loopStateView.elapsedTime = nil
-        }
-
-        // Drive the dashboard connectivity pulse from this same one-second
-        // update that advances the elapsed-time label, keeping them in sync.
-        flashDashboardConnectivityDot()
-
         lastLoopMessage = ""
         let timeAgoToIncludeTimeStamp: TimeInterval = .minutes(20)
         let timeAgoToIncludeDate: TimeInterval = .hours(4)
@@ -276,6 +267,18 @@ public final class LoopCompletionHUDView: BaseHUDView {
             caption?.text = "–"
             accessibilityLabel = LocalizedString("Waiting for first run", comment: "Accessibility label describing completion HUD waiting for first run")
         }
+
+        let referenceDate = lastGlucoseStartDate ?? lastLoopCompleted
+        if let refDate = referenceDate {
+            let elapsed = max(0, -refDate.timeIntervalSinceNow)
+            loopStateView.elapsedTime = elapsed
+        } else {
+            loopStateView.elapsedTime = nil
+        }
+
+        // Drive the dashboard connectivity pulse from this same one-second
+        // update that advances the elapsed-time label, keeping them in sync.
+        flashDashboardConnectivityDot()
 
         if loopIconClosed {
             accessibilityHint = LocalizedString("Closed loop", comment: "Accessibility hint describing completion HUD for a closed loop")

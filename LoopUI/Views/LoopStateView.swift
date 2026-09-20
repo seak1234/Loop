@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import LoopCore
 
 final class LoopStateView: UIView {
     var firstDataUpdate = true
@@ -25,9 +26,16 @@ final class LoopStateView: UIView {
         return label
     }()
 
+    public var freshness: LoopCompletionFreshness = .stale {
+        didSet {
+            updateProgressAndColors()
+        }
+    }
+
     public var elapsedTime: TimeInterval? {
         didSet {
             updateElapsedDisplay()
+            updateProgressAndColors()
         }
     }
 
@@ -36,10 +44,20 @@ final class LoopStateView: UIView {
             elapsedLabel.text = "–"
             return
         }
-        let totalSeconds = Int(max(0, elapsed))
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        elapsedLabel.text = String(format: "%d:%02d", minutes, seconds)
+
+        let cycleDuration: TimeInterval = 300.0 // 5 minutes
+
+        if elapsed <= cycleDuration {
+            let remaining = Int(ceil(max(0, cycleDuration - elapsed)))
+            let minutes = remaining / 60
+            let seconds = remaining % 60
+            elapsedLabel.text = String(format: "%d:%02d", minutes, seconds)
+        } else {
+            let overdue = Int(floor(elapsed - cycleDuration))
+            let minutes = overdue / 60
+            let seconds = overdue % 60
+            elapsedLabel.text = String(format: "+%d:%02d", minutes, seconds)
+        }
     }
 
     override func tintColorDidChange() {
@@ -49,10 +67,53 @@ final class LoopStateView: UIView {
     }
 
     private func updateTintColor() {
-        let tint = tintColor ?? .systemGreen
-        shapeLayer.strokeColor = tint.cgColor
-        elapsedLabel.textColor = .secondaryLabel
+        updateProgressAndColors()
         updateTrackColor()
+    }
+
+    private func updateProgressAndColors() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
+        let cycleDuration: TimeInterval = 300.0 // 5 minutes
+        let currentTint = tintColor ?? .systemGreen
+
+        switch freshness {
+        case .fresh:
+            let elapsed = elapsedTime ?? 0
+            if elapsed <= cycleDuration {
+                // Between 0 and 5 minutes:
+                // Draining clockwise from 12 o'clock like Apple Watch timer:
+                // As elapsed increases from 0 to 300, strokeStart increases from 0.0 to 1.0.
+                let progress = CGFloat(max(0, min(1.0, elapsed / cycleDuration)))
+                shapeLayer.strokeStart = progress
+                shapeLayer.strokeEnd = 1.0
+                shapeLayer.strokeColor = currentTint.cgColor
+                shapeLayer.isHidden = false
+            } else {
+                // > 5 minutes, but not yet warning state:
+                // Stays grey until entering warning state
+                shapeLayer.strokeStart = 1.0
+                shapeLayer.strokeEnd = 1.0
+                shapeLayer.isHidden = true
+            }
+
+        case .aging:
+            // Warning state: whole circle is a steady yellow ring
+            shapeLayer.strokeStart = 0.0
+            shapeLayer.strokeEnd = 1.0
+            shapeLayer.strokeColor = currentTint.cgColor
+            shapeLayer.isHidden = false
+
+        case .stale:
+            // Stale / error state: whole circle is steady error ring
+            shapeLayer.strokeStart = 0.0
+            shapeLayer.strokeEnd = 1.0
+            shapeLayer.strokeColor = currentTint.cgColor
+            shapeLayer.isHidden = false
+        }
+
+        CATransaction.commit()
     }
 
     private func updateTrackColor() {
@@ -73,6 +134,7 @@ final class LoopStateView: UIView {
     var open = false {
         didSet {
             if open != oldValue {
+                trackLayer.path = drawTrackPath()
                 shapeLayer.path = drawPath()
             }
         }
@@ -124,11 +186,14 @@ final class LoopStateView: UIView {
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let radius = min(bounds.width / 2, bounds.height / 2) - trackLayer.lineWidth / 2
 
+        let startAngle = open ? -CGFloat.pi / 4 : -CGFloat.pi / 2
+        let endAngle = open ? 5 * CGFloat.pi / 4 : -CGFloat.pi / 2 + 2 * CGFloat.pi
+
         let path = UIBezierPath(
             arcCenter: center,
             radius: radius,
-            startAngle: 0,
-            endAngle: 2 * CGFloat.pi,
+            startAngle: startAngle,
+            endAngle: endAngle,
             clockwise: true
         )
 
@@ -140,8 +205,8 @@ final class LoopStateView: UIView {
         let lineWidth = lineWidth ?? shapeLayer.lineWidth
         let radius = min(bounds.width / 2, bounds.height / 2) - lineWidth / 2
 
-        let startAngle = open ? -CGFloat.pi / 4 : 0
-        let endAngle = open ? 5 * CGFloat.pi / 4 : 2 * CGFloat.pi
+        let startAngle = open ? -CGFloat.pi / 4 : -CGFloat.pi / 2
+        let endAngle = open ? 5 * CGFloat.pi / 4 : -CGFloat.pi / 2 + 2 * CGFloat.pi
 
         let path = UIBezierPath(
             arcCenter: center,
