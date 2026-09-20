@@ -55,8 +55,21 @@ extension DeviceDataManager {
 
     var pumpExpiresAt: Date? {
         guard let pumpManager = pumpManager else { return nil }
-        if let expiresAt = findExpirationDate(in: pumpManager) {
+
+        let rawState = pumpManager.rawState
+        if let podState = rawState["podState"] as? [String: Any] {
+            if let expiresAt = podState["expiresAt"] as? Date {
+                return expiresAt
+            }
+            if let activatedAt = podState["activatedAt"] as? Date {
+                return activatedAt.addingTimeInterval(.hours(72))
+            }
+        }
+        if let expiresAt = rawState["expiresAt"] as? Date {
             return expiresAt
+        }
+        if let expirationDate = rawState["expirationDate"] as? Date {
+            return expirationDate
         }
         if let progress = pumpLifecycleProgress {
             let nominalHours: Double = 72.0
@@ -66,42 +79,6 @@ extension DeviceDataManager {
         if String(describing: type(of: pumpManager)).contains("Mock") {
             // For MockPumpManager in Simulator / test environments, provide a realistic 2d 14h expiration
             return Date().addingTimeInterval(.hours(62))
-        }
-        return nil
-    }
-
-    private func findExpirationDate(in object: Any, depth: Int = 0) -> Date? {
-        guard depth < 6 else { return nil }
-        var currentMirror: Mirror? = Mirror(reflecting: object)
-        while let mirror = currentMirror {
-            if mirror.displayStyle == .optional {
-                guard let first = mirror.children.first else { return nil }
-                return findExpirationDate(in: first.value, depth: depth + 1)
-            }
-            for child in mirror.children {
-                if let label = child.label {
-                    if label == "expiresAt" || label == "podExpiresAt" || label == "patchExpiresAt" || label == "expirationDate",
-                       let date = child.value as? Date {
-                        return date
-                    }
-                    if label == "pumpExpirationRemaining" || label == "podTimeRemaining",
-                       let interval = child.value as? TimeInterval {
-                        return Date().addingTimeInterval(interval)
-                    }
-                }
-                if let date = child.value as? Date {
-                    if let label = child.label, label.lowercased().contains("expire") {
-                        return date
-                    }
-                }
-                let childMirror = Mirror(reflecting: child.value)
-                if childMirror.displayStyle == .optional || childMirror.displayStyle == .struct || childMirror.displayStyle == .class {
-                    if let date = findExpirationDate(in: child.value, depth: depth + 1) {
-                        return date
-                    }
-                }
-            }
-            currentMirror = mirror.superclassMirror
         }
         return nil
     }
