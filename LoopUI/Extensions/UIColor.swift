@@ -17,7 +17,7 @@ extension UIColor {
     @nonobjc public static let fresh = carbs
 
     @nonobjc public static let glucose = UIColor { _ in
-        UIColor(red: 97/255, green: 192/255, blue: 218/255, alpha: 1.0) // Reference glucose blue (#61c0da)
+        UIColor(red: 54/255, green: 175/255, blue: 209/255, alpha: 1.0) // Balanced Ocean glucose blue (#36afd1)
     }
     
     @nonobjc public static let insulin = UIColor { _ in
