@@ -405,9 +405,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
 
         private func updateColors() {
-            let color = isEnabled ? tintColor : tintColor.withAlphaComponent(0.35)
-            iconImageView.tintColor = color
-            titleLabelView.textColor = color
+            iconImageView.tintColor = tintColor
+            titleLabelView.textColor = tintColor
+            alpha = 1.0
         }
 
         override var tintColor: UIColor! {
@@ -426,7 +426,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         override var isHighlighted: Bool {
             didSet {
                 super.isHighlighted = isHighlighted
-                alpha = isHighlighted ? 0.6 : (isEnabled ? 1.0 : 0.35)
+                transform = isHighlighted ? CGAffineTransform(scaleX: 0.94, y: 0.94) : .identity
             }
         }
     }
@@ -434,7 +434,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private lazy var carbEntryButton = makeToolbarButton(
         systemName: "fork.knife",
         title: NSLocalizedString("Add Carbs", comment: "The label of the carb entry button"),
-        tintColor: .carbTintColor,
+        tintColor: .secondaryLabel,
         action: #selector(userTappedAddCarbs)
     )
     private lazy var bolusButton = makeToolbarButton(
