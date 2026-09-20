@@ -1838,6 +1838,9 @@
         }
       }
     },
+    "Expired" : {
+      "comment" : "Pump expiration badge when expired"
+    },
     "g" : {
       "comment" : "The short unit display string for grams",
       "localizations" : {
@@ -2084,9 +2087,6 @@
           }
         }
       }
-    },
-    "Insulin" : {
-      "comment" : "Dashboard insulin card title"
     },
     "Last completed loop %1$@." : {
       "comment" : "Last loop time completed message (1: last loop time string)",
@@ -3098,6 +3098,9 @@
           }
         }
       }
+    },
+    "Pump" : {
+      "comment" : "Dashboard pump card title"
     },
     "QUANTITY_VALUE_AND_UNIT" : {
       "comment" : "Format string for combining localized numeric value and unit. (1: numeric value)(2: unit)",

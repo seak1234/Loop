@@ -881,6 +881,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 hudView.pumpStatusHUD.presentStatusHighlight(self.deviceManager.pumpStatusHighlight)
                 hudView.pumpStatusHUD.presentStatusBadge(self.deviceManager.pumpStatusBadge)
                 hudView.pumpStatusHUD.lifecycleProgress = self.deviceManager.pumpLifecycleProgress
+                hudView.setPumpExpiration(date: self.deviceManager.pumpExpiresAt)
             }
 
             // Show/hide the table view rows
@@ -2051,6 +2052,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             hudView.cgmStatusHUD.tintColor = .label
             hudView.pumpStatusHUD.stateColors = .pumpStatus
             hudView.pumpStatusHUD.tintColor = .insulinTintColor
+            hudView.setPumpExpiration(date: deviceManager.pumpExpiresAt)
 
             refreshContext.update(with: .status)
             log.debug("[reloadData] after hudView loaded")
@@ -2069,6 +2071,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             }
             hudView.pumpStatusHUD.presentStatusHighlight(deviceManager.pumpStatusHighlight)
             hudView.pumpStatusHUD.lifecycleProgress = deviceManager.pumpLifecycleProgress
+            hudView.setPumpExpiration(date: deviceManager.pumpExpiresAt)
         }
     }
 

@@ -57,6 +57,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
     private weak var loopTitleLabel: UILabel?
 
     private weak var loopDosingModeLabel: UILabel?
+
+    private weak var pumpExpiresLabel: UILabel?
     
     public var adjustViewsForNarrowDisplay: Bool = false {
         didSet {
@@ -135,7 +137,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         let cards: [(view: BaseHUDView, title: String, accentColor: UIColor)] = [
             (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .glucoseTintColor),
             (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .freshColor),
-            (pumpStatusHUD, LocalizedString("Insulin", comment: "Dashboard insulin card title"), .insulinTintColor),
+            (pumpStatusHUD, LocalizedString("Pump", comment: "Dashboard pump card title"), .insulinTintColor),
         ]
 
         for card in cards {
@@ -249,6 +251,25 @@ public class StatusBarHUDView: UIView, NibLoadable {
                 connectivityDot.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
                 connectivityDot.widthAnchor.constraint(equalToConstant: 7),
                 connectivityDot.heightAnchor.constraint(equalToConstant: 7),
+            ])
+        } else if view === pumpStatusHUD {
+            let expiresLabel = UILabel()
+            expiresLabel.translatesAutoresizingMaskIntoConstraints = false
+            expiresLabel.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+            expiresLabel.textColor = .secondaryLabel
+            expiresLabel.textAlignment = .right
+            expiresLabel.adjustsFontSizeToFitWidth = true
+            expiresLabel.minimumScaleFactor = 0.75
+            expiresLabel.setContentHuggingPriority(.required, for: .horizontal)
+            expiresLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            view.addSubview(expiresLabel)
+            pumpExpiresLabel = expiresLabel
+
+            titleConstraints.append(contentsOf: [
+                titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: expiresLabel.leadingAnchor, constant: -4),
+                expiresLabel.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+                expiresLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             ])
         } else {
             titleConstraints.append(titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -7))
@@ -437,6 +458,40 @@ public class StatusBarHUDView: UIView, NibLoadable {
             }
         }
         loopDosingModeLabel?.text = dosingMode.uppercased()
+    }
+
+    public func setPumpExpiration(remaining: TimeInterval?) {
+        guard let remaining = remaining else {
+            pumpExpiresLabel?.text = nil
+            pumpExpiresLabel?.isHidden = true
+            return
+        }
+
+        if remaining <= 0 {
+            pumpExpiresLabel?.text = LocalizedString("Expired", comment: "Pump expiration badge when expired").uppercased()
+            pumpExpiresLabel?.textColor = .systemRed
+        } else if remaining < .hours(24) {
+            let totalSeconds = Int(remaining)
+            let hours = totalSeconds / 3600
+            let minutes = (totalSeconds % 3600) / 60
+            pumpExpiresLabel?.text = "\(hours)h \(minutes)m"
+            pumpExpiresLabel?.textColor = .systemOrange
+        } else {
+            let totalSeconds = Int(remaining)
+            let days = totalSeconds / 86400
+            let hours = (totalSeconds % 86400) / 3600
+            pumpExpiresLabel?.text = "\(days)d \(hours)h"
+            pumpExpiresLabel?.textColor = .secondaryLabel
+        }
+        pumpExpiresLabel?.isHidden = false
+    }
+
+    public func setPumpExpiration(date: Date?) {
+        guard let date = date else {
+            setPumpExpiration(remaining: nil)
+            return
+        }
+        setPumpExpiration(remaining: date.timeIntervalSinceNow)
     }
 
     private func updateDashboardCardColors() {
