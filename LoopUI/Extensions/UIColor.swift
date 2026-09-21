@@ -34,7 +34,7 @@ extension UIColor {
     // Warm dashboard-only palette inspired by the reference design. These are
     // intentionally separate from the clinical state colors used by Loop.
     @nonobjc public static let dashboardCoral = UIColor { _ in
-        UIColor(red: 251 / 255, green: 113 / 255, blue: 133 / 255, alpha: 1.0) // #FB7185
+        UIColor(red: 232 / 255, green: 130 / 255, blue: 136 / 255, alpha: 1.0) // #E88288
     }
 
     @nonobjc public static let dashboardInk = UIColor { traits in
