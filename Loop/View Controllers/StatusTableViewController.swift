@@ -337,17 +337,20 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     /// Layout of the items in the bottom toolbar.
     fileprivate enum ToolbarLayout {
-        static let itemSize = CGSize(width: 60, height: 44)
+        static let itemSize = CGSize(width: 64, height: 44)
+        static let iconSize = CGSize(width: 24, height: 24)
+        static let symbolPointSize: CGFloat = 20
     }
 
     /// A custom toolbar button with an icon stacked vertically above a text label,
-    /// sized to fit the 60x44pt toolbar item geometry without text clipping.
+    /// sized to fit the bottom toolbar geometry without text clipping.
     fileprivate final class ToolbarButton: UIButton {
         private let iconImageView = UIImageView()
         private let titleLabelView = UILabel()
         private let badgeView = UIView()
         private var baseImage: UIImage?
         private var customTintColor: UIColor?
+        private var usesDimensionalIcon = false
         var isBadgeVisible: Bool = false {
             didSet {
                 badgeView.isHidden = !isBadgeVisible
@@ -372,7 +375,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             iconImageView.translatesAutoresizingMaskIntoConstraints = false
             iconImageView.contentMode = .scaleAspectFit
-            iconImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+            iconImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
+                pointSize: ToolbarLayout.symbolPointSize,
+                weight: .medium
+            )
             iconImageView.clipsToBounds = false
             iconImageView.isUserInteractionEnabled = false
             iconImageView.isAccessibilityElement = false
@@ -390,7 +396,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             titleLabelView.translatesAutoresizingMaskIntoConstraints = false
             titleLabelView.textAlignment = .center
-            titleLabelView.font = Self.roundedFont(ofSize: 9.5, weight: .medium)
+            titleLabelView.font = Self.roundedFont(ofSize: 10, weight: .medium)
             titleLabelView.clipsToBounds = false
             titleLabelView.isUserInteractionEnabled = false
             titleLabelView.isAccessibilityElement = false
@@ -411,17 +417,17 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 heightConstraint,
 
                 iconImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
-                iconImageView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-                iconImageView.widthAnchor.constraint(equalToConstant: 21),
-                iconImageView.heightAnchor.constraint(equalToConstant: 21),
+                iconImageView.topAnchor.constraint(equalTo: topAnchor, constant: 2.5),
+                iconImageView.widthAnchor.constraint(equalToConstant: ToolbarLayout.iconSize.width),
+                iconImageView.heightAnchor.constraint(equalToConstant: ToolbarLayout.iconSize.height),
 
                 badgeView.widthAnchor.constraint(equalToConstant: 11),
                 badgeView.heightAnchor.constraint(equalToConstant: 11),
                 badgeView.centerXAnchor.constraint(equalTo: iconImageView.trailingAnchor, constant: 1),
-                badgeView.centerYAnchor.constraint(equalTo: iconImageView.topAnchor, constant: 1),
+                badgeView.centerYAnchor.constraint(equalTo: iconImageView.topAnchor, constant: 3),
 
                 titleLabelView.centerXAnchor.constraint(equalTo: centerXAnchor),
-                titleLabelView.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 2),
+                titleLabelView.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 1.5),
                 titleLabelView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 1),
                 titleLabelView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -1),
             ])
@@ -442,10 +448,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
             return UIFont(descriptor: descriptor, size: size)
         }
 
-        func set(image: UIImage?, title: String, tintColor: UIColor, isBadgeVisible: Bool = false) {
+        func set(image: UIImage?, title: String, tintColor: UIColor, isBadgeVisible: Bool = false, usesDimensionalIcon: Bool = false) {
             self.baseImage = image
             self.customTintColor = tintColor
             self.isBadgeVisible = isBadgeVisible
+            self.usesDimensionalIcon = usesDimensionalIcon
             titleLabelView.text = title
             self.tintColor = tintColor
             updateColors()
@@ -453,7 +460,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         private func updateColors() {
             let color = customTintColor ?? tintColor ?? .dashboardMutedInk
-            iconImageView.image = baseImage?.withTintColor(color, renderingMode: .alwaysOriginal)
+            if usesDimensionalIcon, let baseImage = baseImage {
+                iconImageView.image = Self.dimensionalIcon(from: baseImage, color: color, traits: traitCollection)
+            } else {
+                iconImageView.image = baseImage?.withTintColor(color, renderingMode: .alwaysOriginal)
+            }
             iconImageView.tintColor = color
             titleLabelView.textColor = color
             alpha = 1.0
@@ -462,6 +473,75 @@ final class StatusTableViewController: LoopChartsTableViewController {
             let borderColor = isDark ? UIColor.dashboardMutedInk : UIColor.dashboardCoral.withAlphaComponent(0.65)
             badgeView.layer.borderColor = borderColor.cgColor
             badgeView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(isDark ? 0.55 : 0.22)
+        }
+
+        private static func dimensionalIcon(from image: UIImage, color: UIColor, traits: UITraitCollection) -> UIImage {
+            let canvasSize = ToolbarLayout.iconSize
+            let symbol = image.applyingSymbolConfiguration(
+                UIImage.SymbolConfiguration(pointSize: ToolbarLayout.symbolPointSize, weight: .medium)
+            ) ?? image
+            let scale = min(canvasSize.width / symbol.size.width, canvasSize.height / symbol.size.height)
+            let symbolSize = CGSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
+            let symbolRect = CGRect(
+                x: (canvasSize.width - symbolSize.width) / 2,
+                y: (canvasSize.height - symbolSize.height) / 2,
+                width: symbolSize.width,
+                height: symbolSize.height
+            )
+
+            let resolvedColor = color.resolvedColor(with: traits)
+            let highlightColor = blend(resolvedColor, with: .white, amount: 0.34)
+            let shadowColor = blend(resolvedColor, with: .black, amount: 0.22)
+            let format = UIGraphicsImageRendererFormat()
+            format.opaque = false
+            format.scale = UIScreen.main.scale
+
+            let gradientSymbol = UIGraphicsImageRenderer(size: canvasSize, format: format).image { rendererContext in
+                symbol.withTintColor(.white, renderingMode: .alwaysOriginal).draw(in: symbolRect)
+                rendererContext.cgContext.setBlendMode(.sourceIn)
+
+                let colors = [highlightColor.cgColor, resolvedColor.cgColor, shadowColor.cgColor] as CFArray
+                let locations: [CGFloat] = [0, 0.52, 1]
+                guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: locations) else {
+                    return
+                }
+                rendererContext.cgContext.drawLinearGradient(
+                    gradient,
+                    start: CGPoint(x: canvasSize.width * 0.25, y: 0),
+                    end: CGPoint(x: canvasSize.width * 0.75, y: canvasSize.height),
+                    options: []
+                )
+            }
+
+            return UIGraphicsImageRenderer(size: canvasSize, format: format).image { _ in
+                symbol.withTintColor(shadowColor.withAlphaComponent(0.38), renderingMode: .alwaysOriginal)
+                    .draw(in: symbolRect.offsetBy(dx: 0.6, dy: 1.0))
+                gradientSymbol.draw(at: .zero)
+            }.withRenderingMode(.alwaysOriginal)
+        }
+
+        private static func blend(_ color: UIColor, with otherColor: UIColor, amount: CGFloat) -> UIColor {
+            var red: CGFloat = 0
+            var green: CGFloat = 0
+            var blue: CGFloat = 0
+            var alpha: CGFloat = 0
+            var otherRed: CGFloat = 0
+            var otherGreen: CGFloat = 0
+            var otherBlue: CGFloat = 0
+            var otherAlpha: CGFloat = 0
+
+            guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha),
+                  otherColor.getRed(&otherRed, green: &otherGreen, blue: &otherBlue, alpha: &otherAlpha)
+            else {
+                return color
+            }
+
+            return UIColor(
+                red: red + (otherRed - red) * amount,
+                green: green + (otherGreen - green) * amount,
+                blue: blue + (otherBlue - blue) * amount,
+                alpha: alpha + (otherAlpha - alpha) * amount
+            )
         }
 
         override func tintColorDidChange() {
@@ -505,6 +585,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         systemName: "drop.fill",
         title: NSLocalizedString("Bolus", comment: "The label of the bolus entry button"),
         tintColor: .dashboardCoral,
+        usesDimensionalIcon: true,
         action: #selector(presentBolusScreen)
     )
     private lazy var settingsButton = makeToolbarButton(
@@ -533,8 +614,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
         return button
     }
 
-    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, action: Selector) -> ToolbarButton {
-        return makeToolbarButton(image: UIImage(systemName: systemName), title: title, tintColor: tintColor, action: action)
+    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, usesDimensionalIcon: Bool = false, action: Selector) -> ToolbarButton {
+        let button = ToolbarButton()
+        button.set(
+            image: UIImage(systemName: systemName),
+            title: title,
+            tintColor: tintColor,
+            usesDimensionalIcon: usesDimensionalIcon
+        )
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
     }
 
     /// Position of the pre-meal item within `toolbarItems`, recorded at setup
