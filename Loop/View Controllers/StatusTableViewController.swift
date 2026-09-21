@@ -1475,6 +1475,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 cell.setTitleLabelText(label: NSLocalizedString("Active Carbohydrates", comment: "The title of the Carbs On-Board graph"))
             }
 
+            cell.onNavigate = { [weak self, weak cell] in
+                self?.navigateToDetails(for: chartRow, sender: cell)
+            }
+
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
 
             if collapsedChartRows.contains(chartRow) {
@@ -1606,6 +1610,20 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     return cell
                 }
             }
+        }
+    }
+
+    private func navigateToDetails(for row: ChartRow, sender: Any?) {
+        switch row {
+        case .glucose:
+            guard automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled else {
+                return
+            }
+            performSegue(withIdentifier: PredictionTableViewController.className, sender: sender)
+        case .iob, .dose:
+            performSegue(withIdentifier: InsulinDeliveryTableViewController.className, sender: sender)
+        case .cob:
+            performSegue(withIdentifier: CarbAbsorptionViewController.className, sender: sender)
         }
     }
 
