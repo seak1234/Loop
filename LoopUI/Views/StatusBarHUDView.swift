@@ -10,6 +10,20 @@ import UIKit
 import LoopKit
 import LoopKitUI
 
+private extension UIFont {
+    static func dashboardRounded(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let font = UIFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = font.fontDescriptor.withDesign(.rounded) else { return font }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
+    static func dashboardRoundedDigits(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+        guard let descriptor = font.fontDescriptor.withDesign(.rounded) else { return font }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+}
+
 final class DashboardAccentView: UIView {
 
     private let gradientLayer = CAGradientLayer()
@@ -143,9 +157,9 @@ public class StatusBarHUDView: UIView, NibLoadable {
         containerView.isLayoutMarginsRelativeArrangement = true
 
         let cards: [(view: BaseHUDView, title: String, accentColor: UIColor)] = [
-            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .glucoseTintColor),
-            (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .freshColor),
-            (pumpStatusHUD, LocalizedString("Pump", comment: "Dashboard pump card title"), .insulinTintColor),
+            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .dashboardCoral),
+            (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .dashboardCoral),
+            (pumpStatusHUD, LocalizedString("Pump", comment: "Dashboard pump card title"), .dashboardCoral),
         ]
 
         for card in cards {
@@ -156,6 +170,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
         cgmStatusHUD.configureForDashboardCard()
         pumpStatusHUD.configureForDashboardCard()
+        pumpStatusHUD.basalRateHUD.configureForDashboardCard()
         configureCompactGlucoseTrend()
         configureGlucoseTargetLabel()
         configureLoopDosingModeLabel()
@@ -182,7 +197,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         view.layer.cornerRadius = 16
         view.layer.cornerCurve = .continuous
         view.layer.borderWidth = 0.5
-        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowColor = UIColor.dashboardMutedInk.resolvedColor(with: traitCollection).cgColor
         view.layer.shadowOffset = CGSize(width: 0, height: 1)
         view.layer.shadowRadius = 3
         view.layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0 : 0.08
@@ -191,8 +206,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
         let titleLabel = UILabel()
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text = title.uppercased()
-        titleLabel.font = .systemFont(ofSize: 9, weight: .semibold)
-        titleLabel.textColor = .secondaryLabel
+        titleLabel.font = .dashboardRounded(ofSize: 9, weight: .semibold)
+        titleLabel.textColor = .dashboardInk
         titleLabel.adjustsFontSizeToFitWidth = true
         titleLabel.minimumScaleFactor = 0.75
         titleLabel.isUserInteractionEnabled = false
@@ -204,7 +219,6 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
         if view === loopCompletionHUD {
             loopTitleLabel = titleLabel
-            loopCompletionHUD.configureDashboardAccentView(accentView)
         }
 
         var titleConstraints = [
@@ -215,9 +229,9 @@ public class StatusBarHUDView: UIView, NibLoadable {
             let trendLabel = UILabel()
             trendLabel.translatesAutoresizingMaskIntoConstraints = false
             trendLabel.text = "→"
-            trendLabel.font = .systemFont(ofSize: 18, weight: .bold)
+            trendLabel.font = .dashboardRounded(ofSize: 18, weight: .bold)
             trendLabel.textAlignment = .center
-            trendLabel.textColor = .glucoseTintColor
+            trendLabel.textColor = .dashboardCoral
             trendLabel.isUserInteractionEnabled = false
             trendLabel.accessibilityElementsHidden = true
             view.addSubview(trendLabel)
@@ -264,8 +278,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
         } else if view === pumpStatusHUD {
             let expiresLabel = UILabel()
             expiresLabel.translatesAutoresizingMaskIntoConstraints = false
-            expiresLabel.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
-            expiresLabel.textColor = .secondaryLabel
+            expiresLabel.font = .dashboardRoundedDigits(ofSize: 9, weight: .semibold)
+            expiresLabel.textColor = .dashboardMutedInk
             expiresLabel.textAlignment = .right
             expiresLabel.adjustsFontSizeToFitWidth = true
             expiresLabel.minimumScaleFactor = 0.75
@@ -292,13 +306,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
     }
 
     private var dashboardCardBackgroundColor: UIColor {
-        return UIColor { traitCollection in
-            if traitCollection.userInterfaceStyle == .dark {
-                return UIColor(red: 23 / 255, green: 23 / 255, blue: 26 / 255, alpha: 1)
-            } else {
-                return .white
-            }
-        }
+        return .dashboardSurface
     }
 
     private func configureCompactGlucoseTrend() {
@@ -310,12 +318,14 @@ public class StatusBarHUDView: UIView, NibLoadable {
             return
         }
 
-        glucoseLabel.font = .monospacedDigitSystemFont(ofSize: 26, weight: .bold)
+        glucoseLabel.font = .dashboardRoundedDigits(ofSize: 26, weight: .bold)
+        glucoseLabel.textColor = .dashboardCoral
         glucoseLabel.textAlignment = .left
         glucoseLabel.adjustsFontSizeToFitWidth = true
         glucoseLabel.minimumScaleFactor = 0.75
 
-        unitLabel.font = .systemFont(ofSize: 10, weight: .medium)
+        unitLabel.font = .dashboardRounded(ofSize: 10, weight: .medium)
+        unitLabel.textColor = .dashboardMutedInk
         unitLabel.textAlignment = .left
         unitLabel.adjustsFontSizeToFitWidth = true
         unitLabel.minimumScaleFactor = 0.75
@@ -365,7 +375,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
     private func configureGlucoseTargetLabel() {
         let targetLabel = UILabel()
         targetLabel.translatesAutoresizingMaskIntoConstraints = false
-        targetLabel.font = .monospacedDigitSystemFont(ofSize: 9, weight: .medium)
+        targetLabel.font = .dashboardRoundedDigits(ofSize: 9, weight: .medium)
         targetLabel.textAlignment = .left
         targetLabel.adjustsFontSizeToFitWidth = true
         targetLabel.minimumScaleFactor = 0.7
@@ -411,12 +421,12 @@ public class StatusBarHUDView: UIView, NibLoadable {
         )
         let attributedText = NSMutableAttributedString(
             string: fullText,
-            attributes: [.foregroundColor: UIColor.secondaryLabel]
+            attributes: [.foregroundColor: UIColor.dashboardMutedInk]
         )
         if let range = fullText.range(of: targetRangeText) {
             attributedText.addAttribute(
                 .foregroundColor,
-                value: UIColor.systemCyan,
+                value: UIColor.dashboardCoral,
                 range: NSRange(range, in: fullText)
             )
         }
@@ -427,9 +437,9 @@ public class StatusBarHUDView: UIView, NibLoadable {
     private func configureLoopDosingModeLabel() {
         let dosingModeLabel = UILabel()
         dosingModeLabel.translatesAutoresizingMaskIntoConstraints = false
-        dosingModeLabel.font = .systemFont(ofSize: 9, weight: .semibold)
+        dosingModeLabel.font = .dashboardRounded(ofSize: 9, weight: .semibold)
         dosingModeLabel.textAlignment = .center
-        dosingModeLabel.textColor = .secondaryLabel
+        dosingModeLabel.textColor = .dashboardMutedInk
         dosingModeLabel.adjustsFontSizeToFitWidth = true
         dosingModeLabel.minimumScaleFactor = 0.7
         dosingModeLabel.isUserInteractionEnabled = false
@@ -491,7 +501,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
             let days = totalSeconds / 86400
             let hours = (totalSeconds % 86400) / 3600
             pumpExpiresLabel?.text = "\(days)d \(hours)h"
-            pumpExpiresLabel?.textColor = .secondaryLabel
+            pumpExpiresLabel?.textColor = .dashboardMutedInk
         }
         pumpExpiresLabel?.isHidden = false
     }
@@ -509,16 +519,12 @@ public class StatusBarHUDView: UIView, NibLoadable {
             return
         }
 
-        let borderColor: UIColor
-        if traitCollection.userInterfaceStyle == .dark {
-            borderColor = UIColor.white.withAlphaComponent(0.10)
-        } else {
-            borderColor = UIColor(red: 226 / 255, green: 232 / 255, blue: 240 / 255, alpha: 1)
-        }
+        let borderColor = UIColor.dashboardBorder.resolvedColor(with: traitCollection)
 
         for card in [cgmStatusHUD, loopCompletionHUD, pumpStatusHUD] {
             card?.backgroundColor = dashboardCardBackgroundColor
             card?.layer.borderColor = borderColor.cgColor
+            card?.layer.shadowColor = UIColor.dashboardMutedInk.resolvedColor(with: traitCollection).cgColor
             card?.layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0 : 0.08
         }
     }

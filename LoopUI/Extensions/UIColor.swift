@@ -30,6 +30,42 @@ extension UIColor {
     @nonobjc public static let loopAccent = UIColor(named: "accent") ?? glucose
     
     @nonobjc public static let warning = UIColor(named: "warning") ?? systemYellow
+
+    // Warm dashboard-only palette inspired by the reference design. These are
+    // intentionally separate from the clinical state colors used by Loop.
+    @nonobjc public static let dashboardCoral = UIColor { _ in
+        UIColor(red: 251 / 255, green: 113 / 255, blue: 133 / 255, alpha: 1.0) // #FB7185
+    }
+
+    @nonobjc public static let dashboardInk = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1.00, green: 0.94, blue: 0.92, alpha: 1.0)
+            : UIColor(red: 0.25, green: 0.14, blue: 0.15, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardMutedInk = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.82, green: 0.68, blue: 0.66, alpha: 1.0)
+            : UIColor(red: 0.52, green: 0.36, blue: 0.37, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardSurface = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.14, green: 0.10, blue: 0.11, alpha: 1.0)
+            : UIColor(red: 1.00, green: 0.985, blue: 0.975, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardBackground = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.075, green: 0.055, blue: 0.06, alpha: 1.0)
+            : UIColor(red: 0.985, green: 0.93, blue: 0.90, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardBorder = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor.white.withAlphaComponent(0.10)
+            : UIColor(red: 0.95, green: 0.84, blue: 0.81, alpha: 1.0)
+    }
 }
 
 // MARK: - Context for colors

@@ -66,8 +66,8 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     override public func tintColorDidChange() {
         super.tintColorDidChange()
         
-        glucoseValueHUD.tintColor = viewModel.glucoseValueTintColor
-        glucoseTrendHUD.tintColor = viewModel.glucoseTrendTintColor
+        glucoseValueHUD.tintColor = dashboardTint(for: viewModel.glucoseValueTintColor)
+        glucoseTrendHUD.tintColor = dashboardTint(for: viewModel.glucoseTrendTintColor)
     }
 
     override public func presentStatusHighlight(_ statusHighlight: DeviceStatusHighlight?) {
@@ -207,7 +207,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     func updateDisplay() {
         glucoseValueHUD.glucoseLabel.text = viewModel.glucoseValueString
         glucoseValueHUD.unitLabel.text = viewModel.unitsString
-        glucoseValueHUD.tintColor = viewModel.glucoseValueTintColor
+        glucoseValueHUD.tintColor = dashboardTint(for: viewModel.glucoseValueTintColor)
         presentStatusHighlight(viewModel.statusHighlight)
         
         accessibilityValue = viewModel.accessibilityString
@@ -215,11 +215,11 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     
     func updateTrendIcon() {
         glucoseTrendHUD.setIcon(viewModel.glucoseTrendIcon)
-        glucoseTrendHUD.tintColor = viewModel.glucoseTrendTintColor
+        glucoseTrendHUD.tintColor = dashboardTint(for: viewModel.glucoseTrendTintColor)
 
         let trend = viewModel.trend
         dashboardTrendLabel?.text = trend?.dashboardArrowText ?? "→"
-        dashboardTrendLabel?.textColor = .glucoseTintColor
+        dashboardTrendLabel?.textColor = .dashboardCoral
         dashboardTrendLabel?.alpha = trend == nil ? 0.75 : 1
         dashboardTrendLabel?.isHidden = false
     }
@@ -235,6 +235,15 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         if isStatusHighlightActive {
             dashboardTargetLabel?.isHidden = true
         }
+    }
+
+    private func dashboardTint(for color: UIColor) -> UIColor {
+        let resolvedColor = color.resolvedColor(with: traitCollection)
+        let resolvedDefault = UIColor.glucoseTintColor.resolvedColor(with: traitCollection)
+        guard usesDashboardCardStyle, resolvedColor.isEqual(resolvedDefault) else {
+            return color
+        }
+        return .dashboardCoral
     }
 }
 

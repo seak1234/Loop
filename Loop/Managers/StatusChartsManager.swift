@@ -36,7 +36,12 @@ class StatusChartsManager: ChartsManager {
         self.dose = dose
         self.cob = cob
 
-        super.init(colors: colors, settings: settings, charts: ChartIndex.allCases.map({ (index) -> ChartProviding in
+        let axisFont = UIFont.systemFont(ofSize: 13, weight: .regular)
+        let roundedAxisFont = axisFont.fontDescriptor.withDesign(.rounded).map {
+            UIFont(descriptor: $0, size: 13)
+        } ?? axisFont
+
+        super.init(colors: colors, settings: settings, axisLabelFont: roundedAxisFont, charts: ChartIndex.allCases.map({ (index) -> ChartProviding in
             switch index {
             case .glucose:
                 return glucose

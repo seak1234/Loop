@@ -21,6 +21,20 @@ import Combine
 import WidgetKit
 import MockKit
 
+private extension UIFont {
+    static func dashboardRounded(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let font = UIFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = font.fontDescriptor.withDesign(.rounded) else { return font }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
+    static func dashboardRoundedDigits(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+        guard let descriptor = font.fontDescriptor.withDesign(.rounded) else { return font }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+}
+
 
 private extension RefreshContext {
     static let all: Set<RefreshContext> = [.status, .glucose, .insulin, .carbs, .targets]
@@ -51,10 +65,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
         super.viewDidLoad()
         
         setupToolbarItems()
+        configureDashboardToolbarAppearance()
         
         tableView.register(BolusProgressTableViewCell.nib(), forCellReuseIdentifier: BolusProgressTableViewCell.className)
         tableView.register(AlertPermissionsDisabledWarningCell.self, forCellReuseIdentifier: AlertPermissionsDisabledWarningCell.className)
         tableView.register(MuteAlertsWarningCell.self, forCellReuseIdentifier: MuteAlertsWarningCell.className)
+        tableView.register(DashboardGraphicTableViewCell.self, forCellReuseIdentifier: DashboardGraphicTableViewCell.className)
 
         if FeatureFlags.predictedGlucoseChartClampEnabled {
             statusCharts.glucose.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBoundClamped
@@ -139,17 +155,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
 
         tableView.estimatedRowHeight = 74
+        tableView.sectionHeaderTopPadding = 0
 
         // Estimate an initial value
         landscapeMode = UIScreen.main.bounds.size.width > UIScreen.main.bounds.size.height
 
         addScenarioStepGestureRecognizers()
 
-        tableView.backgroundColor = UIColor { traitCollection in
-            traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 10/255, green: 10/255, blue: 12/255, alpha: 1.0)
-                : UIColor(red: 241/255, green: 245/255, blue: 249/255, alpha: 1.0)
-        }
+        tableView.backgroundColor = .dashboardBackground
         tableView.separatorStyle = .none
     
     }
@@ -169,6 +182,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         navigationController?.setNavigationBarHidden(true, animated: animated)
         navigationController?.setToolbarHidden(false, animated: animated)
+        configureDashboardToolbarAppearance()
         
         updateToolbarItems()
 
@@ -260,7 +274,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
             for case let cell as ChartTableViewCell in tableView.visibleCells {
                 if let indexPath = tableView.indexPath(for: cell) {
-                    self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
+                    refreshChartCellPresentation(cell, at: indexPath)
                 }
             }
         }
@@ -376,7 +390,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             titleLabelView.translatesAutoresizingMaskIntoConstraints = false
             titleLabelView.textAlignment = .center
-            titleLabelView.font = UIFont.systemFont(ofSize: 9.5, weight: .medium)
+            titleLabelView.font = Self.roundedFont(ofSize: 9.5, weight: .medium)
             titleLabelView.clipsToBounds = false
             titleLabelView.isUserInteractionEnabled = false
             titleLabelView.isAccessibilityElement = false
@@ -422,6 +436,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
             return ToolbarLayout.itemSize
         }
 
+        private static func roundedFont(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
+            let font = UIFont.systemFont(ofSize: size, weight: weight)
+            guard let descriptor = font.fontDescriptor.withDesign(.rounded) else { return font }
+            return UIFont(descriptor: descriptor, size: size)
+        }
+
         func set(image: UIImage?, title: String, tintColor: UIColor, isBadgeVisible: Bool = false) {
             self.baseImage = image
             self.customTintColor = tintColor
@@ -432,18 +452,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
 
         private func updateColors() {
-            let color = customTintColor ?? tintColor ?? .secondaryLabel
+            let color = customTintColor ?? tintColor ?? .dashboardMutedInk
             iconImageView.image = baseImage?.withTintColor(color, renderingMode: .alwaysOriginal)
             iconImageView.tintColor = color
             titleLabelView.textColor = color
             alpha = 1.0
 
             let isDark = traitCollection.userInterfaceStyle == .dark
-            let borderColor = isDark ? UIColor(white: 0.65, alpha: 1.0) : UIColor(red: 138/255, green: 138/255, blue: 138/255, alpha: 1.0)
+            let borderColor = isDark ? UIColor.dashboardMutedInk : UIColor.dashboardCoral.withAlphaComponent(0.65)
             badgeView.layer.borderColor = borderColor.cgColor
-            badgeView.backgroundColor = isDark
-                ? UIColor(red: 54/255, green: 175/255, blue: 209/255, alpha: 0.55)
-                : UIColor(red: 177/255, green: 231/255, blue: 244/255, alpha: 1.0)
+            badgeView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(isDark ? 0.55 : 0.22)
         }
 
         override func tintColorDidChange() {
@@ -480,19 +498,19 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private lazy var carbEntryButton = makeToolbarButton(
         systemName: "fork.knife",
         title: NSLocalizedString("Add Carbs", comment: "The label of the carb entry button"),
-        tintColor: .secondaryLabel,
+        tintColor: .dashboardMutedInk,
         action: #selector(userTappedAddCarbs)
     )
     private lazy var bolusButton = makeToolbarButton(
         systemName: "drop.fill",
         title: NSLocalizedString("Bolus", comment: "The label of the bolus entry button"),
-        tintColor: .insulinTintColor,
+        tintColor: .dashboardCoral,
         action: #selector(presentBolusScreen)
     )
     private lazy var settingsButton = makeToolbarButton(
         systemName: "slider.horizontal.3",
         title: NSLocalizedString("Settings", comment: "The label of the settings button"),
-        tintColor: .secondaryLabel,
+        tintColor: .dashboardMutedInk,
         action: #selector(onSettingsTapped)
     )
 
@@ -559,6 +577,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
         preMealItemIndex = toolbarItems?.firstIndex { $0 === preMeal } ?? 1
     }
 
+    private func configureDashboardToolbarAppearance() {
+        let appearance = UIToolbarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = .dashboardSurface
+        appearance.shadowColor = .dashboardBorder
+        navigationController?.toolbar.standardAppearance = appearance
+        navigationController?.toolbar.scrollEdgeAppearance = appearance
+        navigationController?.toolbar.tintColor = .dashboardCoral
+    }
+
     private func updateToolbarItems() {
         let isPumpOnboarded = onboardingManager.isComplete || deviceManager.pumpManager?.isOnboarded == true
 
@@ -616,7 +644,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         deviceManager.pumpManager?.addStatusObserver(self, queue: .main)
     }
     
-    private lazy var statusCharts = StatusChartsManager(colors: .primary, settings: .default, traitCollection: traitCollection)
+    private lazy var statusCharts = StatusChartsManager(colors: .dashboard, settings: .default, traitCollection: traitCollection)
 
     override func createChartsManager() -> ChartsManager {
         return statusCharts
@@ -945,6 +973,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     private enum Section: Int, CaseIterable {
         case alertWarning
+        case branding
         case hud
         case status
         case charts
@@ -958,6 +987,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case dose
         case cob
     }
+
+    // Keep the primary glucose graph visible and present the supporting metrics as
+    // compact summary cards, matching the hierarchy of the redesigned dashboard.
+    private var collapsedChartRows: Set<ChartRow> = [.iob, .dose, .cob]
 
     // MARK: Glucose
 
@@ -1073,8 +1106,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         switch (hudWasVisible, hudIsVisible) {
         case (false, true):
+            tableView.insertRows(at: [IndexPath(row: 0, section: Section.branding.rawValue)], with: animated ? .top : .none)
             tableView.insertRows(at: [IndexPath(row: 0, section: Section.hud.rawValue)], with: animated ? .top : .none)
         case (true, false):
+            tableView.deleteRows(at: [IndexPath(row: 0, section: Section.branding.rawValue)], with: animated ? .top : .none)
             tableView.deleteRows(at: [IndexPath(row: 0, section: Section.hud.rawValue)], with: animated ? .top : .none)
         default:
             break
@@ -1116,7 +1151,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cell.reloadChart()
 
             if let indexPath = tableView.indexPath(for: cell) {
-                self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
+                refreshChartCellPresentation(cell, at: indexPath)
             }
         }
         tableView.endUpdates()
@@ -1169,12 +1204,50 @@ final class StatusTableViewController: LoopChartsTableViewController {
         switch Section(rawValue: section)! {
         case .alertWarning:
             return shouldShowBannerWarning ? 1 : 0
+        case .branding:
+            return shouldShowHUD ? 1 : 0
         case .hud:
             return shouldShowHUD ? 1 : 0
         case .charts:
             return ChartRow.allCases.count
         case .status:
             return shouldShowStatus ? StatusRow.allCases.count : 0
+        }
+    }
+
+    private final class DashboardGraphicTableViewCell: UITableViewCell {
+        private let graphicImageView: UIImageView = {
+            let imageView = UIImageView(image: UIImage(named: "DashboardHeaderGraphic"))
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            imageView.contentMode = .scaleAspectFit
+            imageView.clipsToBounds = false
+            imageView.isAccessibilityElement = true
+            imageView.accessibilityLabel = NSLocalizedString("MichiLoop. My pancreas has WiFi.", comment: "Accessibility label for the dashboard header graphic")
+            return imageView
+        }()
+
+        override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+            super.init(style: style, reuseIdentifier: reuseIdentifier)
+            configureView()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            configureView()
+        }
+
+        private func configureView() {
+            backgroundColor = .clear
+            contentView.backgroundColor = .clear
+            selectionStyle = .none
+            contentView.addSubview(graphicImageView)
+
+            NSLayoutConstraint.activate([
+                graphicImageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+                graphicImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+                graphicImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+                graphicImageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            ])
         }
     }
 
@@ -1271,6 +1344,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 cell.selectionStyle = .none
                 return cell
             }
+        case .branding:
+            return tableView.dequeueReusableCell(withIdentifier: DashboardGraphicTableViewCell.className, for: indexPath)
         case .hud:
             let cell = tableView.dequeueReusableCell(withIdentifier: HUDViewTableViewCell.className, for: indexPath) as! HUDViewTableViewCell
             hudView = cell.hudView
@@ -1279,7 +1354,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case .charts:
             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
 
-            switch ChartRow(rawValue: indexPath.row)! {
+            let chartRow = ChartRow(rawValue: indexPath.row)!
+
+            switch chartRow {
             case .glucose:
                 cell.setChartGenerator(generator: { [weak self] (frame) in
                     return self?.statusCharts.glucoseChart(withFrame: frame)?.view
@@ -1311,6 +1388,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
 
+            if collapsedChartRows.contains(chartRow) {
+                configureCollapsedSummary(cell, for: chartRow)
+            } else {
+                cell.setExpandedAppearance()
+            }
+
             let alpha: CGFloat = charts.gestureRecognizer?.state == .possible ? 1 : 0
             cell.setAlpha(alpha: alpha)
 
@@ -1320,7 +1403,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
             func getTitleSubtitleCell() -> TitleSubtitleTableViewCell {
                 let cell = tableView.dequeueReusableCell(withIdentifier: TitleSubtitleTableViewCell.className, for: indexPath) as! TitleSubtitleTableViewCell
                 cell.selectionStyle = .none
-                cell.backgroundColor = .secondarySystemBackground
+                cell.backgroundColor = .dashboardSurface
+                cell.titleLabel.font = .dashboardRounded(ofSize: 15, weight: .semibold)
+                cell.titleLabel.textColor = .dashboardInk
+                cell.subtitleLabel.font = .dashboardRounded(ofSize: 13, weight: .regular)
+                cell.subtitleLabel.textColor = .dashboardMutedInk
                 cell.titleLabel.text = nil
                 cell.subtitleLabel.text = nil
                 cell.accessoryView = nil
@@ -1338,14 +1425,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     switch override.context {
                     case .preMeal:
                         let symbolAttachment = NSTextAttachment()
-                        symbolAttachment.image = UIImage(named: "Pre-Meal-symbol")?.withTintColor(.glucoseTintColor)
+                        symbolAttachment.image = UIImage(named: "Pre-Meal-symbol")?.withTintColor(.dashboardCoral)
 
                         let attributedString = NSMutableAttributedString(attachment: symbolAttachment)
                         attributedString.append(NSAttributedString(string: NSLocalizedString(" Pre-meal Preset", comment: "Status row title for premeal override enabled (leading space is to separate from symbol)")))
                         cell.titleLabel.attributedText = attributedString
                     case .legacyWorkout:
                         let symbolAttachment = NSTextAttachment()
-                        symbolAttachment.image = UIImage(named: "workout-symbol")?.withTintColor(.glucoseTintColor)
+                        symbolAttachment.image = UIImage(named: "workout-symbol")?.withTintColor(.dashboardCoral)
 
                         let attributedString = NSMutableAttributedString(attachment: symbolAttachment)
                         attributedString.append(NSAttributedString(string: NSLocalizedString(" Workout Preset", comment: "Status row title for workout override enabled (leading space is to separate from symbol)")))
@@ -1382,9 +1469,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     let progressCell = tableView.dequeueReusableCell(withIdentifier: BolusProgressTableViewCell.className, for: indexPath) as! BolusProgressTableViewCell
                     progressCell.selectionStyle = .none
                     progressCell.totalUnits = dose.programmedUnits
-                    progressCell.tintColor = .insulinTintColor
+                    progressCell.tintColor = .dashboardCoral
                     progressCell.deliveredUnits = bolusProgressReporter?.progress.deliveredUnits
-                    progressCell.backgroundColor = .secondarySystemBackground
+                    progressCell.backgroundColor = .dashboardSurface
                     return progressCell
                 case .cancelingBolus:
                     let cell = getTitleSubtitleCell()
@@ -1410,7 +1497,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 case .onboardingSuspended:
                     let cell = tableView.dequeueReusableCell(withIdentifier: IconTitleSubtitleTableViewCell.className, for: indexPath) as! IconTitleSubtitleTableViewCell
                     cell.selectionStyle = .default
-                    cell.backgroundColor = .secondarySystemBackground
+                    cell.backgroundColor = .dashboardSurface
                     cell.iconImageView.image = UIImage(systemName: "exclamationmark.circle.fill")
                     cell.iconImageView.tintColor = .warning
                     cell.iconImageView.contentMode = .scaleAspectFit
@@ -1425,11 +1512,60 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     cell.subtitleLabel.text = NSLocalizedString("Tap to Add", comment: "The subtitle of the cell displaying an action to add a manually measurement glucose value")
                     cell.selectionStyle = .default
                     let imageView = UIImageView(image: UIImage(named: "drop.circle"))
-                    imageView.tintColor = .glucoseTintColor
+                    imageView.tintColor = .dashboardCoral
                     cell.accessoryView = imageView
                     return cell
                 }
             }
+        }
+    }
+
+    private func configureCollapsedSummary(_ cell: ChartTableViewCell, for row: ChartRow) {
+        switch row {
+        case .glucose:
+            cell.setCollapsedAppearance(
+                iconSystemName: "drop.fill",
+                title: NSLocalizedString("Glucose", comment: "The title of the glucose summary card"),
+                detail: NSLocalizedString("Eventually", comment: "The subtitle of the glucose summary card"),
+                value: eventualGlucoseDescription,
+                tintColor: .dashboardCoral
+            )
+        case .iob:
+            cell.setCollapsedAppearance(
+                iconSystemName: "drop",
+                title: NSLocalizedString("Active Insulin", comment: "The title of the Insulin On-Board summary card"),
+                detail: NSLocalizedString("On board (IOB)", comment: "The subtitle of the Insulin On-Board summary card"),
+                value: currentIOBDescription,
+                tintColor: .dashboardCoral
+            )
+        case .dose:
+            let value = totalDelivery.map { String(format: NSLocalizedString("%.0f U", comment: "Compact total insulin delivered value"), $0) }
+            cell.setCollapsedAppearance(
+                iconSystemName: "syringe",
+                title: NSLocalizedString("Insulin Delivered", comment: "The title of the insulin delivery summary card"),
+                detail: NSLocalizedString("Total today", comment: "The subtitle of the insulin delivery summary card"),
+                value: value,
+                tintColor: .dashboardCoral
+            )
+        case .cob:
+            cell.setCollapsedAppearance(
+                iconSystemName: "fork.knife",
+                title: NSLocalizedString("Active Carbohydrates", comment: "The title of the Carbs On-Board summary card"),
+                detail: NSLocalizedString("On board", comment: "The subtitle of the Carbs On-Board summary card"),
+                value: currentCOBDescription,
+                tintColor: .dashboardCoral
+            )
+        }
+    }
+
+    private func refreshChartCellPresentation(_ cell: ChartTableViewCell, at indexPath: IndexPath) {
+        self.tableView(self.tableView, updateSubtitleFor: cell, at: indexPath)
+
+        let row = ChartRow(rawValue: indexPath.row)!
+        if collapsedChartRows.contains(row) {
+            configureCollapsedSummary(cell, for: row)
+        } else {
+            cell.setExpandedAppearance()
         }
     }
 
@@ -1443,15 +1579,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     let attrString = NSMutableAttributedString(
                         string: fullText,
                         attributes: [
-                            .font: UIFont.systemFont(ofSize: 12, weight: .medium),
-                            .foregroundColor: UIColor.secondaryLabel
+                            .font: UIFont.dashboardRounded(ofSize: 12, weight: .medium),
+                            .foregroundColor: UIColor.dashboardMutedInk
                         ]
                     )
                     if let range = fullText.range(of: eventualGlucose) {
                         let nsRange = NSRange(range, in: fullText)
                         attrString.addAttributes([
-                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.glucoseTintColor
+                            .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.dashboardCoral
                         ], range: nsRange)
                     }
                     cell.setAttributedSubtitleLabel(attrString)
@@ -1464,8 +1600,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     let attrString = NSAttributedString(
                         string: currentIOB,
                         attributes: [
-                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.insulinTintColor
+                            .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.dashboardCoral
                         ]
                     )
                     cell.setAttributedSubtitleLabel(attrString)
@@ -1483,15 +1619,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     let attrString = NSMutableAttributedString(
                         string: fullText,
                         attributes: [
-                            .font: UIFont.systemFont(ofSize: 12, weight: .medium),
-                            .foregroundColor: UIColor.secondaryLabel
+                            .font: UIFont.dashboardRounded(ofSize: 12, weight: .medium),
+                            .foregroundColor: UIColor.dashboardMutedInk
                         ]
                     )
                     if let range = fullText.range(of: valueText) {
                         let nsRange = NSRange(range, in: fullText)
                         attrString.addAttributes([
-                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.insulinTintColor
+                            .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.dashboardCoral
                         ], range: nsRange)
                     }
                     cell.setAttributedSubtitleLabel(attrString)
@@ -1503,8 +1639,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     let attrString = NSAttributedString(
                         string: currentCOB,
                         attributes: [
-                            .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.carbTintColor
+                            .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
+                            .foregroundColor: UIColor.dashboardCoral
                         ]
                     )
                     cell.setAttributedSubtitleLabel(attrString)
@@ -1512,16 +1648,32 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     cell.setSubtitleLabel(label: nil)
                 }
             }
-        case .hud, .status, .alertWarning:
+        case .branding, .hud, .status, .alertWarning:
             break
         }
     }
 
     // MARK: - UITableViewDelegate
 
+    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        return .leastNormalMagnitude
+    }
+
+    override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        return .leastNormalMagnitude
+    }
+
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         switch Section(rawValue: indexPath.section)! {
+        case .branding:
+            let availableWidth = max(0, tableView.bounds.width - 20)
+            let graphicAspectRatio: CGFloat = 819 / 1920
+            return ceil(availableWidth * graphicAspectRatio)
         case .charts:
+            if collapsedChartRows.contains(ChartRow(rawValue: indexPath.row)!) {
+                return 74
+            }
+
             // Compute the height of the HUD, defaulting to 70
             let hudHeight = ceil(hudView?.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height ?? 74)
             var availableSize = max(tableView.bounds.width, tableView.bounds.height)
@@ -1548,7 +1700,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 tableView.deselectRow(at: indexPath, animated: true)
                 presentUnmuteAlertConfirmation()
             }
-        case .hud:
+        case .branding, .hud:
             break
         case .status:
             switch StatusRow(rawValue: indexPath.row)! {
@@ -1611,16 +1763,13 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 }
             }
         case .charts:
-            switch ChartRow(rawValue: indexPath.row)! {
-            case .glucose:
-                if automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled {
-                    performSegue(withIdentifier: PredictionTableViewController.className, sender: indexPath)
-                }
-            case .iob, .dose:
-                performSegue(withIdentifier: InsulinDeliveryTableViewController.className, sender: indexPath)
-            case .cob:
-                performSegue(withIdentifier: CarbAbsorptionViewController.className, sender: indexPath)
+            let row = ChartRow(rawValue: indexPath.row)!
+            if collapsedChartRows.contains(row) {
+                collapsedChartRows.remove(row)
+            } else {
+                collapsedChartRows.insert(row)
             }
+            tableView.reloadRows(at: [indexPath], with: .automatic)
         }
     }
 
@@ -1778,7 +1927,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
 
     private func createPreMealButtonItem(selected: Bool, isEnabled: Bool) -> UIBarButtonItem {
-        let tintColor = selected ? UIColor.glucoseTintColor : UIColor.secondaryLabel
+        let tintColor = selected ? UIColor.dashboardCoral : UIColor.dashboardMutedInk
         preMealButton.set(
             image: UIImage(systemName: "timer"),
             title: NSLocalizedString("Pre-Meal", comment: "The label of the pre-meal mode toggle button"),
@@ -1801,7 +1950,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
     
     private func updateWorkoutButton(selected: Bool, isEnabled: Bool) {
-        let tintColor = selected ? UIColor.glucoseTintColor : UIColor.secondaryLabel
+        let tintColor = selected ? UIColor.dashboardCoral : UIColor.dashboardMutedInk
         workoutButton.set(
             image: UIImage(systemName: "figure.run"),
             title: NSLocalizedString("Targets", comment: "The label of the workout mode toggle button"),
@@ -2085,9 +2234,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
             updateLoopStatusHUD()
 
             hudView.cgmStatusHUD.stateColors = .cgmStatus
-            hudView.cgmStatusHUD.tintColor = .label
+            hudView.cgmStatusHUD.tintColor = .dashboardCoral
             hudView.pumpStatusHUD.stateColors = .pumpStatus
-            hudView.pumpStatusHUD.tintColor = .insulinTintColor
+            hudView.pumpStatusHUD.tintColor = .dashboardCoral
             hudView.setPumpExpiration(date: deviceManager.pumpExpiresAt)
 
             refreshContext.update(with: .status)

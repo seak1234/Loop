@@ -587,6 +587,9 @@
         }
       }
     },
+    "%.0f U" : {
+      "comment" : "Compact total insulin delivered value"
+    },
     "%@ %@" : {
       "comment" : "The format for an active custom preset. (1: preset symbol)(2: preset name)",
       "localizations" : {
@@ -4432,7 +4435,7 @@
       }
     },
     "Active Carbohydrates" : {
-      "comment" : "The title of the Carbs On-Board graph",
+      "comment" : "The title of the Carbs On-Board graph\nThe title of the Carbs On-Board summary card",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -4814,7 +4817,7 @@
       }
     },
     "Active Insulin" : {
-      "comment" : "Details for missing data error when active insulin amount is missing\nThe title of the Insulin On-Board graph\nTitle describing quantity of still-absorbing insulin",
+      "comment" : "Details for missing data error when active insulin amount is missing\nThe title of the Insulin On-Board graph\nThe title of the Insulin On-Board summary card\nTitle describing quantity of still-absorbing insulin",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -18462,6 +18465,9 @@
         }
       }
     },
+    "Eventually" : {
+      "comment" : "The subtitle of the glucose summary card"
+    },
     "Eventually %@" : {
       "comment" : "The subtitle format describing eventual glucose. (1: localized glucose value description)",
       "localizations" : {
@@ -20267,7 +20273,7 @@
       }
     },
     "Glucose" : {
-      "comment" : "The title of the glucose and prediction graph\nTitle for predicted glucose chart on bolus screen",
+      "comment" : "The title of the glucose and prediction graph\nThe title of the glucose summary card\nTitle for predicted glucose chart on bolus screen",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -22211,6 +22217,9 @@
           }
         }
       }
+    },
+    "Insulin Delivered" : {
+      "comment" : "The title of the insulin delivery summary card"
     },
     "Insulin Delivery" : {
       "comment" : "The title of the insulin delivery graph",
@@ -26577,6 +26586,9 @@
         }
       }
     },
+    "MichiLoop. My pancreas has WiFi." : {
+      "comment" : "Accessibility label for the dashboard header graphic"
+    },
     "Missed Meal Notifications" : {
       "comment" : "Title for missed meal notifications toggle",
       "localizations" : {
@@ -29784,6 +29796,12 @@
           }
         }
       }
+    },
+    "On board" : {
+      "comment" : "The subtitle of the Carbs On-Board summary card"
+    },
+    "On board (IOB)" : {
+      "comment" : "The subtitle of the Insulin On-Board summary card"
     },
     "Override Presets" : {
       "comment" : "The title text for the override presets",
@@ -38227,6 +38245,9 @@
           }
         }
       }
+    },
+    "Total today" : {
+      "comment" : "The subtitle of the insulin delivery summary card"
     },
     "Transmitter Low Battery" : {
       "localizations" : {

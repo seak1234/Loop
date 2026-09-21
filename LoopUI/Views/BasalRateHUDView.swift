@@ -10,6 +10,8 @@ import UIKit
 import LoopKitUI
 
 public final class BasalRateHUDView: BaseHUDView {
+
+    private var usesDashboardTypography = false
     
     override public var orderPriority: HUDViewOrderPriority {
         return 3
@@ -21,7 +23,7 @@ public final class BasalRateHUDView: BaseHUDView {
         didSet {
             basalRateLabel?.text = String(format: basalRateFormatString, "–")
             basalRateLabel?.textColor = tintColor
-            basalRateLabel?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+            updateFont()
 
             accessibilityValue = LocalizedString("Unknown", comment: "Accessibility value for an unknown value")
         }
@@ -30,7 +32,7 @@ public final class BasalRateHUDView: BaseHUDView {
     public override func awakeFromNib() {
         super.awakeFromNib()
         basalRateLabel?.textColor = tintColor
-        basalRateLabel?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        updateFont()
     }
 
     public override func tintColorDidChange() {
@@ -47,7 +49,7 @@ public final class BasalRateHUDView: BaseHUDView {
         if let rateString = decimalFormatter.string(from: rate) {
             basalRateLabel?.text = String(format: basalRateFormatString, rateString)
             basalRateLabel?.textColor = tintColor
-            basalRateLabel?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+            updateFont()
             accessibilityValue = String(format: LocalizedString("%1$@ units per hour at %2$@", comment: "Accessibility format string describing the basal rate. (1: localized basal rate value)(2: last updated time)"), rateString, time)
         } else {
             basalRateLabel?.text = nil
@@ -67,6 +69,22 @@ public final class BasalRateHUDView: BaseHUDView {
 
         return formatter
     }()
+
+    public func configureForDashboardCard() {
+        usesDashboardTypography = true
+        updateFont()
+    }
+
+    private func updateFont() {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        guard usesDashboardTypography,
+              let descriptor = font.fontDescriptor.withDesign(.rounded)
+        else {
+            basalRateLabel?.font = font
+            return
+        }
+        basalRateLabel?.font = UIFont(descriptor: descriptor, size: 11)
+    }
 
     private lazy var timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
