@@ -25,6 +25,24 @@ class StatusChartsManager: ChartsManager {
     let dose: DoseChart
     let cob: COBChart
 
+    /// When disabled, all dashboard charts display history through the current
+    /// time only, without prediction or a current-time divider.
+    var showsFutureData = true {
+        didSet {
+            guard showsFutureData != oldValue else { return }
+
+            glucose.showsPrediction = showsFutureData
+            glucose.showsCurrentTimeGuide = showsFutureData
+            iob.showsCurrentTimeGuide = showsFutureData
+            dose.showsCurrentTimeGuide = showsFutureData
+            cob.showsCurrentTimeGuide = showsFutureData
+
+            for index in ChartIndex.allCases {
+                invalidateChart(atIndex: index.rawValue)
+            }
+        }
+    }
+
     init(colors: ChartColorPalette, settings: ChartSettings, traitCollection: UITraitCollection) {
         let glucose = PredictedGlucoseChart(predictedGlucoseBounds: FeatureFlags.predictedGlucoseChartClampEnabled ? .default : nil,
                                             yAxisStepSizeMGDLOverride: FeatureFlags.predictedGlucoseChartClampEnabled ? 40 : nil)

@@ -759,7 +759,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     private func updateChartDateRange() {
         let historyHours = Double(selectedHistoryHours)
-        let futureHours: Double = 6.0
 
         let calendar = Calendar.current
         var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: Date())
@@ -767,7 +766,24 @@ final class StatusTableViewController: LoopChartsTableViewController {
         let now = calendar.date(from: components) ?? Date()
 
         let chartStartDate = now.addingTimeInterval(-TimeInterval(hours: historyHours))
-        let chartEndDate = now.addingTimeInterval(TimeInterval(hours: futureHours))
+        let chartEndDate = statusCharts.showsFutureData
+            ? now.addingTimeInterval(TimeInterval(hours: 6))
+            : now
+
+        switch (statusCharts.showsFutureData, selectedHistoryHours) {
+        case (false, 1):
+            charts.xAxisHourStepOverride = 0.25
+        case (false, 3):
+            charts.xAxisHourStepOverride = 0.5
+        case (false, 6):
+            charts.xAxisHourStepOverride = 1
+        case (false, 12):
+            charts.xAxisHourStepOverride = 2
+        case (false, 24):
+            charts.xAxisHourStepOverride = 4
+        default:
+            charts.xAxisHourStepOverride = nil
+        }
 
         if charts.startDate != chartStartDate {
             refreshContext.formUnion(RefreshContext.all)
@@ -775,6 +791,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
         charts.startDate = chartStartDate
         charts.maxEndDate = chartEndDate
         charts.updateEndDate(chartEndDate)
+    }
+
+    private func toggleChartFutureData() {
+        statusCharts.showsFutureData.toggle()
+        updateChartDateRange()
+        redrawCharts()
     }
 
     override func reloadData(animated: Bool = false) {
@@ -1478,6 +1500,18 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cell.onNavigate = { [weak self, weak cell] in
                 self?.navigateToDetails(for: chartRow, sender: cell)
             }
+            cell.onPlotTap = { [weak self] in
+                self?.toggleChartFutureData()
+            }
+            cell.onHeaderTap = { [weak self, weak tableView] in
+                guard let self, let tableView else { return }
+                if self.collapsedChartRows.contains(chartRow) {
+                    self.collapsedChartRows.remove(chartRow)
+                } else {
+                    self.collapsedChartRows.insert(chartRow)
+                }
+                tableView.reloadRows(at: [indexPath], with: .automatic)
+            }
 
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
 
@@ -1870,13 +1904,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 }
             }
         case .charts:
-            let row = ChartRow(rawValue: indexPath.row)!
-            if collapsedChartRows.contains(row) {
-                collapsedChartRows.remove(row)
-            } else {
-                collapsedChartRows.insert(row)
-            }
-            tableView.reloadRows(at: [indexPath], with: .automatic)
+            break
         }
     }
 
