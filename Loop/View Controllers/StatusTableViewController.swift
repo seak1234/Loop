@@ -2227,7 +2227,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             configureCGMManagerHUDViews()
 
             // when HUD view is initialized, update loop completion HUD (e.g., icon and last loop completed)
-            hudView.loopCompletionHUD.stateColors = .loopStatus
+            hudView.loopCompletionHUD.stateColors = .dashboardLoopStatus
             hudView.loopCompletionHUD.loopIconClosed = automaticDosingStatus.automaticDosingEnabled
             hudView.loopCompletionHUD.lastLoopCompleted = deviceManager.loopManager.lastLoopCompleted
             hudView.loopCompletionHUD.lastGlucoseStartDate = deviceManager.glucoseStore.latestGlucose?.startDate
@@ -2235,7 +2235,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             hudView.cgmStatusHUD.stateColors = .cgmStatus
             hudView.cgmStatusHUD.tintColor = .dashboardCoral
-            hudView.pumpStatusHUD.stateColors = .pumpStatus
+            hudView.pumpStatusHUD.stateColors = .dashboardPumpStatus
             hudView.pumpStatusHUD.tintColor = .dashboardCoral
             hudView.setPumpExpiration(date: deviceManager.pumpExpiresAt)
 
@@ -2269,7 +2269,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     private func addPumpManagerViewToHUD(_ view: BaseHUDView) {
         if let hudView = hudView {
-            view.stateColors = .pumpStatus
+            view.stateColors = .dashboardPumpStatus
+            view.tintColor = .dashboardCoral
             hudView.addPumpManagerProvidedHUDView(view)
         }
     }

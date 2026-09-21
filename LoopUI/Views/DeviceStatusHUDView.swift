@@ -12,6 +12,8 @@ import LoopKit
 import LoopKitUI
 
 @objc open class DeviceStatusHUDView: BaseHUDView {
+
+    private var dashboardNormalColor: UIColor?
     
     var statusHighlightView: StatusHighlightHUDView! {
         didSet {
@@ -55,7 +57,7 @@ import LoopKitUI
              
             progressView.isHidden = false
             progressView.progress = Float(lifecycleProgress.percentComplete.clamped(to: 0...1))
-            progressView.tintColor = lifecycleProgress.progressState.color
+            progressView.tintColor = color(for: lifecycleProgress.progressState)
         }
     }
     
@@ -87,8 +89,17 @@ import LoopKitUI
     }
 
     func configureForDashboardCard() {
+        configureForDashboardCard(normalColor: nil)
+    }
+
+    func configureForDashboardCard(normalColor: UIColor?) {
+        dashboardNormalColor = normalColor
         backgroundView.backgroundColor = .clear
         backgroundView.layer.cornerRadius = 0
+
+        if let lifecycleProgress = lifecycleProgress {
+            progressView.tintColor = color(for: lifecycleProgress.progressState)
+        }
     }
     
     public func presentStatusHighlight(_ statusHighlight: DeviceStatusHighlight?) {
@@ -99,7 +110,7 @@ import LoopKitUI
         
         presentStatusHighlight(withMessage: statusHighlight.localizedMessage,
                                image: statusHighlight.image,
-                               color: statusHighlight.state.color)
+                               color: color(for: statusHighlight.state))
     }
     
     private func presentStatusHighlight(withMessage message: String,
@@ -131,7 +142,7 @@ import LoopKitUI
         }
         
         presentStatusBadge(withIcon: statusBadge.image,
-                           color: statusBadge.state.color)
+                           color: color(for: statusBadge.state))
     }
     
     private func presentStatusBadge(withIcon badgeIcon: UIImage?,
@@ -147,5 +158,31 @@ import LoopKitUI
     
     private func dismissStatusBadge() {
         statusBadgeView.isHidden = true
+    }
+
+    private func color(for state: DeviceStatusElementState) -> UIColor {
+        guard let dashboardNormalColor = dashboardNormalColor else {
+            return state.color
+        }
+
+        switch state {
+        case .normalCGM, .normalPump:
+            return dashboardNormalColor
+        case .warning, .critical:
+            return state.color
+        }
+    }
+
+    private func color(for state: DeviceLifecycleProgressState) -> UIColor {
+        guard let dashboardNormalColor = dashboardNormalColor else {
+            return state.color
+        }
+
+        switch state {
+        case .normalCGM, .normalPump:
+            return dashboardNormalColor
+        case .critical, .dimmed, .warning:
+            return state.color
+        }
     }
 }

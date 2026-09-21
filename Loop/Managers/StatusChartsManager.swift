@@ -31,6 +31,7 @@ class StatusChartsManager: ChartsManager {
         let iob = IOBChart()
         let dose = DoseChart()
         let cob = COBChart()
+        glucose.targetGlucoseFillColor = colors.glucoseTint
         self.glucose = glucose
         self.iob = iob
         self.dose = dose

@@ -11,7 +11,11 @@ import LoopKitUI
 extension StateColorPalette {
     static let loopStatus = StateColorPalette(unknown: .unknownColor, normal: .freshColor, warning: .agingColor, error: .staleColor)
 
+    static let dashboardLoopStatus = StateColorPalette(unknown: .unknownColor, normal: .dashboardLoopFresh, warning: .agingColor, error: .staleColor)
+
     static let cgmStatus = loopStatus
 
     static let pumpStatus = StateColorPalette(unknown: .unknownColor, normal: .pumpStatusNormal, warning: .agingColor, error: .staleColor)
+
+    static let dashboardPumpStatus = StateColorPalette(unknown: .unknownColor, normal: .dashboardCoral, warning: .agingColor, error: .staleColor)
 }

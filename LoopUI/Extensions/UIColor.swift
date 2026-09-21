@@ -37,6 +37,10 @@ extension UIColor {
         UIColor(red: 232 / 255, green: 130 / 255, blue: 136 / 255, alpha: 1.0) // #E88288
     }
 
+    @nonobjc public static let dashboardLoopFresh = UIColor { _ in
+        UIColor(red: 116 / 255, green: 184 / 255, blue: 138 / 255, alpha: 1.0) // #74B88A
+    }
+
     @nonobjc public static let dashboardInk = UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 1.00, green: 0.94, blue: 0.92, alpha: 1.0)
