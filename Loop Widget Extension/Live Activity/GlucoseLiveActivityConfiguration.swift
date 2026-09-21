@@ -367,16 +367,102 @@ struct GlucoseLiveActivityConfiguration: Widget {
         }
     }
 
+    private struct LoopShades {
+        let highlight: Color
+        let base: Color
+        let shadow: Color
+        let deepShadow: Color
+    }
+
+    private func getLoopShades(_ age: Date?) -> LoopShades {
+        var freshness: LoopCompletionFreshness = .stale
+        if let age = age {
+            freshness = LoopCompletionFreshness(
+                age: abs(min(0, age.timeIntervalSinceNow))
+            )
+        }
+
+        switch freshness {
+        case .fresh:
+            return LoopShades(
+                highlight: Color(red: 178 / 255, green: 236 / 255, blue: 195 / 255),
+                base: Self.dashboardLoopFresh,
+                shadow: Color(red: 62 / 255, green: 130 / 255, blue: 82 / 255),
+                deepShadow: Color(red: 25 / 255, green: 70 / 255, blue: 38 / 255)
+            )
+        case .aging:
+            return LoopShades(
+                highlight: Color(red: 255 / 255, green: 220 / 255, blue: 125 / 255),
+                base: Color(red: 245 / 255, green: 158 / 255, blue: 11 / 255),
+                shadow: Color(red: 180 / 255, green: 95 / 255, blue: 6 / 255),
+                deepShadow: Color(red: 115 / 255, green: 50 / 255, blue: 5 / 255)
+            )
+        case .stale:
+            return LoopShades(
+                highlight: Color(red: 255 / 255, green: 155 / 255, blue: 155 / 255),
+                base: Color(red: 235 / 255, green: 65 / 255, blue: 65 / 255),
+                shadow: Color(red: 155 / 255, green: 28 / 255, blue: 28 / 255),
+                deepShadow: Color(red: 90 / 255, green: 12 / 255, blue: 12 / 255)
+            )
+        }
+    }
+
     @ViewBuilder
     private func loopIcon(
         _ context: ActivityViewContext<GlucoseActivityAttributes>,
         size: CGFloat = 36
     ) -> some View {
-        Circle()
-            .trim(from: context.state.isCloseLoop ? 0 : 0.2, to: 1)
-            .stroke(getLoopColor(context.state.lastCompleted), lineWidth: size/4.5)
-            .rotationEffect(Angle(degrees: -126))
-            .frame(width: size, height: size)
+        let shades = getLoopShades(context.state.lastCompleted)
+        let lineWidth = size / 4.5
+        let isClosed = context.state.isCloseLoop
+        let trimFrom: CGFloat = isClosed ? 0 : 0.2
+        let rotation = Angle(degrees: -126)
+        let strokeStyle = StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        let spineStyle = StrokeStyle(lineWidth: max(1.0, lineWidth * 0.35), lineCap: .round, lineJoin: .round)
+
+        ZStack {
+            // 1. Recessed groove / background track for physical depth
+            Circle()
+                .trim(from: trimFrom, to: 1)
+                .stroke(Color.black.opacity(0.35), style: strokeStyle)
+                .rotationEffect(rotation)
+
+            // 2. Volumetric 3D tube with directional lighting gradient (top-left to bottom-right)
+            Circle()
+                .trim(from: trimFrom, to: 1)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: shades.highlight, location: 0.0),
+                            .init(color: shades.base, location: 0.45),
+                            .init(color: shades.shadow, location: 1.0)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: strokeStyle
+                )
+                .rotationEffect(rotation)
+                .shadow(color: shades.deepShadow.opacity(0.55), radius: size * 0.06, x: 0, y: size * 0.04)
+
+            // 3. Specular crest highlight along top ridge (gives cylindrical curvature)
+            Circle()
+                .trim(from: trimFrom, to: 1)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: Color.white.opacity(0.65), location: 0.0),
+                            .init(color: shades.highlight.opacity(0.35), location: 0.35),
+                            .init(color: Color.clear, location: 0.75)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: spineStyle
+                )
+                .rotationEffect(rotation)
+        }
+        .frame(width: size, height: size)
     }
 
     @ViewBuilder

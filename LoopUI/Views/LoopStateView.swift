@@ -92,7 +92,7 @@ final class LoopStateView: UIView {
                 shapeLayer.isHidden = false
             } else {
                 // > 5 minutes, but not yet warning state:
-                // Stays grey until entering warning state
+                // Stays grey track until entering warning state
                 shapeLayer.strokeStart = 1.0
                 shapeLayer.strokeEnd = 1.0
                 shapeLayer.isHidden = true
@@ -153,12 +153,14 @@ final class LoopStateView: UIView {
     }
 
     private func setupView() {
-        trackLayer.lineWidth = 3.5
+        // 1. Background track / groove (thicker 5.0pt)
+        trackLayer.lineWidth = 5.0
         trackLayer.fillColor = UIColor.clear.cgColor
         trackLayer.lineCap = .round
         layer.addSublayer(trackLayer)
 
-        shapeLayer.lineWidth = 3.5
+        // 2. Primary loop status stroke (thicker 5.0pt)
+        shapeLayer.lineWidth = 5.0
         shapeLayer.fillColor = UIColor.clear.cgColor
         shapeLayer.lineCap = .round
         layer.addSublayer(shapeLayer)
@@ -179,7 +181,7 @@ final class LoopStateView: UIView {
         shapeLayer.frame = bounds
         shapeLayer.path = drawPath()
 
-        elapsedLabel.frame = bounds.insetBy(dx: 4, dy: 4)
+        elapsedLabel.frame = bounds.insetBy(dx: 5, dy: 5)
     }
 
     private func drawTrackPath() -> CGPath {
@@ -200,10 +202,9 @@ final class LoopStateView: UIView {
         return path.cgPath
     }
 
-    private func drawPath(lineWidth: CGFloat? = nil) -> CGPath {
+    private func drawPath(forStrokeWidth strokeWidth: CGFloat = 5.0) -> CGPath {
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
-        let lineWidth = lineWidth ?? shapeLayer.lineWidth
-        let radius = min(bounds.width / 2, bounds.height / 2) - lineWidth / 2
+        let radius = min(bounds.width / 2, bounds.height / 2) - strokeWidth / 2
 
         let startAngle = open ? -CGFloat.pi / 4 : -CGFloat.pi / 2
         let endAngle = open ? 5 * CGFloat.pi / 4 : -CGFloat.pi / 2 + 2 * CGFloat.pi
@@ -227,11 +228,11 @@ final class LoopStateView: UIView {
                 if animated {
                     let path = CABasicAnimation(keyPath: "path")
                     path.fromValue = shapeLayer.path ?? drawPath()
-                    path.toValue = drawPath(lineWidth: 5.5)
+                    path.toValue = drawPath(forStrokeWidth: 6.5)
 
                     let width = CABasicAnimation(keyPath: "lineWidth")
                     width.fromValue = shapeLayer.lineWidth
-                    width.toValue = 5.0
+                    width.toValue = 6.5
 
                     let group = CAAnimationGroup()
                     group.animations = [path, width]

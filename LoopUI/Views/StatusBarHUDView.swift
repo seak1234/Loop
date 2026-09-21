@@ -437,7 +437,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
     private func configureLoopDosingModeLabel() {
         let dosingModeLabel = UILabel()
         dosingModeLabel.translatesAutoresizingMaskIntoConstraints = false
-        dosingModeLabel.font = .dashboardRounded(ofSize: 12, weight: .regular)
+        dosingModeLabel.font = .dashboardRounded(ofSize: 9, weight: .medium)
         dosingModeLabel.textAlignment = .center
         dosingModeLabel.textColor = .dashboardMutedInk
         dosingModeLabel.adjustsFontSizeToFitWidth = true
@@ -453,7 +453,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
             dosingModeLabel.leadingAnchor.constraint(equalTo: loopCompletionHUD.leadingAnchor, constant: 6),
             dosingModeLabel.trailingAnchor.constraint(equalTo: loopCompletionHUD.trailingAnchor, constant: -6),
             dosingModeLabel.bottomAnchor.constraint(equalTo: loopCompletionHUD.bottomAnchor, constant: -7),
-            dosingModeLabel.heightAnchor.constraint(equalToConstant: 15),
+            dosingModeLabel.heightAnchor.constraint(equalToConstant: 12),
         ]
         if let loopStateView = loopStateView {
             constraints.append(dosingModeLabel.topAnchor.constraint(greaterThanOrEqualTo: loopStateView.bottomAnchor, constant: 2))
