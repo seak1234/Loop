@@ -287,7 +287,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
                     Text(
                         "\(glucoseFormatter.string(from: context.state.currentGlucose) ?? "??")\(getArrowImage(context.state.trendType))"
                     )
-                    .foregroundStyle(getGlucoseColor(context: context))
+                    .foregroundStyle(getDynamicIslandColor(context: context))
                     .font(.headline)
                     .fontWeight(.heavy)
                 }
@@ -295,7 +295,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
             DynamicIslandExpandedRegion(.trailing) {
                 HStack {
                     Text(context.state.delta)
-                        .foregroundStyle(Color(white: 0.9))
+                        .foregroundStyle(getDynamicIslandColor(context: context))
                         .font(.headline)
                     Text(
                         context.state.isMmol
@@ -348,12 +348,12 @@ struct GlucoseLiveActivityConfiguration: Widget {
                 "\(glucoseFormatter.string(from: context.state.currentGlucose) ?? "??")\(getArrowImage(context.state.trendType))"
             )
             .foregroundStyle(
-                getGlucoseColor(context: context)
+                getDynamicIslandColor(context: context)
             )
             .minimumScaleFactor(0.1)
         } compactTrailing: {
             Text(context.state.delta)
-                .foregroundStyle(Color(white: 0.9))
+                .foregroundStyle(getDynamicIslandColor(context: context))
                 .minimumScaleFactor(0.1)
         } minimal: {
             Text(
@@ -361,7 +361,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
                     ?? "??"
             )
             .foregroundStyle(
-                getGlucoseColor(context: context)
+                getDynamicIslandColor(context: context)
             )
             .minimumScaleFactor(0.1)
         }
@@ -579,6 +579,33 @@ struct GlucoseLiveActivityConfiguration: Widget {
         }
 
         return .white
+    }
+
+    private func getDynamicIslandColor(
+        context: ActivityViewContext<GlucoseActivityAttributes>
+    ) -> Color {
+        guard context.attributes.useLimits else {
+            return .primary
+        }
+
+        let value = context.state.currentGlucose
+        if context.state.isMmol
+            && value < context.attributes.lowerLimitChartMmol
+            || !context.state.isMmol
+            && value < context.attributes.lowerLimitChartMg
+        {
+            return .red
+        }
+
+        if context.state.isMmol
+            && value > context.attributes.upperLimitChartMmol
+            || !context.state.isMmol
+            && value > context.attributes.upperLimitChartMg
+        {
+            return .orange
+        }
+
+        return .green
     }
 
 }
