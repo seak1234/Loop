@@ -36,7 +36,7 @@ enum LoopConstants {
     static let statusChartMinimumHistoryDisplay: TimeInterval = .hours(1)
 
     static let glucoseChartDefaultDisplayBound =
-        HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 100)...HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 175)
+        HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 50)...HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 200)
 
     static let glucoseChartDefaultDisplayRangeWide =
         HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 60)...HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 200)
