@@ -19,6 +19,7 @@ struct ChartView: View {
     private let preset: Preset?
     private let yAxisMarks: [Double]
     private let colorGradient: LinearGradient
+    private let currentTime: Date
 
     private static let colorInRange = Color.dashboardCoral
     private static let colorBelowRange = Color.red
@@ -36,15 +37,22 @@ struct ChartView: View {
     }
 
     init(glucoseSamples: [GlucoseSampleAttributes], predicatedGlucose: [Double], predicatedStartDate: Date?, predicatedInterval: TimeInterval?, useLimits: Bool, lowerLimit: Double, upperLimit: Double, glucoseRanges: [GlucoseRangeValue], preset: Preset?, yAxisMarks: [Double]) {
-        self.glucoseSampleData = ChartValues.convert(data: glucoseSamples, useLimits: useLimits, lowerLimit: lowerLimit, upperLimit: upperLimit)
+        let sampleData = ChartValues.convert(data: glucoseSamples, useLimits: useLimits, lowerLimit: lowerLimit, upperLimit: upperLimit)
+        self.glucoseSampleData = sampleData
+        let latestSampleDate = sampleData.map(\.x).max()
+        let now = Date.now
+        let current = max(now, latestSampleDate ?? now)
+        self.currentTime = current
+        
         self.predicatedData = ChartValues.convert(
             data: predicatedGlucose,
-            startDate: predicatedStartDate ?? Date.now,
+            startDate: predicatedStartDate ?? now,
             interval: predicatedInterval ?? .minutes(5),
             useLimits: useLimits,
             lowerLimit: lowerLimit,
             upperLimit: upperLimit
-        )
+        ).filter { $0.x >= (latestSampleDate ?? current) }
+
         self.colorGradient = ChartView.getGradient(useLimits: useLimits, lowerLimit: lowerLimit, upperLimit: upperLimit, lowestValue: predicatedGlucose.min() ?? 1, highestValue: predicatedGlucose.max() ?? 1)
         self.preset = preset
         self.glucoseRanges = glucoseRanges
@@ -52,7 +60,11 @@ struct ChartView: View {
     }
     
     init(glucoseSamples: [GlucoseSampleAttributes], useLimits: Bool, lowerLimit: Double, upperLimit: Double, glucoseRanges: [GlucoseRangeValue], preset: Preset?, yAxisMarks: [Double]) {
-        self.glucoseSampleData = ChartValues.convert(data: glucoseSamples, useLimits: useLimits, lowerLimit: lowerLimit, upperLimit: upperLimit)
+        let sampleData = ChartValues.convert(data: glucoseSamples, useLimits: useLimits, lowerLimit: lowerLimit, upperLimit: upperLimit)
+        self.glucoseSampleData = sampleData
+        let latestSampleDate = sampleData.map(\.x).max()
+        let now = Date.now
+        self.currentTime = max(now, latestSampleDate ?? now)
         self.predicatedData = []
         self.preset = preset
         self.glucoseRanges = glucoseRanges
@@ -124,6 +136,12 @@ struct ChartView: View {
                     )
                     .foregroundStyle(Color.dashboardCoral)
                     .opacity(item.isOverride ? 0.30 : 0.18)
+                }
+
+                if !glucoseSampleData.isEmpty || !predicatedData.isEmpty {
+                    RuleMark(x: .value("Current Time", currentTime))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .foregroundStyle(Color.dashboardMutedInk.opacity(0.65))
                 }
                 
                 ForEach(glucoseSampleData) { item in
