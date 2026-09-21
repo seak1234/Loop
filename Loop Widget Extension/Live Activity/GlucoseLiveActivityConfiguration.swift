@@ -16,6 +16,18 @@ import WidgetKit
 
 @available(iOS 16.2, *)
 struct GlucoseLiveActivityConfiguration: Widget {
+    private static let dashboardCoral = Color(
+        red: 232 / 255,
+        green: 130 / 255,
+        blue: 136 / 255
+    )
+
+    private static let dashboardLoopFresh = Color(
+        red: 116 / 255,
+        green: 184 / 255,
+        blue: 138 / 255
+    )
+
     var body: some WidgetConfiguration {
         if #available(iOS 18.0, *) {
             return ActivityConfiguration(for: GlucoseActivityAttributes.self) {
@@ -212,7 +224,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
             ? HKUnit.millimolesPerLiter.localizedShortUnitString
             : HKUnit.milligramsPerDeciliter.localizedShortUnitString
         
-        let glucoseColor = !context.attributes.useLimits ? .primary : getGlucoseColor(context: context)
+        let glucoseColor = getGlucoseColor(context: context)
         let currentBG = (glucoseFormatter.string(from: context.state.currentGlucose) ?? "??") + getArrowImage(context.state.trendType)
         let eventualBG = formatEventualBG(value: context.state.eventualGlucose, formatter: glucoseFormatter)
         
@@ -392,11 +404,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
             HStack {
                 Text(value + getArrowImage(trend))
                     .font(.title)
-                    .foregroundStyle(
-                        !context.attributes.useLimits
-                            ? .primary
-                            : getGlucoseColor(context: context)
-                    )
+                    .foregroundStyle(getGlucoseColor(context: context))
                     .fontWeight(.heavy)
                     .font(Font.body.leading(.tight))
             }
@@ -454,7 +462,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
 
         switch freshness {
         case .fresh:
-            return Color("fresh")
+            return Self.dashboardLoopFresh
         case .aging:
             return Color("warning")
         case .stale:
@@ -464,7 +472,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
 
     private func getGlucoseColor(context: ActivityViewContext<GlucoseActivityAttributes>) -> Color {
         guard context.attributes.useLimits else {
-            return .primary
+            return Self.dashboardCoral
         }
         
         let value = context.state.currentGlucose
@@ -484,7 +492,7 @@ struct GlucoseLiveActivityConfiguration: Widget {
             return .orange
         }
 
-        return .green
+        return Self.dashboardCoral
     }
 
 }

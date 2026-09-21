@@ -1979,7 +1979,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             vc.deviceManager = deviceManager
             vc.hidesBottomBarWhenPushed = true
             vc.enableEntryDeletion = FeatureFlags.entryDeletionEnabled
-            vc.headerValueLabelColor = .insulinTintColor
+            vc.headerValueLabelColor = .dashboardCoral
         case let vc as OverrideSelectionViewController:
             if deviceManager.loopManager.settings.futureOverrideEnabled() {
                 vc.scheduledOverride = deviceManager.loopManager.settings.scheduleOverride
