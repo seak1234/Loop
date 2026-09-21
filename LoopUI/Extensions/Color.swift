@@ -55,3 +55,14 @@ extension Color {
     
     public static let unknownColor = Color(UIColor.unknownColor)
 }
+
+// MARK: - Dashboard Palette
+extension Color {
+    public static let dashboardCoral = Color(UIColor.dashboardCoral)
+    public static let dashboardLoopFresh = Color(UIColor.dashboardLoopFresh)
+    public static let dashboardInk = Color(UIColor.dashboardInk)
+    public static let dashboardMutedInk = Color(UIColor.dashboardMutedInk)
+    public static let dashboardSurface = Color(UIColor.dashboardSurface)
+    public static let dashboardBackground = Color(UIColor.dashboardBackground)
+    public static let dashboardBorder = Color(UIColor.dashboardBorder)
+}

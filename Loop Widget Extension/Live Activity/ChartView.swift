@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import Charts
+import LoopUI
 
 @available(iOS 16.2, *)
 struct ChartView: View {
@@ -19,9 +20,10 @@ struct ChartView: View {
     private let yAxisMarks: [Double]
     private let colorGradient: LinearGradient
 
-    private static let colorInRange = Color.green
+    private static let colorInRange = Color.dashboardCoral
     private static let colorBelowRange = Color.red
     private static let colorAboveRange = Color.orange
+    private static let colorDefault = Color.dashboardCoral
 
     // Infer chartable increment from yAxisMarks: mmol/L values are always below 40, mg/dL above 54.
     private var chartableIncrement: Double { (yAxisMarks.max() ?? 100) < 40 ? 1.0/25.0 : 1.0 }
@@ -60,7 +62,7 @@ struct ChartView: View {
 
     private static func getGradient(useLimits: Bool, lowerLimit: Double, upperLimit: Double, lowestValue: Double, highestValue: Double) -> LinearGradient {
     
-        var stops: [Gradient.Stop] = [Gradient.Stop(color: Color("glucose"), location: 0)]
+        var stops: [Gradient.Stop] = [Gradient.Stop(color: colorDefault.opacity(0.7), location: 0)]
         if useLimits {
             // For applying a color gradient to line data, the range of the plotted
             // data maps to the space 0 to 1 for setting gradient stops, so normalize:
@@ -72,21 +74,21 @@ struct ChartView: View {
             var stopColor: Color
             // Get the color for glucose at the minimum of the line:
             if lowestValue < lowerLimit {
-                stopColor = colorBelowRange
+                stopColor = colorBelowRange.opacity(0.8)
             } else if lowestValue < upperLimit {
-                stopColor = colorInRange
+                stopColor = colorInRange.opacity(0.7)
             } else {
-                stopColor = colorAboveRange
+                stopColor = colorAboveRange.opacity(0.8)
             }
             stops.append(Gradient.Stop(color: stopColor, location: 0))
             // Add the transition stops if they are in the visible range:
             if lowerStop > 0, lowerStop < 1 {
-                stops.append(Gradient.Stop(color: colorBelowRange, location: lowerStop))
-                stops.append(Gradient.Stop(color: colorInRange, location: lowerStop + 0.01))
+                stops.append(Gradient.Stop(color: colorBelowRange.opacity(0.8), location: lowerStop))
+                stops.append(Gradient.Stop(color: colorInRange.opacity(0.7), location: lowerStop + 0.01))
             }
             if upperStop > 0, upperStop < 1 {
-                stops.append(Gradient.Stop(color: colorInRange, location: upperStop))
-                stops.append(Gradient.Stop(color: colorAboveRange, location: upperStop + 0.01))
+                stops.append(Gradient.Stop(color: colorInRange.opacity(0.7), location: upperStop))
+                stops.append(Gradient.Stop(color: colorAboveRange.opacity(0.8), location: upperStop + 0.01))
             }
             
         }
@@ -108,8 +110,8 @@ struct ChartView: View {
                         yStart: .value("Preset override", presetMin),
                         yEnd: .value("Preset override", presetMax)
                     )
-                    .foregroundStyle(.primary)
-                    .opacity(0.6)
+                    .foregroundStyle(Color.dashboardCoral)
+                    .opacity(0.30)
                 }
                 
                 ForEach(glucoseRanges) { item in
@@ -120,8 +122,8 @@ struct ChartView: View {
                         yStart: .value("Glucose range", rangeMin),
                         yEnd: .value("Glucose range", rangeMax)
                     )
-                    .foregroundStyle(.primary)
-                    .opacity(item.isOverride ? 0.6 : 0.3)
+                    .foregroundStyle(Color.dashboardCoral)
+                    .opacity(item.isOverride ? 0.30 : 0.18)
                 }
                 
                 ForEach(glucoseSampleData) { item in
@@ -144,10 +146,10 @@ struct ChartView: View {
                 "Good": Self.colorInRange,
                 "High": Self.colorAboveRange,
                 "Low": Self.colorBelowRange,
-                "Default": Color("glucose")
+                "Default": Self.colorDefault
             ])
             .chartPlotStyle { plotContent in
-                plotContent.background(.cyan.opacity(0.15))
+                plotContent.background(Color.clear)
             }
             .chartLegend(.hidden)
             .chartYScale(domain: [yAxisMarks.first ?? 0, yAxisMarks.last ?? 0])
@@ -157,22 +159,23 @@ struct ChartView: View {
             .chartYAxis {
                 AxisMarks(position: .leading) { _ in
                     AxisValueLabel().foregroundStyle(Color.primary)
-                    AxisGridLine(stroke: .init(lineWidth: 0.1, dash: [2, 3]))
-                        .foregroundStyle(Color.primary)
+                    AxisGridLine(stroke: .init(lineWidth: 0.5, dash: [2, 3]))
+                        .foregroundStyle(Color.dashboardBorder.opacity(0.65))
                 }
             }
             .chartXAxis {
                 AxisMarks(position: .automatic, values: .stride(by: .hour)) { _ in
                     AxisValueLabel(format: .dateTime.hour(.twoDigits(amPM: .narrow)), anchor: .top)
                         .foregroundStyle(Color.primary)
-                    AxisGridLine(stroke: .init(lineWidth: 0.1, dash: [2, 3]))
-                        .foregroundStyle(Color.primary)
+                    AxisGridLine(stroke: .init(lineWidth: 0.5, dash: [2, 3]))
+                        .foregroundStyle(Color.dashboardBorder.opacity(0.65))
                 }
             }
             
             if let preset = self.preset, preset.endDate > Date.now {
                 Text(preset.title)
                     .font(.footnote)
+                    .foregroundStyle(Color.dashboardMutedInk)
                     .padding(.trailing, 5)
                     .padding(.top, 2)
             }
