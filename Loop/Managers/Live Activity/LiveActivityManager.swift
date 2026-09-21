@@ -92,15 +92,21 @@ class LiveActivityManager : LiveActivityManagerProxy {
                 await endActivity()
             }
             
-            guard let unit = await self.healthStore.cachedPreferredUnits(for: .bloodGlucose) else {
-                print("ERROR: No unit found...")
-                return
-            }
-            
+            let statusContext = UserDefaults.appGroup?.statusExtensionContext
+            // HealthKit may not have a preferred unit yet, most commonly in the
+            // simulator or before authorization completes. Glucose data can
+            // already be available in those states, so do not leave the Live
+            // Activity displaying its initial "ended" placeholder. Prefer the
+            // configured therapy unit, then the shared widget context, and use
+            // mg/dL as the final safe default.
+            let unit = await self.healthStore.cachedPreferredUnits(for: .bloodGlucose)
+                ?? self.loopSettings.glucoseUnit
+                ?? statusContext?.predictedGlucose?.unit
+                ?? .milligramsPerDeciliter
+
             let isMmol = unit == HKUnit.millimolesPerLiter
             await self.endUnknownActivities()
 
-            let statusContext = UserDefaults.appGroup?.statusExtensionContext
             let glucoseFormatter = NumberFormatter.glucoseFormatter(for: unit)
             
             let glucoseSamples = await self.getGlucoseSample(unit: unit)
@@ -177,6 +183,14 @@ class LiveActivityManager : LiveActivityManagerProxy {
                 isMmol: unit == HKUnit.millimolesPerLiter
             )
 
+            // ActivityKit limits each ContentState payload to 4 KB. Sending the
+            // previous cap of 100 samples can exceed that limit (especially with
+            // the simulator's high-frequency CGM), leaving the activity stuck on
+            // its initial placeholder. Keep 24 evenly-spaced points across the
+            // entire requested history so the chart retains its overall shape
+            // while the encoded update remains comfortably below the limit.
+            let chartGlucoseSamples = self.downsample(glucoseSamples, to: 24)
+
             let state = GlucoseActivityAttributes.ContentState(
                 date: currentGlucose.startDate,
                 ended: false,
@@ -190,9 +204,7 @@ class LiveActivityManager : LiveActivityManagerProxy {
                 isCloseLoop: statusContext?.isClosedLoop ?? false,
                 lastCompleted: statusContext?.lastLoopCompleted,
                 bottomRow: bottomRow,
-                // In order to prevent maxSize errors, only allow the last 100 samples to be sent
-                // Will most likely not be an issue, might be an issue for debugging/CGM simulator with 5sec interval
-                glucoseSamples: glucoseSamples.suffix(100).map { item in
+                glucoseSamples: chartGlucoseSamples.map { item in
                     return GlucoseSampleAttributes(x: item.startDate, y: item.quantity.doubleValue(for: unit))
                 },
                 predicatedGlucose: predicatedGlucose,
@@ -344,6 +356,17 @@ class LiveActivityManager : LiveActivityManagerProxy {
                     continuation.resume(returning: data)
                 }
             }
+        }
+    }
+
+    private func downsample<T>(_ samples: [T], to maximumCount: Int) -> [T] {
+        guard maximumCount > 1, samples.count > maximumCount else {
+            return samples
+        }
+
+        let scale = Double(samples.count - 1) / Double(maximumCount - 1)
+        return (0..<maximumCount).map { index in
+            samples[Int((Double(index) * scale).rounded())]
         }
     }
     

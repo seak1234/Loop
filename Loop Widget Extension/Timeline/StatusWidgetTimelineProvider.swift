@@ -114,11 +114,18 @@ class StatusWidgetTimelineProvider: TimelineProvider {
         Task { @MainActor in
             guard let defaults = self.defaults,
                   let context = defaults.statusExtensionContext,
-                  let contextUpdatedAt = context.createdAt,
-                  let unit = await healthStore.cachedPreferredUnits(for: .bloodGlucose)
+                  let contextUpdatedAt = context.createdAt
             else {
                 return
             }
+
+            // The simulator (and a newly-authorized device) may have glucose
+            // samples before HealthKit reports a preferred display unit. Fall
+            // back to the unit already stored in Loop's shared context so the
+            // widget can still publish a complete timeline entry.
+            let unit = await healthStore.cachedPreferredUnits(for: .bloodGlucose)
+                ?? context.predictedGlucose?.unit
+                ?? .milligramsPerDeciliter
 
             let lastCompleted = context.lastLoopCompleted
 
