@@ -1667,7 +1667,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         switch Section(rawValue: indexPath.section)! {
         case .branding:
             let availableWidth = max(0, tableView.bounds.width - 20)
-            let graphicAspectRatio: CGFloat = 819 / 1920
+            let graphicAspectRatio: CGFloat = 705 / 1919
             return ceil(availableWidth * graphicAspectRatio)
         case .charts:
             if collapsedChartRows.contains(ChartRow(rawValue: indexPath.row)!) {
