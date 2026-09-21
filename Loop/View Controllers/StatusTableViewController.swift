@@ -44,6 +44,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     private let log = OSLog(category: "StatusTableViewController")
 
+    private lazy var dashboardBackgroundImageView: UIImageView = {
+        let imageView = UIImageView(image: UIImage(named: "DashboardMarbleBackground"))
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.backgroundColor = .dashboardBackground
+        imageView.isAccessibilityElement = false
+        return imageView
+    }()
+
     lazy var carbFormatter: QuantityFormatter = QuantityFormatter(for: .gram())
 
     var onboardingManager: OnboardingManager!
@@ -163,6 +172,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
         addScenarioStepGestureRecognizers()
 
         tableView.backgroundColor = .dashboardBackground
+        tableView.backgroundView = dashboardBackgroundImageView
+        updateDashboardBackgroundAppearance()
         tableView.separatorStyle = .none
     
     }
@@ -272,12 +283,17 @@ final class StatusTableViewController: LoopChartsTableViewController {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            updateDashboardBackgroundAppearance()
             for case let cell as ChartTableViewCell in tableView.visibleCells {
                 if let indexPath = tableView.indexPath(for: cell) {
                     refreshChartCellPresentation(cell, at: indexPath)
                 }
             }
         }
+    }
+
+    private func updateDashboardBackgroundAppearance() {
+        dashboardBackgroundImageView.alpha = traitCollection.userInterfaceStyle == .dark ? 0.08 : 0.44
     }
 
     // MARK: - State
