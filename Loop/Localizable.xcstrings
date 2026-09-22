@@ -3179,6 +3179,12 @@
         }
       }
     },
+    "%d days" : {
+      "comment" : "Cycle length in days\nDays until the next period"
+    },
+    "%lld" : {
+
+    },
     "⚠️" : {
       "localizations" : {
         "da" : {
@@ -10142,7 +10148,7 @@
       }
     },
     "Cancel" : {
-      "comment" : "Button label for cancel\nButton text to cancel\nCancel button for reset loop alert\nCancel export button title\nThe title of the cancel action in an action sheet",
+      "comment" : "Button label for cancel\nButton text to cancel\nCancel button for reset loop alert\nCancel export button title\nCancel period history edits\nThe title of the cancel action in an action sheet",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -13769,6 +13775,9 @@
         }
       }
     },
+    "Correct the start and end dates for previously logged periods. Cycle phases and predictions update when you save." : {
+      "comment" : "Instructions for editing cycle period history"
+    },
     "Correction Range" : {
       "comment" : "The title of the glucose target range schedule screen\n   The title text for the glucose target range schedule",
       "extractionState" : "manual",
@@ -14768,6 +14777,26 @@
         }
       }
     },
+    "Cycle" : {
+      "comment" : "Cycle summary card title\nCycle tracker navigation title"
+    },
+    "Cycle day %d of %d" : {
+      "comment" : "Current cycle day and cycle length",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle day %1$d of %2$d"
+          }
+        }
+      }
+    },
+    "Cycle length" : {
+      "comment" : "Cycle tracker cycle length title"
+    },
+    "Cycle tracking" : {
+      "comment" : "Cycle summary phase before a period is logged"
+    },
     "Date" : {
       "comment" : "Date picker label",
       "localizations" : {
@@ -14889,6 +14918,20 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日期"
+          }
+        }
+      }
+    },
+    "DAY" : {
+      "comment" : "Cycle day heading"
+    },
+    "Day %d • %@" : {
+      "comment" : "Cycle summary containing day and phase",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$d • %2$@"
           }
         }
       }
@@ -15609,6 +15652,9 @@
           }
         }
       }
+    },
+    "Delete period" : {
+      "comment" : "Delete a saved period entry"
     },
     "Delete Service" : {
       "comment" : "Button title to delete a service",
@@ -17151,6 +17197,12 @@
         }
       }
     },
+    "Edit period days" : {
+      "comment" : "Period history editor title"
+    },
+    "Edit previous period days" : {
+      "comment" : "Button to edit saved period history"
+    },
     "Enable\nBluetooth" : {
       "comment" : "Message to the user to enable bluetooth",
       "localizations" : {
@@ -17511,6 +17563,9 @@
           }
         }
       }
+    },
+    "Ended" : {
+      "comment" : "Period history end date label"
     },
     "Enter a blood glucose from a meter for a recommended bolus amount." : {
       "comment" : "Caption for bolus screen notice when glucose data is missing or stale",
@@ -19239,6 +19294,9 @@
         }
       }
     },
+    "Fertile window" : {
+      "comment" : "Cycle calendar legend"
+    },
     "Fiasp" : {
       "comment" : "Title of insulin model preset",
       "extractionState" : "manual",
@@ -19548,6 +19606,9 @@
           }
         }
       }
+    },
+    "Follicular" : {
+      "comment" : "Cycle phase progress label\nMenstrual cycle follicular phase"
     },
     "Food Type" : {
       "comment" : "Label for food type entry on add favorite food screen",
@@ -25862,6 +25923,9 @@
         }
       }
     },
+    "Luteal" : {
+      "comment" : "Cycle phase progress label\nMenstrual cycle luteal phase"
+    },
     "Manage Permissions in Settings" : {
       "comment" : "Manage Permissions in Settings button text",
       "localizations" : {
@@ -27396,6 +27460,12 @@
         }
       }
     },
+    "My period ended" : {
+      "comment" : "Button to record the end of a period"
+    },
+    "My period started" : {
+      "comment" : "Button to record the start of a period"
+    },
     "Name" : {
       "comment" : "Label for name row on add favorite food screen",
       "localizations" : {
@@ -27752,6 +27822,12 @@
           }
         }
       }
+    },
+    "Next month" : {
+      "comment" : "Cycle calendar navigation"
+    },
+    "Next period" : {
+      "comment" : "Cycle tracker next period title"
     },
     "Nightscout" : {
       "comment" : "The title of the Nightscout service",
@@ -29536,7 +29612,7 @@
       }
     },
     "OK" : {
-      "comment" : "Alert acknowledgment OK button\nCritical Alert permissions disabled alert button\nDefault action for alert when alert acknowledgment fails\nNotifications permissions disabled alert button\nText for ok action on notification of upcoming TestFlight expiration\nText for ok action on notification of upcoming profile expiration\nThe title of the notification action to acknowledge a device alert",
+      "comment" : "Alert acknowledgment OK button\nCritical Alert permissions disabled alert button\nDefault action for alert when alert acknowledgment fails\nDismiss cycle logging confirmation\nNotifications permissions disabled alert button\nText for ok action on notification of upcoming TestFlight expiration\nText for ok action on notification of upcoming profile expiration\nThe title of the notification action to acknowledge a device alert",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -29928,6 +30004,18 @@
           }
         }
       }
+    },
+    "Ovulation" : {
+      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle ovulation phase"
+    },
+    "Period" : {
+      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle period phase"
+    },
+    "Period ended" : {
+      "comment" : "Confirmation after recording the end of a period\nPeriod history ended toggle"
+    },
+    "Period started" : {
+      "comment" : "Confirmation after recording the start of a period"
     },
     "Possible Missed Meal" : {
       "comment" : "The notification title for a meal that was possibly not logged in Loop.",
@@ -30970,6 +31058,9 @@
           }
         }
       }
+    },
+    "Previous month" : {
+      "comment" : "Cycle calendar navigation"
     },
     "Profile Expiration" : {
       "comment" : "Settings App Profile expiration view",
@@ -33988,6 +34079,7 @@
       }
     },
     "Save" : {
+      "comment" : "Save period history edits",
       "localizations" : {
         "da" : {
           "stringUnit" : {
@@ -35451,6 +35543,9 @@
         }
       }
     },
+    "Start cycle tracking" : {
+      "comment" : "Cycle tracker empty state title"
+    },
     "Start time is out of range: %@" : {
       "comment" : "Carb error description: invalid start time is out of range.",
       "localizations" : {
@@ -35527,6 +35622,9 @@
           }
         }
       }
+    },
+    "Started" : {
+      "comment" : "Period history start date label"
     },
     "starting at %@" : {
       "comment" : "The format for the description of a custom preset start date",
@@ -36365,6 +36463,12 @@
           }
         }
       }
+    },
+    "Tap My period started" : {
+      "comment" : "Cycle summary prompt before a period is logged"
+    },
+    "Tap My period started when your period begins." : {
+      "comment" : "Cycle tracker empty state instructions"
     },
     "Tap to Add" : {
       "comment" : "The subtitle of the cell displaying an action to add a manually measurement glucose value",

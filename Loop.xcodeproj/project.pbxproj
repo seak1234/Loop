@@ -140,6 +140,7 @@
 		43785E982120E7060057DED1 /* Intents.intentdefinition in Sources */ = {isa = PBXBuildFile; fileRef = 43785E9B2120E7060057DED1 /* Intents.intentdefinition */; };
 		437CEEE41CDE5C0A003C8C80 /* UIImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437CEEE31CDE5C0A003C8C80 /* UIImage.swift */; };
 		437D9BA31D7BC977007245E8 /* PredictionTableViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437D9BA21D7BC977007245E8 /* PredictionTableViewController.swift */; };
+		D5C1E00131F0000000000002 /* CycleTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C1E00131F0000000000001 /* CycleTrackingView.swift */; };
 		4389916B1E91B689000EEF90 /* ChartSettings+Loop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4389916A1E91B689000EEF90 /* ChartSettings+Loop.swift */; };
 		438D42F91D7C88BC003244B0 /* PredictionInputEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 438D42F81D7C88BC003244B0 /* PredictionInputEffect.swift */; };
 		438D42FB1D7D11A4003244B0 /* PredictionInputEffectTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 438D42FA1D7D11A4003244B0 /* PredictionInputEffectTableViewCell.swift */; };
@@ -880,6 +881,7 @@
 		437CEEE31CDE5C0A003C8C80 /* UIImage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UIImage.swift; sourceTree = "<group>"; };
 		437D9BA11D7B5203007245E8 /* Loop.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Loop.xcconfig; sourceTree = "<group>"; };
 		437D9BA21D7BC977007245E8 /* PredictionTableViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PredictionTableViewController.swift; sourceTree = "<group>"; };
+		D5C1E00131F0000000000001 /* CycleTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleTrackingView.swift; sourceTree = "<group>"; };
 		4389916A1E91B689000EEF90 /* ChartSettings+Loop.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "ChartSettings+Loop.swift"; sourceTree = "<group>"; };
 		438A95A71D8B9B24009D12E1 /* CGMBLEKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = CGMBLEKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		438D42F81D7C88BC003244B0 /* PredictionInputEffect.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PredictionInputEffect.swift; sourceTree = "<group>"; };
@@ -1975,6 +1977,7 @@
 				43B260481ED248FB008CAA77 /* CarbEntryTableViewCell.swift */,
 				149A28BC2A853E6C00052EDF /* CarbEntryView.swift */,
 				431A8C3F1EC6E8AB00823B9C /* CircleMaskView.swift */,
+				D5C1E00131F0000000000001 /* CycleTrackingView.swift */,
 				A9A056B224B93C62007CF06D /* CriticalEventLogExportView.swift */,
 				C191D2A025B3ACAA00C26C0B /* DosingStrategySelectionView.swift */,
 				149A28E32A8A63A700052EDF /* FavoriteFoodDetailView.swift */,
@@ -3530,6 +3533,7 @@
 				43F89CA322BDFBBD006BB54E /* UIActivityIndicatorView.swift in Sources */,
 				A999D40624663D18004C89D4 /* PumpManagerError.swift in Sources */,
 				437D9BA31D7BC977007245E8 /* PredictionTableViewController.swift in Sources */,
+				D5C1E00131F0000000000002 /* CycleTrackingView.swift in Sources */,
 				A987CD4924A58A0100439ADC /* ZipArchive.swift in Sources */,
 				43F41C371D3BF32400C11ED6 /* UIAlertController.swift in Sources */,
 				A9CBE45C248ACC03008E7BA2 /* SettingsStore+SimulatedCoreData.swift in Sources */,

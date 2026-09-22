@@ -80,6 +80,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         tableView.register(AlertPermissionsDisabledWarningCell.self, forCellReuseIdentifier: AlertPermissionsDisabledWarningCell.className)
         tableView.register(MuteAlertsWarningCell.self, forCellReuseIdentifier: MuteAlertsWarningCell.className)
         tableView.register(DashboardGraphicTableViewCell.self, forCellReuseIdentifier: DashboardGraphicTableViewCell.className)
+        tableView.register(CycleSummaryTableViewCell.self, forCellReuseIdentifier: CycleSummaryTableViewCell.className)
 
         if FeatureFlags.predictedGlucoseChartClampEnabled {
             statusCharts.glucose.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBoundClamped
@@ -1110,8 +1111,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private enum ChartRow: Int, CaseIterable {
         case glucose
         case iob
-        case dose
         case cob
+        case cycle
+        case dose
     }
 
     // Keep the primary glucose graph visible and present the supporting metrics as
@@ -1377,6 +1379,239 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
     }
 
+    private final class CycleSummaryTableViewCell: UITableViewCell {
+        private let cardView = UIView()
+        private let iconBackgroundView = UIView()
+        private let iconView = CalendarDropIconView()
+        private let titleLabel = UILabel()
+        private let detailLabel = UILabel()
+        private let valueLabel = UILabel()
+        private let chevronView = UIImageView()
+        private let progressTrack = UIView()
+        private let progressFill = GradientView()
+        private var progressWidthConstraint: NSLayoutConstraint!
+
+        private final class GradientView: UIView {
+            override class var layerClass: AnyClass { CAGradientLayer.self }
+
+            var gradientLayer: CAGradientLayer {
+                layer as! CAGradientLayer
+            }
+        }
+
+        private final class CalendarDropIconView: UIView {
+            private let calendarView = UIImageView(image: UIImage(systemName: "calendar"))
+            private let badgeView = UIView()
+            private let dropView = UIImageView(image: UIImage(systemName: "drop.fill"))
+
+            override init(frame: CGRect) {
+                super.init(frame: frame)
+                configureView()
+            }
+
+            required init?(coder: NSCoder) {
+                super.init(coder: coder)
+                configureView()
+            }
+
+            private func configureView() {
+                backgroundColor = .clear
+                isAccessibilityElement = false
+
+                [calendarView, badgeView, dropView].forEach {
+                    $0.translatesAutoresizingMaskIntoConstraints = false
+                }
+
+                calendarView.contentMode = .scaleAspectFit
+                calendarView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
+                addSubview(calendarView)
+
+                badgeView.layer.cornerRadius = 9
+                addSubview(badgeView)
+
+                dropView.contentMode = .scaleAspectFit
+                dropView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 8, weight: .bold)
+                badgeView.addSubview(dropView)
+
+                NSLayoutConstraint.activate([
+                    calendarView.topAnchor.constraint(equalTo: topAnchor),
+                    calendarView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                    calendarView.widthAnchor.constraint(equalToConstant: 28),
+                    calendarView.heightAnchor.constraint(equalToConstant: 28),
+
+                    badgeView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                    badgeView.bottomAnchor.constraint(equalTo: bottomAnchor),
+                    badgeView.widthAnchor.constraint(equalToConstant: 18),
+                    badgeView.heightAnchor.constraint(equalTo: badgeView.widthAnchor),
+
+                    dropView.centerXAnchor.constraint(equalTo: badgeView.centerXAnchor),
+                    dropView.centerYAnchor.constraint(equalTo: badgeView.centerYAnchor),
+                    dropView.widthAnchor.constraint(equalToConstant: 9),
+                    dropView.heightAnchor.constraint(equalToConstant: 11)
+                ])
+
+                updateColors()
+            }
+
+            private func updateColors() {
+                calendarView.tintColor = .dashboardCoral
+                badgeView.backgroundColor = .dashboardCoral
+                dropView.tintColor = .white
+            }
+
+            override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+                super.traitCollectionDidChange(previousTraitCollection)
+                updateColors()
+            }
+        }
+
+        override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+            super.init(style: style, reuseIdentifier: reuseIdentifier)
+            configureView()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            configureView()
+        }
+
+        private func configureView() {
+            backgroundColor = .clear
+            contentView.backgroundColor = .clear
+            selectionStyle = .default
+            tintColor = .dashboardCoral
+
+            let selectedView = UIView()
+            selectedView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.10)
+            selectedBackgroundView = selectedView
+
+            [cardView, iconBackgroundView, iconView, titleLabel, detailLabel, valueLabel, chevronView, progressTrack, progressFill].forEach {
+                $0.translatesAutoresizingMaskIntoConstraints = false
+            }
+
+            cardView.backgroundColor = .dashboardSurface
+            cardView.layer.cornerRadius = 18
+            cardView.layer.cornerCurve = .continuous
+            cardView.layer.borderWidth = 0.5
+            contentView.addSubview(cardView)
+
+            iconBackgroundView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.13)
+            iconBackgroundView.layer.cornerRadius = 27
+            cardView.addSubview(iconBackgroundView)
+
+            iconBackgroundView.addSubview(iconView)
+
+            titleLabel.text = NSLocalizedString("Cycle", comment: "Cycle summary card title").uppercased()
+            titleLabel.font = .dashboardRounded(ofSize: 15, weight: .bold)
+            titleLabel.textColor = .dashboardInk
+            cardView.addSubview(titleLabel)
+
+            detailLabel.font = .dashboardRounded(ofSize: 13, weight: .medium)
+            detailLabel.textColor = .dashboardMutedInk
+            detailLabel.adjustsFontSizeToFitWidth = true
+            detailLabel.minimumScaleFactor = 0.75
+            cardView.addSubview(detailLabel)
+
+            valueLabel.font = .dashboardRoundedDigits(ofSize: 19, weight: .bold)
+            valueLabel.textColor = .dashboardCoral
+            valueLabel.textAlignment = .right
+            valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            cardView.addSubview(valueLabel)
+
+            chevronView.image = UIImage(systemName: "chevron.right")
+            chevronView.tintColor = .dashboardCoral
+            chevronView.contentMode = .scaleAspectFit
+            chevronView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+            cardView.addSubview(chevronView)
+
+            progressTrack.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.14)
+            progressTrack.layer.cornerRadius = 4
+            progressTrack.clipsToBounds = true
+            cardView.addSubview(progressTrack)
+
+            progressFill.gradientLayer.colors = [
+                UIColor.dashboardCoral.cgColor,
+                UIColor(red: 0.89, green: 0.61, blue: 0.20, alpha: 1).cgColor
+            ]
+            progressFill.gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+            progressFill.gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+            progressFill.layer.cornerRadius = 4
+            progressTrack.addSubview(progressFill)
+
+            progressWidthConstraint = progressFill.widthAnchor.constraint(equalTo: progressTrack.widthAnchor, multiplier: 0)
+
+            NSLayoutConstraint.activate([
+                cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
+                cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+                cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+                cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
+
+                iconBackgroundView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
+                iconBackgroundView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+                iconBackgroundView.widthAnchor.constraint(equalToConstant: 54),
+                iconBackgroundView.heightAnchor.constraint(equalTo: iconBackgroundView.widthAnchor),
+
+                iconView.centerXAnchor.constraint(equalTo: iconBackgroundView.centerXAnchor),
+                iconView.centerYAnchor.constraint(equalTo: iconBackgroundView.centerYAnchor),
+                iconView.widthAnchor.constraint(equalToConstant: 34),
+                iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
+
+                titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
+                titleLabel.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: 14),
+                titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -8),
+
+                detailLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 1),
+                detailLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+                detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -8),
+
+                chevronView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
+                chevronView.centerYAnchor.constraint(equalTo: titleLabel.bottomAnchor),
+                chevronView.widthAnchor.constraint(equalToConstant: 10),
+
+                valueLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -10),
+                valueLabel.centerYAnchor.constraint(equalTo: chevronView.centerYAnchor),
+
+                progressTrack.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+                progressTrack.trailingAnchor.constraint(equalTo: chevronView.trailingAnchor),
+                progressTrack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -11),
+                progressTrack.heightAnchor.constraint(equalToConstant: 8),
+
+                progressFill.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
+                progressFill.topAnchor.constraint(equalTo: progressTrack.topAnchor),
+                progressFill.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
+                progressWidthConstraint
+            ])
+        }
+
+        override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+            super.traitCollectionDidChange(previousTraitCollection)
+            updateColors()
+        }
+
+        private func updateColors() {
+            cardView.backgroundColor = .dashboardSurface
+            cardView.layer.borderColor = UIColor.dashboardBorder.resolvedColor(with: traitCollection).cgColor
+            titleLabel.textColor = .dashboardInk
+            detailLabel.textColor = .dashboardMutedInk
+        }
+
+        func configure(with summary: CycleTrackingStore.Summary) {
+            detailLabel.text = summary.detail
+            valueLabel.text = summary.cycleDay.map { "\($0) / \(summary.cycleLength)" } ?? "— / \(summary.cycleLength)"
+
+            progressWidthConstraint.isActive = false
+            progressWidthConstraint = progressFill.widthAnchor.constraint(
+                equalTo: progressTrack.widthAnchor,
+                multiplier: CGFloat(min(1, max(0, summary.progress)))
+            )
+            progressWidthConstraint.isActive = true
+            accessibilityLabel = [titleLabel.text, detailLabel.text, valueLabel.text]
+                .compactMap { $0 }
+                .joined(separator: ", ")
+            updateColors()
+        }
+    }
+
     private class AlertPermissionsDisabledWarningCell: UITableViewCell {
         override func updateConfiguration(using state: UICellConfigurationState) {
             super.updateConfiguration(using: state)
@@ -1478,9 +1713,18 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             return cell
         case .charts:
-            let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
-
             let chartRow = ChartRow(rawValue: indexPath.row)!
+
+            if chartRow == .cycle {
+                let cell = tableView.dequeueReusableCell(
+                    withIdentifier: CycleSummaryTableViewCell.className,
+                    for: indexPath
+                ) as! CycleSummaryTableViewCell
+                cell.configure(with: CycleTrackingStore.shared.summary())
+                return cell
+            }
+
+            let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
 
             switch chartRow {
             case .glucose:
@@ -1510,6 +1754,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     return self?.statusCharts.cobChart(withFrame: frame)?.view
                 })
                 cell.setTitleLabelText(label: NSLocalizedString("Active Carbohydrates", comment: "The title of the Carbs On-Board graph"))
+            case .cycle:
+                assertionFailure("Cycle uses CycleSummaryTableViewCell")
             }
 
             cell.onNavigate = { [weak self, weak cell] in
@@ -1673,6 +1919,18 @@ final class StatusTableViewController: LoopChartsTableViewController {
             performSegue(withIdentifier: InsulinDeliveryTableViewController.className, sender: sender)
         case .cob:
             performSegue(withIdentifier: CarbAbsorptionViewController.className, sender: sender)
+        case .cycle:
+            let view = CycleTrackingView { [weak self] in
+                guard let self else { return }
+                let indexPath = IndexPath(row: ChartRow.cycle.rawValue, section: Section.charts.rawValue)
+                if self.tableView.indexPathsForVisibleRows?.contains(indexPath) == true {
+                    self.tableView.reloadRows(at: [indexPath], with: .none)
+                }
+            }
+            let controller = UIHostingController(rootView: view)
+            controller.title = NSLocalizedString("Cycle", comment: "Cycle tracker navigation title")
+            controller.hidesBottomBarWhenPushed = true
+            show(controller, sender: sender)
         }
     }
 
@@ -1711,6 +1969,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 value: currentCOBDescription,
                 tintColor: .dashboardCoral
             )
+        case .cycle:
+            break
         }
     }
 
@@ -1803,6 +2063,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 } else {
                     cell.setSubtitleLabel(label: nil)
                 }
+            case .cycle:
+                break
             }
         case .branding, .hud, .status, .alertWarning:
             break
@@ -1840,6 +2102,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 return max(150, 0.38 * availableSize)
             case .iob, .dose, .cob:
                 return max(115, 0.22 * availableSize)
+            case .cycle:
+                return 92
             }
         case .hud, .status, .alertWarning:
             return UITableView.automaticDimension
@@ -1919,7 +2183,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 }
             }
         case .charts:
-            break
+            if ChartRow(rawValue: indexPath.row) == .cycle {
+                tableView.deselectRow(at: indexPath, animated: true)
+                navigateToDetails(for: .cycle, sender: tableView.cellForRow(at: indexPath))
+            }
         }
     }
 
