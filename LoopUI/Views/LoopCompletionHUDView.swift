@@ -48,6 +48,7 @@ public final class LoopCompletionHUDView: BaseHUDView {
         didSet {
             if lastLoopCompleted != oldValue {
                 loopInProgress = false
+                updateDisplay(nil)
             }
         }
     }
@@ -65,15 +66,8 @@ public final class LoopCompletionHUDView: BaseHUDView {
 
     public var closedLoopDisallowedLocalizedDescription: String?
 
-    public var lastGlucoseStartDate: Date? {
-        didSet {
-            updateDisplay(nil)
-            assertTimer()
-        }
-    }
-
     public func assertTimer(_ active: Bool = true) {
-        if active && window != nil, (lastLoopCompleted != nil || lastGlucoseStartDate != nil) {
+        if active && window != nil, lastLoopCompleted != nil {
             initTimer()
         } else {
             updateTimer = nil
@@ -268,9 +262,8 @@ public final class LoopCompletionHUDView: BaseHUDView {
             accessibilityLabel = LocalizedString("Waiting for first run", comment: "Accessibility label describing completion HUD waiting for first run")
         }
 
-        let referenceDate = lastGlucoseStartDate ?? lastLoopCompleted
-        if let refDate = referenceDate {
-            let elapsed = max(0, -refDate.timeIntervalSinceNow)
+        if let lastLoopCompleted = lastLoopCompleted {
+            let elapsed = max(0, -lastLoopCompleted.timeIntervalSinceNow)
             loopStateView.elapsedTime = elapsed
         } else {
             loopStateView.elapsedTime = nil

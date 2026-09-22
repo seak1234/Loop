@@ -1064,7 +1064,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
                                                             glucoseDisplay: self.deviceManager.glucoseDisplay(for: glucose),
                                                             wasUserEntered: glucose.wasUserEntered,
                                                             isDisplayOnly: glucose.isDisplayOnly)
-                    hudView.loopCompletionHUD.lastGlucoseStartDate = glucose.startDate
                 }
                 hudView.cgmStatusHUD.presentStatusHighlight(self.deviceManager.cgmStatusHighlight)
                 hudView.cgmStatusHUD.presentStatusBadge(self.deviceManager.cgmStatusBadge)
@@ -2381,7 +2380,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             hudView.loopCompletionHUD.stateColors = .dashboardLoopStatus
             hudView.loopCompletionHUD.loopIconClosed = automaticDosingStatus.automaticDosingEnabled
             hudView.loopCompletionHUD.lastLoopCompleted = deviceManager.loopManager.lastLoopCompleted
-            hudView.loopCompletionHUD.lastGlucoseStartDate = deviceManager.glucoseStore.latestGlucose?.startDate
             updateLoopStatusHUD()
 
             hudView.cgmStatusHUD.stateColors = .cgmStatus
