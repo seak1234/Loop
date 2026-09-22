@@ -1605,16 +1605,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
             if traitCollection.userInterfaceStyle == .dark {
                 phaseColors = [
                     UIColor(red: 0.402, green: 0.239, blue: 0.254, alpha: 1),
-                    UIColor(red: 0.496, green: 0.483, blue: 0.517, alpha: 1),
+                    UIColor(red: 0.283, green: 0.271, blue: 0.228, alpha: 1),
                     UIColor(red: 0.380, green: 0.263, blue: 0.139, alpha: 1),
-                    UIColor(red: 0.283, green: 0.271, blue: 0.228, alpha: 1)
+                    UIColor(red: 0.496, green: 0.483, blue: 0.517, alpha: 1)
                 ]
             } else {
                 phaseColors = [
                     UIColor(red: 0.978, green: 0.871, blue: 0.869, alpha: 1),
-                    UIColor(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0, alpha: 1),
+                    UIColor(red: 0.923, green: 0.925, blue: 0.877, alpha: 1),
                     UIColor(red: 0.974, green: 0.895, blue: 0.789, alpha: 1),
-                    UIColor(red: 0.923, green: 0.925, blue: 0.877, alpha: 1)
+                    UIColor(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0, alpha: 1)
                 ]
             }
             progressFill.gradientLayer.colors = phaseColors.flatMap { [$0.cgColor, $0.cgColor] }

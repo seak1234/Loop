@@ -874,16 +874,16 @@ struct CycleTrackingView: View {
                 : Color(red: 0.978, green: 0.871, blue: 0.869)
         case .follicular:
             return isDark
-                ? Color(red: 0.496, green: 0.483, blue: 0.517)
-                : Color(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0)
+                ? Color(red: 0.283, green: 0.271, blue: 0.228)
+                : Color(red: 0.923, green: 0.925, blue: 0.877)
         case .ovulation:
             return isDark
                 ? Color(red: 0.380, green: 0.263, blue: 0.139)
                 : Color(red: 0.974, green: 0.895, blue: 0.789)
         case .luteal:
             return isDark
-                ? Color(red: 0.283, green: 0.271, blue: 0.228)
-                : Color(red: 0.923, green: 0.925, blue: 0.877)
+                ? Color(red: 0.496, green: 0.483, blue: 0.517)
+                : Color(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0)
         }
     }
 
