@@ -437,41 +437,48 @@ struct CycleTrackingView: View {
     }
 
     private var phaseCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let cycleDay = summary.cycleDay {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(NSLocalizedString("DAY", comment: "Cycle day heading"))
-                                .font(.system(size: 25, weight: .medium, design: .serif))
-                                .tracking(3)
-                            Text("\(cycleDay)")
-                                .font(.system(size: 66, weight: .light, design: .serif))
-                                .monospacedDigit()
-                        }
-                        .foregroundStyle(ink)
+                GeometryReader { proxy in
+                    let availableWidth = max(0, proxy.size.width - 14)
 
-                        Text(summary.phaseName.uppercased())
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .tracking(3)
-                            .foregroundStyle(coral)
+                    HStack(alignment: .center, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(NSLocalizedString("DAY", comment: "Cycle day heading"))
+                                    .font(.system(size: 23, weight: .medium, design: .serif))
+                                    .tracking(3)
+                                Text("\(cycleDay)")
+                                    .font(.system(size: 60, weight: .light, design: .serif))
+                                    .monospacedDigit()
+                            }
+                            .foregroundStyle(ink)
 
-                        Text(
-                            String(
-                                format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
-                                cycleDay,
-                                summary.cycleLength
+                            Text(summary.phaseName.uppercased())
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .tracking(2.5)
+                                .foregroundStyle(coral)
+
+                            Text(
+                                String(
+                                    format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
+                                    cycleDay,
+                                    summary.cycleLength
+                                )
                             )
-                        )
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(mutedInk)
-                    }
-                    .layoutPriority(1)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(mutedInk)
+                        }
+                        .frame(width: availableWidth * 0.55, alignment: .leading)
 
-                    if let phase = store.phase(for: Date()) {
-                        insulinSensitivityCallout(for: phase)
+                        if let phase = store.phase(for: Date()) {
+                            insulinSensitivityCallout(for: phase)
+                                .frame(width: availableWidth * 0.45, alignment: .leading)
+                        }
                     }
+                    .frame(maxHeight: .infinity, alignment: .center)
                 }
+                .frame(height: 128)
             } else {
                 Label {
                     VStack(alignment: .leading, spacing: 4) {
@@ -491,7 +498,8 @@ struct CycleTrackingView: View {
             phaseProgressBar
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .background(cardBackground)
     }
 
@@ -511,16 +519,12 @@ struct CycleTrackingView: View {
                 .foregroundStyle(ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
         .padding(12)
         .background(
             phaseColor(phase).opacity(colorScheme == .dark ? 0.58 : 0.72),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(border.opacity(0.8), lineWidth: 1)
-        }
     }
 
     private func insulinSensitivityInsight(for phase: CycleTrackingStore.Phase) -> String {
