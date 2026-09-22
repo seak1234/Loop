@@ -1388,6 +1388,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private let valueLabel = UILabel()
         private let chevronView = UIImageView()
         private let progressTrack = UIView()
+        private let progressMaskView = UIView()
         private let progressFill = GradientView()
         private var progressWidthConstraint: NSLayoutConstraint!
 
@@ -1485,7 +1486,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             selectedView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.10)
             selectedBackgroundView = selectedView
 
-            [cardView, iconBackgroundView, iconView, titleLabel, detailLabel, valueLabel, chevronView, progressTrack, progressFill].forEach {
+            [cardView, iconBackgroundView, iconView, titleLabel, detailLabel, valueLabel, chevronView, progressTrack, progressMaskView, progressFill].forEach {
                 $0.translatesAutoresizingMaskIntoConstraints = false
             }
 
@@ -1504,6 +1505,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
             titleLabel.text = NSLocalizedString("Cycle", comment: "Cycle summary card title").uppercased()
             titleLabel.font = .dashboardRounded(ofSize: 15, weight: .bold)
             titleLabel.textColor = .dashboardInk
+            titleLabel.adjustsFontSizeToFitWidth = true
+            titleLabel.minimumScaleFactor = 0.75
             cardView.addSubview(titleLabel)
 
             detailLabel.font = .dashboardRounded(ofSize: 13, weight: .medium)
@@ -1524,21 +1527,21 @@ final class StatusTableViewController: LoopChartsTableViewController {
             chevronView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
             cardView.addSubview(chevronView)
 
-            progressTrack.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.14)
+            progressTrack.backgroundColor = UIColor.dashboardBorder.withAlphaComponent(0.55)
             progressTrack.layer.cornerRadius = 4
             progressTrack.clipsToBounds = true
             cardView.addSubview(progressTrack)
 
-            progressFill.gradientLayer.colors = [
-                UIColor.dashboardCoral.cgColor,
-                UIColor(red: 0.89, green: 0.61, blue: 0.20, alpha: 1).cgColor
-            ]
+            progressMaskView.clipsToBounds = true
+            progressMaskView.layer.cornerRadius = 4
+            progressTrack.addSubview(progressMaskView)
+
+            progressFill.gradientLayer.locations = [0, 0.18, 0.20, 0.43, 0.46, 0.56, 0.60, 1]
             progressFill.gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
             progressFill.gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
-            progressFill.layer.cornerRadius = 4
-            progressTrack.addSubview(progressFill)
+            progressMaskView.addSubview(progressFill)
 
-            progressWidthConstraint = progressFill.widthAnchor.constraint(equalTo: progressTrack.widthAnchor, multiplier: 0)
+            progressWidthConstraint = progressMaskView.widthAnchor.constraint(equalTo: progressTrack.widthAnchor, multiplier: 0)
 
             NSLayoutConstraint.activate([
                 cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
@@ -1562,7 +1565,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
                 detailLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 1),
                 detailLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-                detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -8),
+                detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: chevronView.leadingAnchor, constant: -8),
 
                 chevronView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
                 chevronView.centerYAnchor.constraint(equalTo: titleLabel.bottomAnchor),
@@ -1576,9 +1579,13 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 progressTrack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -11),
                 progressTrack.heightAnchor.constraint(equalToConstant: 8),
 
-                progressFill.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
-                progressFill.topAnchor.constraint(equalTo: progressTrack.topAnchor),
-                progressFill.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
+                progressMaskView.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
+                progressMaskView.topAnchor.constraint(equalTo: progressTrack.topAnchor),
+                progressMaskView.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
+                progressFill.leadingAnchor.constraint(equalTo: progressMaskView.leadingAnchor),
+                progressFill.topAnchor.constraint(equalTo: progressMaskView.topAnchor),
+                progressFill.bottomAnchor.constraint(equalTo: progressMaskView.bottomAnchor),
+                progressFill.widthAnchor.constraint(equalTo: progressTrack.widthAnchor),
                 progressWidthConstraint
             ])
         }
@@ -1593,14 +1600,33 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cardView.layer.borderColor = UIColor.dashboardBorder.resolvedColor(with: traitCollection).cgColor
             titleLabel.textColor = .dashboardInk
             detailLabel.textColor = .dashboardMutedInk
+
+            let phaseColors: [UIColor]
+            if traitCollection.userInterfaceStyle == .dark {
+                phaseColors = [
+                    UIColor(red: 0.402, green: 0.239, blue: 0.254, alpha: 1),
+                    UIColor(red: 0.496, green: 0.483, blue: 0.517, alpha: 1),
+                    UIColor(red: 0.380, green: 0.263, blue: 0.139, alpha: 1),
+                    UIColor(red: 0.283, green: 0.271, blue: 0.228, alpha: 1)
+                ]
+            } else {
+                phaseColors = [
+                    UIColor(red: 0.978, green: 0.871, blue: 0.869, alpha: 1),
+                    UIColor(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0, alpha: 1),
+                    UIColor(red: 0.974, green: 0.895, blue: 0.789, alpha: 1),
+                    UIColor(red: 0.923, green: 0.925, blue: 0.877, alpha: 1)
+                ]
+            }
+            progressFill.gradientLayer.colors = phaseColors.flatMap { [$0.cgColor, $0.cgColor] }
         }
 
         func configure(with summary: CycleTrackingStore.Summary) {
-            detailLabel.text = summary.detail
+            titleLabel.text = summary.detail
+            detailLabel.text = summary.nextPhaseDetail
             valueLabel.text = summary.cycleDay.map { "\($0) / \(summary.cycleLength)" } ?? "— / \(summary.cycleLength)"
 
             progressWidthConstraint.isActive = false
-            progressWidthConstraint = progressFill.widthAnchor.constraint(
+            progressWidthConstraint = progressMaskView.widthAnchor.constraint(
                 equalTo: progressTrack.widthAnchor,
                 multiplier: CGFloat(min(1, max(0, summary.progress)))
             )
@@ -1609,6 +1635,40 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 .compactMap { $0 }
                 .joined(separator: ", ")
             updateColors()
+        }
+    }
+
+    private final class CycleHostingController: UIHostingController<CycleTrackingView> {
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+            navigationController?.setToolbarHidden(true, animated: animated)
+            configureDashboardNavigationAppearance()
+        }
+
+        override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+            super.traitCollectionDidChange(previousTraitCollection)
+
+            if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+                configureDashboardNavigationAppearance()
+            }
+        }
+
+        private func configureDashboardNavigationAppearance() {
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = .dashboardSurface
+            appearance.shadowColor = .dashboardBorder
+            appearance.titleTextAttributes = [
+                .font: UIFont.dashboardRounded(ofSize: 17, weight: .semibold),
+                .foregroundColor: UIColor.dashboardInk
+            ]
+
+            navigationController?.navigationBar.standardAppearance = appearance
+            navigationController?.navigationBar.scrollEdgeAppearance = appearance
+            navigationController?.navigationBar.compactAppearance = appearance
+            navigationController?.navigationBar.tintColor = .dashboardCoral
         }
     }
 
@@ -1927,7 +1987,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     self.tableView.reloadRows(at: [indexPath], with: .none)
                 }
             }
-            let controller = UIHostingController(rootView: view)
+            let controller = CycleHostingController(rootView: view)
             controller.title = NSLocalizedString("Cycle", comment: "Cycle tracker navigation title")
             controller.hidesBottomBarWhenPushed = true
             show(controller, sender: sender)

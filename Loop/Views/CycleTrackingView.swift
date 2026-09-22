@@ -5,8 +5,9 @@
 //  Stores and presents a lightweight, on-device menstrual cycle tracker.
 //
 
-import SwiftUI
 import LoopUI
+import SwiftUI
+import UIKit
 
 final class CycleTrackingStore: ObservableObject {
     static let shared = CycleTrackingStore()
@@ -28,6 +29,7 @@ final class CycleTrackingStore: ObservableObject {
         let cycleLength: Int
         let phaseName: String
         let detail: String
+        let nextPhaseDetail: String
         let progress: Double
     }
 
@@ -35,6 +37,13 @@ final class CycleTrackingStore: ObservableObject {
         case period
         case fertile
         case ovulation
+    }
+
+    enum Phase: Equatable {
+        case period
+        case follicular
+        case ovulation
+        case luteal
     }
 
     private enum Keys {
@@ -146,7 +155,8 @@ final class CycleTrackingStore: ObservableObject {
                 cycleDay: nil,
                 cycleLength: cycleLength,
                 phaseName: NSLocalizedString("Cycle tracking", comment: "Cycle summary phase before a period is logged"),
-                detail: NSLocalizedString("Tap My period started", comment: "Cycle summary prompt before a period is logged"),
+                detail: NSLocalizedString("Cycle tracking", comment: "Cycle summary phase before a period is logged"),
+                nextPhaseDetail: NSLocalizedString("Tap My period started", comment: "Cycle summary prompt before a period is logged"),
                 progress: 0
             )
         }
@@ -156,26 +166,90 @@ final class CycleTrackingStore: ObservableObject {
             cycleDay: cycleDay,
             cycleLength: cycleLength,
             phaseName: phase,
-            detail: String(
-                format: NSLocalizedString("Day %d • %@", comment: "Cycle summary containing day and phase"),
-                cycleDay,
-                phase
-            ),
+            detail: phase,
+            nextPhaseDetail: nextPhaseDetail(for: cycleDay, on: date),
             progress: Double(cycleDay) / Double(cycleLength)
         )
     }
 
+    private func nextPhaseDetail(for cycleDay: Int, on date: Date) -> String {
+        let activePeriodLength = periodLength(forCycleContaining: date)
+        let ovulationDay = max(activePeriodLength + 2, cycleLength - 14)
+        let nextPhaseDay: Int
+        let nextPhaseName: String
+
+        if cycleDay <= activePeriodLength {
+            nextPhaseDay = activePeriodLength + 1
+            nextPhaseName = NSLocalizedString("Follicular", comment: "Menstrual cycle follicular phase")
+        } else if cycleDay < ovulationDay - 1 {
+            nextPhaseDay = ovulationDay - 1
+            nextPhaseName = NSLocalizedString("Ovulation", comment: "Menstrual cycle ovulation phase")
+        } else if cycleDay <= ovulationDay + 1 {
+            nextPhaseDay = ovulationDay + 2
+            nextPhaseName = NSLocalizedString("Luteal", comment: "Menstrual cycle luteal phase")
+        } else {
+            nextPhaseDay = cycleLength + 1
+            nextPhaseName = NSLocalizedString("Period", comment: "Menstrual cycle period phase")
+        }
+
+        let days = max(1, nextPhaseDay - cycleDay)
+        if days == 1 {
+            return String(
+                format: NSLocalizedString("1 day until %@", comment: "Countdown until the next menstrual cycle phase"),
+                nextPhaseName
+            )
+        }
+        return String(
+            format: NSLocalizedString("%d days until %@", comment: "Countdown until the next menstrual cycle phase"),
+            days,
+            nextPhaseName
+        )
+    }
+
     private func phaseName(for cycleDay: Int, on date: Date) -> String {
+        localizedName(for: phase(for: cycleDay, on: date))
+    }
+
+    func phase(for date: Date) -> Phase? {
+        let day = calendar.startOfDay(for: date)
+        guard let cycleDay = cycleDay(on: day) else {
+            return nil
+        }
+
+        let phase = phase(for: cycleDay, on: day)
+        if phase == .period,
+           periodEntry(anchoring: day)?.endDate == nil,
+           day > calendar.startOfDay(for: Date())
+        {
+            return nil
+        }
+        return phase
+    }
+
+    private func phase(for cycleDay: Int, on date: Date) -> Phase {
         let activePeriodLength = periodLength(forCycleContaining: date)
         let ovulationDay = max(activePeriodLength + 2, cycleLength - 14)
 
         if cycleDay <= activePeriodLength {
-            return NSLocalizedString("Period", comment: "Menstrual cycle period phase")
+            return .period
         } else if cycleDay < ovulationDay - 1 {
-            return NSLocalizedString("Follicular", comment: "Menstrual cycle follicular phase")
+            return .follicular
         } else if cycleDay <= ovulationDay + 1 {
-            return NSLocalizedString("Ovulation", comment: "Menstrual cycle ovulation phase")
+            return .ovulation
         } else {
+            return .luteal
+        }
+    }
+
+    private func localizedName(for phase: Phase) -> String {
+        switch phase {
+        case .period:
+            return NSLocalizedString("Period", comment: "Menstrual cycle period phase")
+        case .follicular:
+            return NSLocalizedString("Follicular", comment: "Menstrual cycle follicular phase")
+        case .ovulation:
+            return NSLocalizedString("Ovulation", comment: "Menstrual cycle ovulation phase")
+        case .luteal:
             return NSLocalizedString("Luteal", comment: "Menstrual cycle luteal phase")
         }
     }
@@ -308,26 +382,27 @@ struct CycleTrackingView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color(uiColor: .dashboardBackground)
-                .ignoresSafeArea()
-
-            Image("DashboardMarbleBackground")
-                .resizable()
-                .scaledToFill()
-                .opacity(colorScheme == .dark ? 0.08 : 0.44)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(spacing: 14) {
-                    phaseCard
-                    calendarCard
-                    statsRow
-                    periodActions
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+        ScrollView {
+            VStack(spacing: 14) {
+                phaseCard
+                calendarCard
+                statsRow
+                periodActions
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+        }
+        .background {
+            ZStack {
+                Color(uiColor: .dashboardBackground)
+
+                Image("DashboardMarbleBackground")
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(colorScheme == .dark ? 0.08 : 0.44)
+            }
+            .ignoresSafeArea()
         }
         .navigationTitle(NSLocalizedString("Cycle", comment: "Cycle tracker navigation title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -417,17 +492,14 @@ struct CycleTrackingView: View {
                 let progress = summary.progress
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(border.opacity(0.7))
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [coral, Color.pink.opacity(0.55), gold],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: proxy.size.width * progress)
+                        .fill(phaseBarGradient.opacity(colorScheme == .dark ? 0.26 : 0.18))
+
+                    phaseBarGradient
+                        .frame(width: proxy.size.width)
+                        .frame(width: proxy.size.width * progress, alignment: .leading)
+                        .clipped()
                 }
+                .clipShape(Capsule())
             }
             .frame(height: 14)
 
@@ -466,16 +538,36 @@ struct CycleTrackingView: View {
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .foregroundStyle(mutedInk)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 7) {
                 ForEach(monthDates, id: \.self) { date in
                     calendarDay(date)
                 }
             }
 
-            HStack(spacing: 18) {
-                legendItem(color: coral, label: NSLocalizedString("Period", comment: "Cycle calendar legend"))
-                legendItem(color: gold, label: NSLocalizedString("Fertile window", comment: "Cycle calendar legend"))
-                ovulationLegend
+            VStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    phaseLegendItem(
+                        color: phaseColor(.period),
+                        label: NSLocalizedString("Period", comment: "Cycle calendar legend")
+                    )
+                    phaseLegendItem(
+                        color: phaseColor(.follicular),
+                        label: NSLocalizedString("Follicular", comment: "Cycle calendar legend")
+                    )
+                    phaseLegendItem(
+                        color: phaseColor(.ovulation),
+                        label: NSLocalizedString("Ovulation", comment: "Cycle calendar legend")
+                    )
+                    phaseLegendItem(
+                        color: phaseColor(.luteal),
+                        label: NSLocalizedString("Luteal", comment: "Cycle calendar legend")
+                    )
+                }
+
+                HStack(spacing: 18) {
+                    legendItem(color: gold, label: NSLocalizedString("Fertile window", comment: "Cycle calendar legend"))
+                    ovulationLegend
+                }
             }
         }
         .padding(16)
@@ -515,29 +607,42 @@ struct CycleTrackingView: View {
         let isDisplayedMonth = calendar.isDate(date, equalTo: displayedMonth, toGranularity: .month)
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
         let marker = store.marker(for: date)
+        let phase = store.phase(for: date)
+        let roundsLeadingEdge = phase.map { !phaseContinues(from: date, direction: -1, phase: $0) } ?? false
+        let roundsTrailingEdge = phase.map { !phaseContinues(from: date, direction: 1, phase: $0) } ?? false
 
         return Button {
             selectedDate = date
         } label: {
-            VStack(spacing: 3) {
-                ZStack {
-                    if isSelected {
-                        Circle().fill(coral)
-                    }
-                    if marker == .ovulation && !isSelected {
-                        Circle().stroke(gold, lineWidth: 2)
-                    }
-                    Text("\(calendar.component(.day, from: date))")
-                        .font(.system(size: 14, weight: isSelected ? .bold : .medium, design: .rounded))
-                        .foregroundStyle(isSelected ? Color.white : (isDisplayedMonth ? ink : mutedInk.opacity(0.45)))
+            ZStack {
+                if let phase {
+                    CalendarPhaseBandShape(
+                        roundsLeadingEdge: roundsLeadingEdge,
+                        roundsTrailingEdge: roundsTrailingEdge
+                    )
+                    .fill(phaseColor(phase))
                 }
-                .frame(width: 34, height: 34)
 
-                Circle()
-                    .fill(markerColor(marker) ?? Color.clear)
-                    .frame(width: 6, height: 6)
+                VStack(spacing: 3) {
+                    ZStack {
+                        if isSelected {
+                            Circle().fill(coral)
+                        }
+                        if marker == .ovulation && !isSelected {
+                            Circle().stroke(gold, lineWidth: 2)
+                        }
+                        Text("\(calendar.component(.day, from: date))")
+                            .font(.system(size: 14, weight: isSelected ? .bold : .medium, design: .rounded))
+                            .foregroundStyle(isSelected ? Color.white : (isDisplayedMonth ? ink : mutedInk.opacity(0.45)))
+                    }
+                    .frame(width: 34, height: 34)
+
+                    Circle()
+                        .fill(markerColor(marker) ?? Color.clear)
+                        .frame(width: 6, height: 6)
+                }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 43)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(date.formatted(date: .complete, time: .omitted))
@@ -667,10 +772,19 @@ struct CycleTrackingView: View {
         .foregroundStyle(mutedInk)
     }
 
+    private func phaseLegendItem(color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            Capsule().fill(color).frame(width: 14, height: 8)
+            Text(label)
+        }
+        .font(.system(size: 9, weight: .medium, design: .rounded))
+        .foregroundStyle(mutedInk)
+    }
+
     private var ovulationLegend: some View {
         HStack(spacing: 5) {
             Circle().stroke(gold, lineWidth: 2).frame(width: 11, height: 11)
-            Text(NSLocalizedString("Ovulation", comment: "Cycle calendar legend"))
+            Text(NSLocalizedString("Ovulation day", comment: "Cycle calendar exact ovulation day legend"))
         }
         .font(.system(size: 10, weight: .medium, design: .rounded))
         .foregroundStyle(mutedInk)
@@ -679,7 +793,7 @@ struct CycleTrackingView: View {
     private func markerColor(_ marker: CycleTrackingStore.Marker?) -> Color? {
         switch marker {
         case .period:
-            return coral
+            return nil
         case .fertile:
             return gold
         case .ovulation:
@@ -687,6 +801,82 @@ struct CycleTrackingView: View {
         case nil:
             return nil
         }
+    }
+
+    private func phaseColor(_ phase: CycleTrackingStore.Phase) -> Color {
+        let isDark = colorScheme == .dark
+        switch phase {
+        case .period:
+            return isDark
+                ? Color(red: 0.402, green: 0.239, blue: 0.254)
+                : Color(red: 0.978, green: 0.871, blue: 0.869)
+        case .follicular:
+            return isDark
+                ? Color(red: 0.496, green: 0.483, blue: 0.517)
+                : Color(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0)
+        case .ovulation:
+            return isDark
+                ? Color(red: 0.380, green: 0.263, blue: 0.139)
+                : Color(red: 0.974, green: 0.895, blue: 0.789)
+        case .luteal:
+            return isDark
+                ? Color(red: 0.283, green: 0.271, blue: 0.228)
+                : Color(red: 0.923, green: 0.925, blue: 0.877)
+        }
+    }
+
+    private var phaseBarGradient: LinearGradient {
+        LinearGradient(
+            gradient: Gradient(stops: [
+                .init(color: phaseColor(.period), location: 0),
+                .init(color: phaseColor(.period), location: 0.18),
+                .init(color: phaseColor(.follicular), location: 0.20),
+                .init(color: phaseColor(.follicular), location: 0.43),
+                .init(color: phaseColor(.ovulation), location: 0.46),
+                .init(color: phaseColor(.ovulation), location: 0.56),
+                .init(color: phaseColor(.luteal), location: 0.60),
+                .init(color: phaseColor(.luteal), location: 1)
+            ]),
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    private func phaseContinues(
+        from date: Date,
+        direction: Int,
+        phase: CycleTrackingStore.Phase
+    ) -> Bool {
+        let weekday = calendar.component(.weekday, from: date)
+        let positionInWeek = (weekday - calendar.firstWeekday + 7) % 7
+        guard (direction < 0 && positionInWeek > 0) || (direction > 0 && positionInWeek < 6),
+              let adjacentDate = calendar.date(byAdding: .day, value: direction, to: date)
+        else {
+            return false
+        }
+        return store.phase(for: adjacentDate) == phase
+    }
+}
+
+private struct CalendarPhaseBandShape: Shape {
+    let roundsLeadingEdge: Bool
+    let roundsTrailingEdge: Bool
+
+    func path(in rect: CGRect) -> Path {
+        var corners: UIRectCorner = []
+        if roundsLeadingEdge {
+            corners.formUnion([.topLeft, .bottomLeft])
+        }
+        if roundsTrailingEdge {
+            corners.formUnion([.topRight, .bottomRight])
+        }
+        return Path(
+            UIBezierPath(
+                roundedRect: rect,
+                byRoundingCorners: corners,
+                cornerRadii: CGSize(width: 14, height: 14)
+            ).cgPath
+        )
     }
 }
 

@@ -3182,6 +3182,17 @@
     "%d days" : {
       "comment" : "Cycle length in days\nDays until the next period"
     },
+    "%d days until %@" : {
+      "comment" : "Countdown until the next menstrual cycle phase",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$d days until %2$@"
+          }
+        }
+      }
+    },
     "%lld" : {
 
     },
@@ -3245,6 +3256,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "⚠️"
+          }
+        }
+      }
+    },
+    "1 day until %@" : {
+      "comment" : "Countdown until the next menstrual cycle phase",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 day until %1$@"
           }
         }
       }
@@ -14925,17 +14947,6 @@
     "DAY" : {
       "comment" : "Cycle day heading"
     },
-    "Day %d • %@" : {
-      "comment" : "Cycle summary containing day and phase",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Day %1$d • %2$@"
-          }
-        }
-      }
-    },
     "dB" : {
       "comment" : "The short unit display string for decibles",
       "localizations" : {
@@ -19608,7 +19619,7 @@
       }
     },
     "Follicular" : {
-      "comment" : "Cycle phase progress label\nMenstrual cycle follicular phase"
+      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle follicular phase"
     },
     "Food Type" : {
       "comment" : "Label for food type entry on add favorite food screen",
@@ -25924,7 +25935,7 @@
       }
     },
     "Luteal" : {
-      "comment" : "Cycle phase progress label\nMenstrual cycle luteal phase"
+      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle luteal phase"
     },
     "Manage Permissions in Settings" : {
       "comment" : "Manage Permissions in Settings button text",
@@ -30007,6 +30018,9 @@
     },
     "Ovulation" : {
       "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle ovulation phase"
+    },
+    "Ovulation day" : {
+      "comment" : "Cycle calendar exact ovulation day legend"
     },
     "Period" : {
       "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle period phase"
