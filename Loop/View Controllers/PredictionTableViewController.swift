@@ -19,15 +19,55 @@ private extension RefreshContext {
     static let all: Set<RefreshContext> = [.glucose, .targets]
 }
 
+private extension UIFont {
+    static func predictionDashboardRounded(
+        ofSize size: CGFloat,
+        weight: UIFont.Weight
+    ) -> UIFont {
+        let font = UIFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = font.fontDescriptor.withDesign(.rounded) else {
+            return font
+        }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
+    static func predictionDashboardRoundedDigits(
+        ofSize size: CGFloat,
+        weight: UIFont.Weight
+    ) -> UIFont {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+        guard let descriptor = font.fontDescriptor.withDesign(.rounded) else {
+            return font
+        }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+}
+
 
 class PredictionTableViewController: LoopChartsTableViewController, IdentifiableClass {
     private let log = OSLog(category: "PredictionTableViewController")
+
+    private lazy var dashboardBackgroundImageView: UIImageView = {
+        let imageView = UIImageView(image: UIImage(named: "DashboardMarbleBackground"))
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.backgroundColor = .dashboardBackground
+        imageView.isAccessibilityElement = false
+        return imageView
+    }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         tableView.rowHeight = UITableView.automaticDimension
         tableView.cellLayoutMarginsFollowReadableWidth = true
+        tableView.backgroundColor = .dashboardBackground
+        tableView.backgroundView = dashboardBackgroundImageView
+        tableView.separatorStyle = .none
+        tableView.tintColor = .dashboardCoral
+        tableView.sectionHeaderTopPadding = 4
+        tableView.contentInset = UIEdgeInsets(top: 6, left: 0, bottom: 12, right: 0)
+        updateDashboardBackgroundAppearance()
 
         glucoseChart.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayRangeWide
 
@@ -50,6 +90,43 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
                 }
             },
         ]
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.setToolbarHidden(true, animated: animated)
+        configureDashboardNavigationAppearance()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            updateDashboardBackgroundAppearance()
+            configureDashboardNavigationAppearance()
+        }
+    }
+
+    private func configureDashboardNavigationAppearance() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = .dashboardSurface
+        appearance.shadowColor = .dashboardBorder
+        appearance.titleTextAttributes = [
+            .font: UIFont.predictionDashboardRounded(ofSize: 17, weight: .semibold),
+            .foregroundColor: UIColor.dashboardInk
+        ]
+
+        navigationController?.navigationBar.standardAppearance = appearance
+        navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        navigationController?.navigationBar.compactAppearance = appearance
+        navigationController?.navigationBar.tintColor = .dashboardCoral
+    }
+
+    private func updateDashboardBackgroundAppearance() {
+        dashboardBackgroundImageView.alpha = traitCollection.userInterfaceStyle == .dark ? 0.08 : 0.44
     }
 
     override func didReceiveMemoryWarning() {
@@ -90,7 +167,8 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
     let glucoseChart = PredictedGlucoseChart(yAxisStepSizeMGDLOverride: FeatureFlags.predictedGlucoseChartClampEnabled ? 40 : nil)
 
     override func createChartsManager() -> ChartsManager {
-        return ChartsManager(colors: .primary, settings: .default, charts: [glucoseChart], traitCollection: traitCollection)
+        glucoseChart.targetGlucoseFillColor = .dashboardCoral
+        return ChartsManager(colors: .dashboard, settings: .default, charts: [glucoseChart], traitCollection: traitCollection)
     }
 
     override func glucoseUnitDidChange() {
@@ -223,15 +301,28 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
                 return self?.charts.chart(atIndex: 0, frame: frame)?.view
             })
 
-            cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
             cell.selectionStyle = .none
+            cell.doesNavigate = false
+
+            for case let label as UILabel in cell.contentView.subviews {
+                guard label.text != nil else { continue }
+                label.textColor = .dashboardMutedInk
+                if label.font.pointSize <= 13 {
+                    label.font = .predictionDashboardRounded(ofSize: label.font.pointSize, weight: .regular)
+                }
+            }
+
+            // Apply this after the supporting copy so the graph heading keeps
+            // the stronger dashboard hierarchy.
+            cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
 
             cell.addGestureRecognizer(charts.gestureRecognizer!)
 
             return cell
         case .inputs:
             let cell = tableView.dequeueReusableCell(withIdentifier: PredictionInputEffectTableViewCell.className, for: indexPath) as! PredictionInputEffectTableViewCell
+            cell.applyDashboardAppearance()
             self.tableView(tableView, updateTextFor: cell, at: indexPath)
             return cell
         }
@@ -247,15 +338,15 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
             let attrString = NSMutableAttributedString(
                 string: fullText,
                 attributes: [
-                    .font: UIFont.systemFont(ofSize: 12, weight: .medium),
-                    .foregroundColor: UIColor.secondaryLabel
+                    .font: UIFont.predictionDashboardRounded(ofSize: 12, weight: .medium),
+                    .foregroundColor: UIColor.dashboardMutedInk
                 ]
             )
             if let range = fullText.range(of: eventualGlucose) {
                 let nsRange = NSRange(range, in: fullText)
                 attrString.addAttributes([
-                    .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
-                    .foregroundColor: UIColor.glucoseTintColor
+                    .font: UIFont.predictionDashboardRoundedDigits(ofSize: 13, weight: .bold),
+                    .foregroundColor: UIColor.dashboardCoral
                 ], range: nsRange)
             }
             cell.setAttributedSubtitleLabel(attrString)
@@ -273,6 +364,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
 
         cell.titleLabel?.text = input.localizedTitle
         cell.accessoryType = selectedInputs.contains(input) ? .checkmark : .none
+        cell.tintColor = .dashboardCoral
 
         var subtitleText = input.localizedDescription(forGlucoseUnit: glucoseChart.glucoseUnit) ?? ""
 
@@ -316,6 +408,24 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
     }
 
     // MARK: - UITableViewDelegate
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard Section(rawValue: section) == .inputs else {
+            return nil
+        }
+
+        return NSLocalizedString("Prediction Inputs", comment: "Header for the inputs included in glucose prediction")
+    }
+
+    override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
+        guard let header = view as? UITableViewHeaderFooterView else {
+            return
+        }
+
+        header.contentView.backgroundColor = .clear
+        header.textLabel?.font = .predictionDashboardRounded(ofSize: 12, weight: .bold)
+        header.textLabel?.textColor = .dashboardInk
+    }
 
     override func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
         switch Section(rawValue: indexPath.section)! {

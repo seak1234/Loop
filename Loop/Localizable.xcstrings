@@ -30682,6 +30682,9 @@
         }
       }
     },
+    "Prediction Inputs" : {
+      "comment" : "Header for the inputs included in glucose prediction"
+    },
     "prediction-description-integral-retrospective-correction" : {
       "comment" : "Format string describing integral retrospective correction. (1: Integral glucose effect)(2: Total glucose effect)",
       "localizations" : {
