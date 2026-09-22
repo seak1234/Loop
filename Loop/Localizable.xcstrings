@@ -4,6 +4,21 @@
     "" : {
 
     },
+    "Hormone shifts may change insulin sensitivity. Some people notice higher glucose." : {
+      "comment" : "Insulin sensitivity insight for the ovulation phase"
+    },
+    "INSULIN SENSITIVITY" : {
+      "comment" : "Cycle phase insulin sensitivity insight heading"
+    },
+    "Insulin sensitivity is often higher, so insulin may have a stronger effect." : {
+      "comment" : "Insulin sensitivity insight for the follicular phase"
+    },
+    "Insulin sensitivity may decrease, especially before your period, so glucose may run higher." : {
+      "comment" : "Insulin sensitivity insight for the luteal phase"
+    },
+    "You may be more sensitive to insulin as your period begins." : {
+      "comment" : "Insulin sensitivity insight for the menstrual period phase"
+    },
     " (pending: %@)" : {
       "comment" : "The string format appended to active insulin that describes pending insulin. (1: pending insulin)",
       "extractionState" : "manual",
