@@ -1684,21 +1684,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private let iconView = CalendarDropIconView()
         private let titleLabel = UILabel()
         private let detailLabel = UILabel()
+        private lazy var textStack: UIStackView = {
+            let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            stack.axis = .vertical
+            stack.alignment = .leading
+            stack.spacing = 1
+            return stack
+        }()
         private let valueLabel = UILabel()
         private let chevronView = UIImageView()
-        private let progressTrack = GradientView()
-        private let progressMaskView = UIView()
-        private let progressFill = GradientView()
-        private var progressWidthConstraint: NSLayoutConstraint!
-        private var phaseTransitions: [Double]?
-
-        private final class GradientView: UIView {
-            override class var layerClass: AnyClass { CAGradientLayer.self }
-
-            var gradientLayer: CAGradientLayer {
-                layer as! CAGradientLayer
-            }
-        }
 
         private final class CalendarDropIconView: UIView {
             private let calendarView = UIImageView(image: UIImage(systemName: "calendar"))
@@ -1724,31 +1719,31 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 }
 
                 calendarView.contentMode = .scaleAspectFit
-                calendarView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
+                calendarView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
                 addSubview(calendarView)
 
-                badgeView.layer.cornerRadius = 9
+                badgeView.layer.cornerRadius = 8
                 addSubview(badgeView)
 
                 dropView.contentMode = .scaleAspectFit
-                dropView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 8, weight: .bold)
+                dropView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 7, weight: .bold)
                 badgeView.addSubview(dropView)
 
                 NSLayoutConstraint.activate([
                     calendarView.topAnchor.constraint(equalTo: topAnchor),
                     calendarView.leadingAnchor.constraint(equalTo: leadingAnchor),
-                    calendarView.widthAnchor.constraint(equalToConstant: 28),
-                    calendarView.heightAnchor.constraint(equalToConstant: 28),
+                    calendarView.widthAnchor.constraint(equalToConstant: 24),
+                    calendarView.heightAnchor.constraint(equalToConstant: 24),
 
                     badgeView.trailingAnchor.constraint(equalTo: trailingAnchor),
                     badgeView.bottomAnchor.constraint(equalTo: bottomAnchor),
-                    badgeView.widthAnchor.constraint(equalToConstant: 18),
+                    badgeView.widthAnchor.constraint(equalToConstant: 16),
                     badgeView.heightAnchor.constraint(equalTo: badgeView.widthAnchor),
 
                     dropView.centerXAnchor.constraint(equalTo: badgeView.centerXAnchor),
                     dropView.centerYAnchor.constraint(equalTo: badgeView.centerYAnchor),
-                    dropView.widthAnchor.constraint(equalToConstant: 9),
-                    dropView.heightAnchor.constraint(equalToConstant: 11)
+                    dropView.widthAnchor.constraint(equalToConstant: 8),
+                    dropView.heightAnchor.constraint(equalToConstant: 10)
                 ])
 
                 updateColors()
@@ -1786,109 +1781,75 @@ final class StatusTableViewController: LoopChartsTableViewController {
             selectedView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.10)
             selectedBackgroundView = selectedView
 
-            [cardView, iconBackgroundView, iconView, titleLabel, detailLabel, valueLabel, chevronView, progressTrack, progressMaskView, progressFill].forEach {
+            [cardView, iconBackgroundView, iconView, textStack, valueLabel, chevronView].forEach {
                 $0.translatesAutoresizingMaskIntoConstraints = false
             }
 
             cardView.backgroundColor = .dashboardSurface
-            cardView.layer.cornerRadius = 18
+            cardView.layer.cornerRadius = 16
             cardView.layer.cornerCurve = .continuous
-            cardView.layer.borderWidth = 0.5
+            cardView.layer.borderWidth = 1
             contentView.addSubview(cardView)
 
             iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
-            iconBackgroundView.layer.cornerRadius = 27
+            iconBackgroundView.layer.cornerRadius = 24
             cardView.addSubview(iconBackgroundView)
 
             iconBackgroundView.addSubview(iconView)
 
             titleLabel.text = NSLocalizedString("Cycle", comment: "Cycle summary card title").uppercased()
-            titleLabel.font = .dashboardRounded(ofSize: 15, weight: .bold)
+            titleLabel.font = .dashboardRounded(ofSize: 14, weight: .semibold)
             titleLabel.textColor = .dashboardInk
             titleLabel.adjustsFontSizeToFitWidth = true
-            titleLabel.minimumScaleFactor = 0.75
-            cardView.addSubview(titleLabel)
+            titleLabel.minimumScaleFactor = 0.8
 
-            detailLabel.font = .dashboardRounded(ofSize: 13, weight: .medium)
+            detailLabel.font = .dashboardRounded(ofSize: 12, weight: .regular)
             detailLabel.textColor = .dashboardMutedInk
             detailLabel.adjustsFontSizeToFitWidth = true
-            detailLabel.minimumScaleFactor = 0.75
-            cardView.addSubview(detailLabel)
+            detailLabel.minimumScaleFactor = 0.8
 
-            valueLabel.font = .dashboardRoundedDigits(ofSize: 19, weight: .bold)
+            cardView.addSubview(textStack)
+
+            valueLabel.font = .dashboardRoundedDigits(ofSize: 20, weight: .bold)
             valueLabel.textColor = .dashboardCycleAccent
             valueLabel.textAlignment = .right
             valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
             cardView.addSubview(valueLabel)
 
-            chevronView.image = UIImage(systemName: "chevron.right")
+            chevronView.image = UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
             chevronView.tintColor = .dashboardCycleAccent
             chevronView.contentMode = .scaleAspectFit
-            chevronView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
             cardView.addSubview(chevronView)
 
-            progressTrack.layer.cornerRadius = 5
-            progressTrack.isOpaque = false
-            progressTrack.clipsToBounds = true
-            cardView.addSubview(progressTrack)
-
-            progressMaskView.clipsToBounds = true
-            progressMaskView.layer.cornerRadius = 5
-            progressTrack.addSubview(progressMaskView)
-
-            for gradient in [progressTrack.gradientLayer, progressFill.gradientLayer] {
-                gradient.startPoint = CGPoint(x: 0, y: 0.5)
-                gradient.endPoint = CGPoint(x: 1, y: 0.5)
-            }
-            progressMaskView.addSubview(progressFill)
-
-            progressWidthConstraint = progressMaskView.widthAnchor.constraint(equalTo: progressTrack.widthAnchor, multiplier: 0)
-
             NSLayoutConstraint.activate([
-                cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-                cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
-                cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
-                cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
+                cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
+                cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 14),
+                cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -14),
+                cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -5),
 
                 iconBackgroundView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
                 iconBackgroundView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
-                iconBackgroundView.widthAnchor.constraint(equalToConstant: 54),
+                iconBackgroundView.widthAnchor.constraint(equalToConstant: 48),
                 iconBackgroundView.heightAnchor.constraint(equalTo: iconBackgroundView.widthAnchor),
 
                 iconView.centerXAnchor.constraint(equalTo: iconBackgroundView.centerXAnchor),
                 iconView.centerYAnchor.constraint(equalTo: iconBackgroundView.centerYAnchor),
-                iconView.widthAnchor.constraint(equalToConstant: 34),
-                iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
+                iconView.widthAnchor.constraint(equalToConstant: 28),
+                iconView.heightAnchor.constraint(equalToConstant: 28),
 
-                titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
-                titleLabel.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: 14),
-                titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -8),
-
-                detailLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 1),
-                detailLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-                detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: chevronView.leadingAnchor, constant: -8),
+                textStack.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: 14),
+                textStack.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+                textStack.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -10),
 
                 chevronView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
-                chevronView.centerYAnchor.constraint(equalTo: titleLabel.bottomAnchor),
+                chevronView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
                 chevronView.widthAnchor.constraint(equalToConstant: 10),
 
-                valueLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -10),
-                valueLabel.centerYAnchor.constraint(equalTo: chevronView.centerYAnchor),
-
-                progressTrack.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-                progressTrack.trailingAnchor.constraint(equalTo: chevronView.trailingAnchor),
-                progressTrack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -11),
-                progressTrack.heightAnchor.constraint(equalToConstant: 10),
-
-                progressMaskView.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
-                progressMaskView.topAnchor.constraint(equalTo: progressTrack.topAnchor),
-                progressMaskView.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
-                progressFill.leadingAnchor.constraint(equalTo: progressMaskView.leadingAnchor),
-                progressFill.topAnchor.constraint(equalTo: progressMaskView.topAnchor),
-                progressFill.bottomAnchor.constraint(equalTo: progressMaskView.bottomAnchor),
-                progressFill.widthAnchor.constraint(equalTo: progressTrack.widthAnchor),
-                progressWidthConstraint
+                valueLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -12),
+                valueLabel.centerYAnchor.constraint(equalTo: cardView.centerYAnchor)
             ])
+
+            updateColors()
         }
 
         override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -1904,34 +1865,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             valueLabel.textColor = .dashboardCycleAccent
             chevronView.tintColor = .dashboardCycleAccent
             iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
-
-            let phaseColors: [UIColor] = phaseTransitions == nil
-                ? Array(repeating: .dashboardMutedInk, count: 4)
-                : [
-                    .dashboardPeriodProgress,
-                    .dashboardFollicularProgress,
-                    .dashboardOvulationProgress,
-                    .dashboardLutealProgress
-                ]
-            let resolvedColors = phaseColors.map { $0.resolvedColor(with: traitCollection) }
-            let locations: [NSNumber]
-            if let transitions = phaseTransitions, transitions.count == 3 {
-                locations = [0, transitions[0], transitions[0], transitions[1], transitions[1], transitions[2], transitions[2], 1]
-                    .map { NSNumber(value: $0) }
-            } else {
-                locations = [0.0, 0.25, 0.25, 0.50, 0.50, 0.75, 0.75, 1.0]
-                    .map { NSNumber(value: $0) }
-            }
-            progressTrack.gradientLayer.locations = locations
-            progressFill.gradientLayer.locations = locations
-            progressTrack.gradientLayer.colors = resolvedColors.flatMap { color in
-                let faded = color.withAlphaComponent(traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.40).cgColor
-                return [faded, faded]
-            }
-            progressFill.gradientLayer.colors = resolvedColors.flatMap { color in
-                return [color.cgColor, color.cgColor]
-            }
-            progressFill.gradientLayer.opacity = traitCollection.userInterfaceStyle == .dark ? 0.90 : 0.86
         }
 
         func configure(with summary: CycleTrackingStore.Summary) {
@@ -1940,14 +1873,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             valueLabel.text = summary.cycleDay.map { day in
                 day > summary.cycleLength ? "\(day) days" : "\(day) / \(summary.cycleLength)"
             } ?? "— / \(summary.cycleLength)"
-            phaseTransitions = summary.phaseTransitions
-
-            progressWidthConstraint.isActive = false
-            progressWidthConstraint = progressMaskView.widthAnchor.constraint(
-                equalTo: progressTrack.widthAnchor,
-                multiplier: CGFloat(min(1, max(0, summary.progress)))
-            )
-            progressWidthConstraint.isActive = true
             accessibilityLabel = [titleLabel.text, detailLabel.text, valueLabel.text]
                 .compactMap { $0 }
                 .joined(separator: ", ")
@@ -2469,7 +2394,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             let graphicAspectRatio: CGFloat = 705 / 1919
             return ceil(availableWidth * graphicAspectRatio)
         case .charts:
-            if collapsedChartRows.contains(chartRow(at: indexPath)) {
+            if isCollapsedChartRow(chartRow(at: indexPath)) {
                 return 74
             }
 
@@ -2484,7 +2409,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .iob, .dose, .cob:
                 return max(115, 0.22 * availableSize)
             case .cycle:
-                return 92
+                return 74
             }
         case .hud, .status, .alertWarning:
             return UITableView.automaticDimension
