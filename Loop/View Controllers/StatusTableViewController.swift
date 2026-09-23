@@ -1868,7 +1868,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
 
         func configure(with summary: CycleTrackingStore.Summary) {
-            titleLabel.text = summary.detail
+            titleLabel.text = summary.detail.uppercased()
             detailLabel.text = summary.nextPhaseDetail
             valueLabel.text = summary.cycleDay.map { day in
                 day > summary.cycleLength ? "\(day) days" : "\(day) / \(summary.cycleLength)"
