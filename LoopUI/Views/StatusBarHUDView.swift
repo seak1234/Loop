@@ -74,6 +74,13 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
     private var usesDashboardCardStyle = false
 
+    private static let dashboardCardOrderKey = "DashboardStatusCardOrder"
+    private let defaultDashboardCardOrder = ["loop", "glucose", "pump"]
+    private var dashboardCardOrder: [String] = ["loop", "glucose", "pump"]
+    private weak var draggedDashboardCard: UIView?
+    private var dashboardCardSnapshot: UIView?
+    private var dashboardCardDragOffset = CGPoint.zero
+
     private weak var glucoseTargetLabel: UILabel?
 
     private weak var loopTitleLabel: UILabel?
@@ -170,7 +177,15 @@ public class StatusBarHUDView: UIView, NibLoadable {
             removeLegacyWidthConstraints(from: card.view)
             movePrimaryContentDown(in: card.view)
             styleCard(card.view, title: card.title, accentColor: card.accentColor)
+            let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleDashboardCardLongPress(_:)))
+            recognizer.minimumPressDuration = 0.5
+            card.view.addGestureRecognizer(recognizer)
         }
+
+        let savedOrder = UserDefaults.standard.stringArray(forKey: Self.dashboardCardOrderKey) ?? []
+        dashboardCardOrder = savedOrder.filter { defaultDashboardCardOrder.contains($0) }
+        dashboardCardOrder.append(contentsOf: defaultDashboardCardOrder.filter { !dashboardCardOrder.contains($0) })
+        applyDashboardCardOrder()
 
         cgmStatusHUD.configureForDashboardCard()
         pumpStatusHUD.configureForDashboardCard(normalColor: .dashboardCoral)
@@ -179,6 +194,70 @@ public class StatusBarHUDView: UIView, NibLoadable {
         configureGlucoseTargetLabel()
         configureLoopDosingModeLabel()
         updateDashboardCardColors()
+    }
+
+    private func dashboardCard(for identifier: String) -> UIView? {
+        switch identifier {
+        case "loop": return loopCompletionHUD
+        case "glucose": return cgmStatusHUD
+        case "pump": return pumpStatusHUD
+        default: return nil
+        }
+    }
+
+    private func applyDashboardCardOrder() {
+        for (index, identifier) in dashboardCardOrder.enumerated() {
+            if let card = dashboardCard(for: identifier) {
+                containerView.insertArrangedSubview(card, at: index)
+            }
+        }
+    }
+
+    @objc private func handleDashboardCardLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        guard let card = recognizer.view,
+              let sourceIdentifier = defaultDashboardCardOrder.first(where: { dashboardCard(for: $0) === card })
+        else { return }
+
+        switch recognizer.state {
+        case .began:
+            guard let snapshot = card.snapshotView(afterScreenUpdates: false) else { return }
+            snapshot.frame = card.convert(card.bounds, to: self)
+            snapshot.layer.shadowColor = UIColor.black.cgColor
+            snapshot.layer.shadowOpacity = 0.18
+            snapshot.layer.shadowRadius = 10
+            addSubview(snapshot)
+            let touch = recognizer.location(in: self)
+            dashboardCardDragOffset = CGPoint(x: snapshot.center.x - touch.x, y: snapshot.center.y - touch.y)
+            card.alpha = 0.25
+            draggedDashboardCard = card
+            dashboardCardSnapshot = snapshot
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        case .changed:
+            let touch = recognizer.location(in: self)
+            dashboardCardSnapshot?.center = CGPoint(x: touch.x + dashboardCardDragOffset.x, y: touch.y + dashboardCardDragOffset.y)
+        case .ended:
+            if draggedDashboardCard === card,
+               let targetIdentifier = dashboardCardOrder.first(where: {
+                   guard let target = dashboardCard(for: $0) else { return false }
+                   return target.convert(target.bounds, to: self).contains(recognizer.location(in: self))
+               }),
+               let sourceIndex = dashboardCardOrder.firstIndex(of: sourceIdentifier),
+               let targetIndex = dashboardCardOrder.firstIndex(of: targetIdentifier),
+               sourceIndex != targetIndex
+            {
+                dashboardCardOrder.swapAt(sourceIndex, targetIndex)
+                applyDashboardCardOrder()
+                UserDefaults.standard.set(dashboardCardOrder, forKey: Self.dashboardCardOrderKey)
+            }
+            fallthrough
+        case .cancelled, .failed:
+            draggedDashboardCard?.alpha = 1
+            dashboardCardSnapshot?.removeFromSuperview()
+            draggedDashboardCard = nil
+            dashboardCardSnapshot = nil
+        default:
+            break
+        }
     }
 
     private func removeLegacyWidthConstraints(from view: UIView) {

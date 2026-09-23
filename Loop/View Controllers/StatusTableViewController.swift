@@ -35,7 +35,6 @@ private extension UIFont {
     }
 }
 
-
 private extension RefreshContext {
     static let all: Set<RefreshContext> = [.status, .glucose, .insulin, .carbs, .targets]
 }
@@ -162,8 +161,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
             .store(in: &cancellables)
 
         if let gestureRecognizer = charts.gestureRecognizer {
+            gestureRecognizer.delegate = chartReorderGestureDelegate
             tableView.addGestureRecognizer(gestureRecognizer)
         }
+
+        let chartReorderRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleChartLongPress(_:)))
+        chartReorderRecognizer.minimumPressDuration = 0.35
+        chartReorderRecognizer.allowableMovement = 18
+        chartReorderRecognizer.delegate = chartReorderGestureDelegate
+        self.chartReorderRecognizer = chartReorderRecognizer
+        tableView.addGestureRecognizer(chartReorderRecognizer)
 
         tableView.estimatedRowHeight = 74
         tableView.sectionHeaderTopPadding = 0
@@ -196,6 +203,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         navigationController?.setNavigationBarHidden(true, animated: animated)
         navigationController?.setToolbarHidden(false, animated: animated)
         configureDashboardToolbarAppearance()
+        installToolbarReordering()
         
         updateToolbarItems()
 
@@ -688,6 +696,91 @@ final class StatusTableViewController: LoopChartsTableViewController {
     /// because it differs between the iOS 26 and legacy layouts.
     private var preMealItemIndex: Int = 1
 
+    private enum DashboardAction: String, CaseIterable {
+        case carbs, preMeal, bolus, workout, settings
+    }
+
+    private static let toolbarOrderKey = "DashboardToolbarOrder"
+    private lazy var dashboardToolbarOrder: [DashboardAction] = {
+        let saved = UserDefaults.standard.stringArray(forKey: Self.toolbarOrderKey) ?? []
+        let ordered = saved.compactMap(DashboardAction.init(rawValue:)).reduce(into: [DashboardAction]()) { result, item in
+            if !result.contains(item) { result.append(item) }
+        }
+        return ordered + DashboardAction.allCases.filter { !ordered.contains($0) }
+    }()
+    private weak var draggedToolbarButton: ToolbarButton?
+    private var toolbarDragSnapshot: UIView?
+    private var toolbarDragOffset = CGPoint.zero
+    private var toolbarReorderRecognizers: [UILongPressGestureRecognizer] = []
+
+    private func toolbarButton(for action: DashboardAction) -> ToolbarButton {
+        switch action {
+        case .carbs: return carbEntryButton
+        case .preMeal: return preMealButton
+        case .bolus: return bolusButton
+        case .workout: return workoutButton
+        case .settings: return settingsButton
+        }
+    }
+
+    private func installToolbarReordering() {
+        guard toolbarReorderRecognizers.isEmpty else { return }
+        for action in DashboardAction.allCases {
+            let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleToolbarLongPress(_:)))
+            recognizer.minimumPressDuration = 0.35
+            toolbarButton(for: action).addGestureRecognizer(recognizer)
+            toolbarReorderRecognizers.append(recognizer)
+        }
+    }
+
+    @objc private func handleToolbarLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        guard let toolbar = navigationController?.toolbar else { return }
+        let location = recognizer.location(in: toolbar)
+
+        switch recognizer.state {
+        case .began:
+            guard let button = recognizer.view as? ToolbarButton,
+                  let action = dashboardToolbarOrder.first(where: { toolbarButton(for: $0) === button }),
+                  let snapshot = toolbarButton(for: action).snapshotView(afterScreenUpdates: false)
+            else { return }
+            snapshot.frame = button.convert(button.bounds, to: toolbar)
+            snapshot.layer.shadowColor = UIColor.black.cgColor
+            snapshot.layer.shadowOpacity = 0.2
+            snapshot.layer.shadowRadius = 8
+            toolbar.addSubview(snapshot)
+            toolbarDragOffset = CGPoint(x: snapshot.center.x - location.x, y: snapshot.center.y - location.y)
+            button.alpha = 0.25
+            draggedToolbarButton = button
+            toolbarDragSnapshot = snapshot
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        case .changed:
+            toolbarDragSnapshot?.center = CGPoint(x: location.x + toolbarDragOffset.x, y: location.y + toolbarDragOffset.y)
+        case .ended:
+            if let source = dashboardToolbarOrder.first(where: { toolbarButton(for: $0) === draggedToolbarButton }),
+               let target = dashboardToolbarOrder.min(by: {
+                   abs(toolbarButton(for: $0).convert(toolbarButton(for: $0).bounds, to: toolbar).midX - location.x) <
+                   abs(toolbarButton(for: $1).convert(toolbarButton(for: $1).bounds, to: toolbar).midX - location.x)
+               }),
+               let sourceIndex = dashboardToolbarOrder.firstIndex(of: source),
+               let targetIndex = dashboardToolbarOrder.firstIndex(of: target),
+               sourceIndex != targetIndex
+            {
+                dashboardToolbarOrder.swapAt(sourceIndex, targetIndex)
+                UserDefaults.standard.set(dashboardToolbarOrder.map(\.rawValue), forKey: Self.toolbarOrderKey)
+                setupToolbarItems()
+                updateToolbarItems()
+            }
+            fallthrough
+        case .cancelled, .failed:
+            draggedToolbarButton?.alpha = 1
+            toolbarDragSnapshot?.removeFromSuperview()
+            draggedToolbarButton = nil
+            toolbarDragSnapshot = nil
+        default:
+            break
+        }
+    }
+
     private func setupToolbarItems() {
         let carbs = UIBarButtonItem(customView: carbEntryButton)
         let bolus = UIBarButtonItem(customView: bolusButton)
@@ -703,20 +796,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
         }
 
+        let items: [DashboardAction: UIBarButtonItem] = [
+            .carbs: carbs, .preMeal: preMeal, .bolus: bolus, .workout: workout, .settings: settings
+        ]
+        let orderedItems = dashboardToolbarOrder.compactMap { items[$0] }
         if #available(iOS 26, *) {
-            toolbarItems = [carbs, preMeal, bolus, workout, settings]
+            toolbarItems = orderedItems
         } else {
-            toolbarItems = [
-                carbs,
-                flexibleSpace(),
-                preMeal,
-                flexibleSpace(),
-                bolus,
-                flexibleSpace(),
-                workout,
-                flexibleSpace(),
-                settings
-            ]
+            toolbarItems = orderedItems.enumerated().flatMap { index, item in
+                index == 0 ? [item] : [flexibleSpace(), item]
+            }
         }
 
         // The two layouts put pre-meal at different indices, so record where it
@@ -1166,6 +1255,166 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
     }
 
+    private static let chartOrderKey = "DashboardChartOrder"
+    private var chartReorderRecognizer: UILongPressGestureRecognizer?
+    private final class ChartReorderGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+        weak var owner: StatusTableViewController?
+
+        init(owner: StatusTableViewController) {
+            self.owner = owner
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let owner else { return false }
+            let location = touch.location(in: owner.tableView)
+            if gestureRecognizer === owner.chartReorderRecognizer {
+                return owner.canBeginChartReorder(at: location)
+            }
+            if gestureRecognizer === owner.charts.gestureRecognizer {
+                return owner.canBeginChartTouch(at: location)
+            }
+            return true
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
+        }
+    }
+    private lazy var chartReorderGestureDelegate = ChartReorderGestureDelegate(owner: self)
+    private var draggedChartIndexPath: IndexPath?
+    private weak var draggedChartCell: UITableViewCell?
+    private var chartDragSnapshot: UIView?
+    private var chartDragOffset = CGPoint.zero
+    private var chartWasScrollEnabled = true
+    private weak var activeChartReorderRecognizer: UILongPressGestureRecognizer?
+    private var chartAutoscrollDisplayLink: CADisplayLink?
+    private lazy var chartOrder: [ChartRow] = {
+        let saved = UserDefaults.standard.array(forKey: Self.chartOrderKey) as? [Int] ?? []
+        let ordered = saved.compactMap(ChartRow.init(rawValue:)).reduce(into: [ChartRow]()) { result, item in
+            if !result.contains(item) { result.append(item) }
+        }
+        return ordered + ChartRow.allCases.filter { !ordered.contains($0) }
+    }()
+
+    private func chartRow(at indexPath: IndexPath) -> ChartRow {
+        chartOrder[indexPath.row]
+    }
+
+    private func isCollapsedChartRow(_ row: ChartRow) -> Bool {
+        row == .cycle || collapsedChartRows.contains(row)
+    }
+
+    private func canBeginChartReorder(at location: CGPoint) -> Bool {
+        guard let indexPath = tableView.indexPathForRow(at: location),
+              indexPath.section == Section.charts.rawValue,
+              isCollapsedChartRow(chartRow(at: indexPath)),
+              tableView.cellForRow(at: indexPath) != nil
+        else { return false }
+
+        // A tap keeps its normal action; a hold anywhere on a collapsed card moves it.
+        return true
+    }
+
+    private func canBeginChartTouch(at location: CGPoint) -> Bool {
+        guard let indexPath = tableView.indexPathForRow(at: location),
+              indexPath.section == Section.charts.rawValue,
+              !isCollapsedChartRow(chartRow(at: indexPath)),
+              let cell = tableView.cellForRow(at: indexPath) as? ChartTableViewCell
+        else { return false }
+
+        // The chart cursor belongs to the plot, never the card icon or header.
+        return cell.convert(location, from: tableView).y > 48
+    }
+
+    @objc private func autoscrollChartDuringDrag() {
+        guard let recognizer = activeChartReorderRecognizer,
+              recognizer.state == .changed || recognizer.state == .began
+        else { return }
+
+        let location = recognizer.location(in: tableView)
+        let visibleBounds = tableView.bounds
+        let edgeHeight: CGFloat = 64
+        let distanceFromTop = location.y - visibleBounds.minY
+        let distanceFromBottom = visibleBounds.maxY - location.y
+        let step: CGFloat
+        if distanceFromTop < edgeHeight {
+            step = -min(10, (edgeHeight - distanceFromTop) / 6)
+        } else if distanceFromBottom < edgeHeight {
+            step = min(10, (edgeHeight - distanceFromBottom) / 6)
+        } else {
+            step = 0
+        }
+
+        if step != 0 {
+            let minimumOffset = -tableView.adjustedContentInset.top
+            let maximumOffset = max(minimumOffset, tableView.contentSize.height - tableView.bounds.height + tableView.adjustedContentInset.bottom)
+            let newOffset = min(max(tableView.contentOffset.y + step, minimumOffset), maximumOffset)
+            tableView.contentOffset.y = newOffset
+        }
+
+        let updatedLocation = recognizer.location(in: tableView)
+        chartDragSnapshot?.center = CGPoint(x: updatedLocation.x + chartDragOffset.x, y: updatedLocation.y + chartDragOffset.y)
+    }
+
+    @objc private func handleChartLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        let location = recognizer.location(in: tableView)
+        switch recognizer.state {
+        case .began:
+            guard canBeginChartReorder(at: location),
+                  let indexPath = tableView.indexPathForRow(at: location),
+                  let cell = tableView.cellForRow(at: indexPath),
+                  let snapshot = cell.snapshotView(afterScreenUpdates: false)
+            else { return }
+            snapshot.frame = cell.frame
+            snapshot.layer.shadowColor = UIColor.black.cgColor
+            snapshot.layer.shadowOpacity = 0.18
+            snapshot.layer.shadowRadius = 12
+            tableView.addSubview(snapshot)
+            chartDragOffset = CGPoint(x: snapshot.center.x - location.x, y: snapshot.center.y - location.y)
+            cell.alpha = 0.25
+            draggedChartIndexPath = indexPath
+            draggedChartCell = cell
+            chartDragSnapshot = snapshot
+            chartWasScrollEnabled = tableView.isScrollEnabled
+            tableView.isScrollEnabled = false
+            activeChartReorderRecognizer = recognizer
+            let displayLink = CADisplayLink(target: self, selector: #selector(autoscrollChartDuringDrag))
+            displayLink.add(to: .main, forMode: .common)
+            chartAutoscrollDisplayLink = displayLink
+            charts.gestureRecognizer?.isEnabled = false
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        case .changed:
+            chartDragSnapshot?.center = CGPoint(x: location.x + chartDragOffset.x, y: location.y + chartDragOffset.y)
+        case .ended:
+            if let source = draggedChartIndexPath,
+               let target = tableView.indexPathForRow(at: location),
+               target.section == Section.charts.rawValue,
+               source.row != target.row
+            {
+                let row = chartOrder.remove(at: source.row)
+                chartOrder.insert(row, at: target.row)
+                UserDefaults.standard.set(chartOrder.map(\.rawValue), forKey: Self.chartOrderKey)
+                draggedChartCell?.alpha = 1
+                chartDragSnapshot?.removeFromSuperview()
+                tableView.reloadSections(IndexSet(integer: Section.charts.rawValue), with: .automatic)
+            }
+            fallthrough
+        case .cancelled, .failed:
+            draggedChartCell?.alpha = 1
+            chartDragSnapshot?.removeFromSuperview()
+            draggedChartIndexPath = nil
+            draggedChartCell = nil
+            chartDragSnapshot = nil
+            chartAutoscrollDisplayLink?.invalidate()
+            chartAutoscrollDisplayLink = nil
+            activeChartReorderRecognizer = nil
+            tableView.isScrollEnabled = chartWasScrollEnabled
+            charts.gestureRecognizer?.isEnabled = true
+        default:
+            break
+        }
+    }
+
     // Keep the primary glucose graph visible and present the supporting metrics as
     // compact summary cards, matching the hierarchy of the redesigned dashboard.
     private var collapsedChartRows: Set<ChartRow> = [.iob, .dose, .cob]
@@ -1387,7 +1636,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case .hud:
             return shouldShowHUD ? 1 : 0
         case .charts:
-            return ChartRow.allCases.count
+            return chartOrder.count
         case .status:
             return shouldShowStatus ? StatusRow.allCases.count : 0
         }
@@ -1841,7 +2090,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             return cell
         case .charts:
-            let chartRow = ChartRow(rawValue: indexPath.row)!
+            let chartRow = chartRow(at: indexPath)
 
             if chartRow == .cycle {
                 let cell = tableView.dequeueReusableCell(
@@ -1900,7 +2149,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 } else {
                     self.collapsedChartRows.insert(chartRow)
                 }
-                tableView.reloadRows(at: [indexPath], with: .automatic)
+                guard let rowIndex = self.chartOrder.firstIndex(of: chartRow) else { return }
+                tableView.reloadRows(at: [IndexPath(row: rowIndex, section: Section.charts.rawValue)], with: .automatic)
             }
 
             self.tableView(tableView, updateSubtitleFor: cell, at: indexPath)
@@ -2051,7 +2301,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case .cycle:
             let view = CycleTrackingView { [weak self] in
                 guard let self else { return }
-                let indexPath = IndexPath(row: ChartRow.cycle.rawValue, section: Section.charts.rawValue)
+                guard let rowIndex = self.chartOrder.firstIndex(of: .cycle) else { return }
+                let indexPath = IndexPath(row: rowIndex, section: Section.charts.rawValue)
                 if self.tableView.indexPathsForVisibleRows?.contains(indexPath) == true {
                     self.tableView.reloadRows(at: [indexPath], with: .none)
                 }
@@ -2106,7 +2357,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func refreshChartCellPresentation(_ cell: ChartTableViewCell, at indexPath: IndexPath) {
         self.tableView(self.tableView, updateSubtitleFor: cell, at: indexPath)
 
-        let row = ChartRow(rawValue: indexPath.row)!
+        let row = chartRow(at: indexPath)
         if collapsedChartRows.contains(row) {
             configureCollapsedSummary(cell, for: row)
         } else {
@@ -2117,7 +2368,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func tableView(_ tableView: UITableView, updateSubtitleFor cell: ChartTableViewCell, at indexPath: IndexPath) {
         switch Section(rawValue: indexPath.section)! {
         case .charts:
-            let chartRow = ChartRow(rawValue: indexPath.row)!
+            let chartRow = chartRow(at: indexPath)
             switch chartRow {
             case .glucose:
                 if let eventualGlucose = eventualGlucoseDescription {
@@ -2218,7 +2469,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             let graphicAspectRatio: CGFloat = 705 / 1919
             return ceil(availableWidth * graphicAspectRatio)
         case .charts:
-            if collapsedChartRows.contains(ChartRow(rawValue: indexPath.row)!) {
+            if collapsedChartRows.contains(chartRow(at: indexPath)) {
                 return 74
             }
 
@@ -2227,7 +2478,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             var availableSize = max(tableView.bounds.width, tableView.bounds.height)
             availableSize -= (tableView.safeAreaInsets.top + tableView.safeAreaInsets.bottom + hudHeight)
 
-            switch ChartRow(rawValue: indexPath.row)! {
+            switch chartRow(at: indexPath) {
             case .glucose:
                 return max(150, 0.38 * availableSize)
             case .iob, .dose, .cob:
@@ -2313,7 +2564,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 }
             }
         case .charts:
-            if ChartRow(rawValue: indexPath.row) == .cycle {
+            if chartRow(at: indexPath) == .cycle {
                 tableView.deselectRow(at: indexPath, animated: true)
                 navigateToDetails(for: .cycle, sender: tableView.cellForRow(at: indexPath))
             }
@@ -2585,13 +2836,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
             }
         } else {
             if FeatureFlags.sensitivityOverridesEnabled {
-                let overridesIndex: Int
-                if #available(iOS 26, *) {
-                    overridesIndex = 3
-                } else {
-                    overridesIndex = 6
-                }
-                performSegue(withIdentifier: OverrideSelectionViewController.className, sender: toolbarItems![overridesIndex])
+                let workoutItem = toolbarItems?.first { $0.customView === workoutButton }
+                performSegue(withIdentifier: OverrideSelectionViewController.className, sender: workoutItem)
             } else {
                 presentWorkoutModeAlertController()
             }
