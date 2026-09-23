@@ -867,6 +867,88 @@ final class StatusTableViewController: LoopChartsTableViewController {
         log.debug("[reloadData] for HealthKit unit preference change")
         refreshContext = RefreshContext.all
     }
+
+    // MARK: - Glucose Unit Toggle (US / Europe)
+
+    private var glucoseUnitToastView: UIView?
+
+    private func toggleGlucoseUnit() {
+        guard let deviceManager = deviceManager else { return }
+
+        let feedback = UIImpactFeedbackGenerator(style: .medium)
+        feedback.impactOccurred()
+
+        let newUnit = deviceManager.toggleDisplayGlucoseUnit()
+
+        showGlucoseUnitToast(unit: newUnit)
+
+        unitPreferencesDidChange(to: newUnit)
+        tableView.reloadData()
+    }
+
+    private func showGlucoseUnitToast(unit: HKUnit) {
+        glucoseUnitToastView?.removeFromSuperview()
+
+        let toast = UIView()
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        toast.backgroundColor = UIColor.dashboardInk.withAlphaComponent(0.90)
+        toast.layer.cornerRadius = 18
+        toast.layer.cornerCurve = .continuous
+        toast.clipsToBounds = true
+
+        let iconLabel = UILabel()
+        iconLabel.translatesAutoresizingMaskIntoConstraints = false
+        iconLabel.text = "💧"
+        iconLabel.font = .systemFont(ofSize: 15)
+
+        let textLabel = UILabel()
+        textLabel.translatesAutoresizingMaskIntoConstraints = false
+        let unitText = unit == .millimolesPerLiter ? "mmol/L" : "mg/dL"
+        textLabel.text = unitText
+        textLabel.font = .dashboardRounded(ofSize: 15, weight: .bold)
+        textLabel.textColor = .dashboardSurface
+
+        let stack = UIStackView(arrangedSubviews: [iconLabel, textLabel])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .horizontal
+        stack.spacing = 6
+        stack.alignment = .center
+
+        toast.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: toast.topAnchor, constant: 8),
+            stack.leadingAnchor.constraint(equalTo: toast.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: toast.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: toast.bottomAnchor, constant: -8)
+        ])
+
+        view.addSubview(toast)
+        glucoseUnitToastView = toast
+
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            toast.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12)
+        ])
+
+        toast.alpha = 0
+        toast.transform = CGAffineTransform(scaleX: 0.85, y: 0.85).translatedBy(x: 0, y: -10)
+
+        UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0, options: [.curveEaseOut]) {
+            toast.alpha = 1
+            toast.transform = .identity
+        } completion: { _ in
+            UIView.animate(withDuration: 0.3, delay: 1.2, options: [.curveEaseIn]) {
+                toast.alpha = 0
+                toast.transform = CGAffineTransform(scaleX: 0.9, y: 0.9).translatedBy(x: 0, y: -10)
+            } completion: { _ in
+                toast.removeFromSuperview()
+                if self.glucoseUnitToastView === toast {
+                    self.glucoseUnitToastView = nil
+                }
+            }
+        }
+    }
     
     private func registerCGMManager() {
         deviceManager.cgmManager?.removeStatusObserver(self)
@@ -1643,6 +1725,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
 
     private final class DashboardGraphicTableViewCell: UITableViewCell {
+        var onSensorTap: (() -> Void)?
+
         private let graphicImageView: UIImageView = {
             let imageView = UIImageView(image: UIImage(named: "DashboardHeaderGraphic"))
             imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -1651,6 +1735,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
             imageView.isAccessibilityElement = true
             imageView.accessibilityLabel = NSLocalizedString("MichiLoop. My pancreas has WiFi.", comment: "Accessibility label for the dashboard header graphic")
             return imageView
+        }()
+
+        private lazy var sensorButton: UIButton = {
+            let button = UIButton(type: .custom)
+            button.backgroundColor = .clear
+            button.accessibilityLabel = NSLocalizedString("Toggle glucose unit", comment: "Accessibility label for glucose unit toggle button on header graphic")
+            button.accessibilityHint = NSLocalizedString("Switches glucose unit between US (mg/dL) and European (mmol/L) units", comment: "Accessibility hint for glucose unit toggle")
+            button.addTarget(self, action: #selector(sensorButtonTapped), for: .touchUpInside)
+            return button
         }()
 
         override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -1668,6 +1761,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             contentView.backgroundColor = .clear
             selectionStyle = .none
             contentView.addSubview(graphicImageView)
+            contentView.addSubview(sensorButton)
 
             NSLayoutConstraint.activate([
                 graphicImageView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -1675,6 +1769,40 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 graphicImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
                 graphicImageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
             ])
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+
+            let imageFrame = graphicImageView.frame
+            // The Dexcom G7 sensor center is located at 66.7% width and 75.7% height
+            let centerX = imageFrame.minX + imageFrame.width * 0.667
+            let centerY = imageFrame.minY + imageFrame.height * 0.757
+            let buttonSize = max(52, imageFrame.height * 0.44)
+            sensorButton.frame = CGRect(
+                x: centerX - buttonSize / 2,
+                y: centerY - buttonSize / 2,
+                width: buttonSize,
+                height: buttonSize
+            )
+            sensorButton.layer.cornerRadius = buttonSize / 2
+            contentView.bringSubviewToFront(sensorButton)
+        }
+
+        @objc private func sensorButtonTapped() {
+            UIView.animate(withDuration: 0.08, animations: {
+                self.sensorButton.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
+            }) { _ in
+                UIView.animate(withDuration: 0.12) {
+                    self.sensorButton.transform = .identity
+                }
+            }
+            onSensorTap?()
+        }
+
+        override func prepareForReuse() {
+            super.prepareForReuse()
+            onSensorTap = nil
         }
     }
 
@@ -2306,7 +2434,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 return cell
             }
         case .branding:
-            return tableView.dequeueReusableCell(withIdentifier: DashboardGraphicTableViewCell.className, for: indexPath)
+            let cell = tableView.dequeueReusableCell(withIdentifier: DashboardGraphicTableViewCell.className, for: indexPath) as! DashboardGraphicTableViewCell
+            cell.onSensorTap = { [weak self] in
+                self?.toggleGlucoseUnit()
+            }
+            return cell
         case .hud:
             let cell = tableView.dequeueReusableCell(withIdentifier: HUDViewTableViewCell.className, for: indexPath) as! HUDViewTableViewCell
             hudView = cell.hudView

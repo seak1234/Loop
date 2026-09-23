@@ -354,8 +354,10 @@ final class DeviceDataManager {
         pumpIsAllowingAutomation = true
         self.automaticDosingStatus = automaticDosingStatus
 
-        // HealthStorePreferredGlucoseUnitDidChange will be notified once the user completes the health access form. Set to .milligramsPerDeciliter until then
-        displayGlucosePreference = DisplayGlucosePreference(displayGlucoseUnit: .milligramsPerDeciliter)
+        // HealthStorePreferredGlucoseUnitDidChange will be notified once the user completes the health access form. Set to user preference or .milligramsPerDeciliter until then
+        HealthStoreUnitCache.appGroupSuiteName = Bundle.main.appGroupSuiteName
+        let initialGlucoseUnit = HealthStoreUnitCache.userPreferredGlucoseUnit ?? .milligramsPerDeciliter
+        displayGlucosePreference = DisplayGlucosePreference(displayGlucoseUnit: initialGlucoseUnit)
 
         self.trustedTimeChecker = trustedTimeChecker
 
@@ -1711,6 +1713,19 @@ extension DeviceDataManager {
         self.displayGlucoseUnitObservers.forEach {
             $0.unitDidChange(to: displayGlucoseUnit)
         }
+    }
+
+    @discardableResult
+    func toggleDisplayGlucoseUnit() -> HKUnit {
+        let currentUnit = displayGlucosePreference.unit
+        let newUnit: HKUnit = (currentUnit == .millimolesPerLiter) ? .milligramsPerDeciliter : .millimolesPerLiter
+
+        HealthStoreUnitCache.unitCache(for: healthStore).setUserPreferredUnit(newUnit, for: .bloodGlucose)
+
+        self.displayGlucosePreference.unitDidChange(to: newUnit)
+        self.notifyObserversOfDisplayGlucoseUnitChange(to: newUnit)
+
+        return newUnit
     }
 }
 

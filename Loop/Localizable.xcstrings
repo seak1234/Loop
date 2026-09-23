@@ -36226,6 +36226,9 @@
         }
       }
     },
+    "Switches glucose unit between US (mg/dL) and European (mmol/L) units" : {
+      "comment" : "Accessibility hint for glucose unit toggle"
+    },
     "Tap here to set up a CGM" : {
       "comment" : "Descriptive text for button to add CGM device",
       "localizations" : {
@@ -38402,6 +38405,9 @@
     },
     "Timing uncertain" : {
       "comment" : "Cycle phase when a period has not been confirmed"
+    },
+    "Toggle glucose unit" : {
+      "comment" : "Accessibility label for glucose unit toggle button on header graphic"
     },
     "Total today" : {
       "comment" : "The subtitle of the insulin delivery summary card"
