@@ -496,6 +496,7 @@ struct CycleTrackingView: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.layoutDirection) private var layoutDirection
 
     private var coral: Color { Color(uiColor: .dashboardCoral) }
     private var ink: Color { Color(uiColor: .dashboardInk) }
@@ -647,15 +648,47 @@ struct CycleTrackingView: View {
             }
             .frame(height: 14)
 
-            HStack {
-                Text(NSLocalizedString("Period", comment: "Cycle phase progress label"))
-                Spacer()
-                Text(NSLocalizedString("Follicular", comment: "Cycle phase progress label"))
-                Spacer()
-                Text(NSLocalizedString("Ovulation", comment: "Cycle phase progress label"))
-                Spacer()
-                Text(NSLocalizedString("Luteal", comment: "Cycle phase progress label"))
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let transitions: [Double] = {
+                    if let t = summary.phaseTransitions, t.count == 3 {
+                        return t
+                    }
+                    let length = Double(max(20, summary.cycleLength))
+                    let periodLength = 5.0
+                    let ovulationDay = max(10.0, length - 14.0)
+                    return [
+                        periodLength / length,
+                        (ovulationDay - 2.0) / length,
+                        (ovulationDay + 1.0) / length
+                    ]
+                }()
+
+                let follicularFraction = (transitions[0] + transitions[1]) / 2.0
+                let ovulationFraction = (transitions[1] + transitions[2]) / 2.0
+
+                let follicularX = layoutDirection == .rightToLeft
+                    ? width * (1.0 - follicularFraction)
+                    : width * follicularFraction
+                let ovulationX = layoutDirection == .rightToLeft
+                    ? width * (1.0 - ovulationFraction)
+                    : width * ovulationFraction
+
+                ZStack(alignment: .leading) {
+                    Text(NSLocalizedString("Period", comment: "Cycle phase progress label"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(NSLocalizedString("Follicular", comment: "Cycle phase progress label"))
+                        .position(x: follicularX, y: proxy.size.height / 2)
+
+                    Text(NSLocalizedString("Ovulation", comment: "Cycle phase progress label"))
+                        .position(x: ovulationX, y: proxy.size.height / 2)
+
+                    Text(NSLocalizedString("Luteal", comment: "Cycle phase progress label"))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
+            .frame(height: 14)
             .font(.system(size: 10, weight: .medium, design: .rounded))
             .foregroundStyle(mutedInk)
         }
