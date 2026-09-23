@@ -47,6 +47,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private lazy var dashboardBackgroundImageView: UIImageView = {
         let imageView = UIImageView(image: UIImage(named: "DashboardMarbleBackground"))
         imageView.contentMode = .scaleAspectFill
+        imageView.transform = CGAffineTransform(scaleX: -1, y: 1)
         imageView.clipsToBounds = true
         imageView.backgroundColor = .dashboardBackground
         imageView.isAccessibilityElement = false
@@ -362,6 +363,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
     /// A custom toolbar button with an icon stacked vertically above a text label,
     /// sized to fit the bottom toolbar geometry without text clipping.
     fileprivate final class ToolbarButton: UIButton {
+        private let emphasisBackgroundView = UIView()
+        private let emphasisGradient = CAGradientLayer()
         private let iconImageView = UIImageView()
         private let titleLabelView = UILabel()
         private let badgeView = UIView()
@@ -389,6 +392,17 @@ final class StatusTableViewController: LoopChartsTableViewController {
             isAccessibilityElement = true
             adjustsImageWhenDisabled = false
             tintAdjustmentMode = .normal
+
+            emphasisBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+            emphasisBackgroundView.isUserInteractionEnabled = false
+            emphasisBackgroundView.isAccessibilityElement = false
+            emphasisBackgroundView.layer.cornerRadius = 15
+            emphasisBackgroundView.layer.borderWidth = 1
+            emphasisBackgroundView.layer.shadowOffset = CGSize(width: 0, height: 2)
+            emphasisBackgroundView.layer.shadowRadius = 5
+            emphasisBackgroundView.layer.addSublayer(emphasisGradient)
+            emphasisBackgroundView.isHidden = true
+            addSubview(emphasisBackgroundView)
 
             iconImageView.translatesAutoresizingMaskIntoConstraints = false
             iconImageView.contentMode = .scaleAspectFit
@@ -433,6 +447,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 widthConstraint,
                 heightConstraint,
 
+                emphasisBackgroundView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                emphasisBackgroundView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                emphasisBackgroundView.topAnchor.constraint(equalTo: topAnchor),
+                emphasisBackgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
                 iconImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
                 iconImageView.topAnchor.constraint(equalTo: topAnchor, constant: 2.5),
                 iconImageView.widthAnchor.constraint(equalToConstant: ToolbarLayout.iconSize.width),
@@ -459,17 +478,28 @@ final class StatusTableViewController: LoopChartsTableViewController {
             return ToolbarLayout.itemSize
         }
 
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            emphasisGradient.frame = emphasisBackgroundView.bounds
+            emphasisGradient.cornerRadius = emphasisBackgroundView.layer.cornerRadius
+            emphasisBackgroundView.layer.shadowPath = UIBezierPath(
+                roundedRect: emphasisBackgroundView.bounds,
+                cornerRadius: emphasisBackgroundView.layer.cornerRadius
+            ).cgPath
+        }
+
         private static func roundedFont(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
             let font = UIFont.systemFont(ofSize: size, weight: weight)
             guard let descriptor = font.fontDescriptor.withDesign(.rounded) else { return font }
             return UIFont(descriptor: descriptor, size: size)
         }
 
-        func set(image: UIImage?, title: String, tintColor: UIColor, isBadgeVisible: Bool = false, usesDimensionalIcon: Bool = false) {
+        func set(image: UIImage?, title: String, tintColor: UIColor, isBadgeVisible: Bool = false, usesDimensionalIcon: Bool = false, showsEmphasisBackground: Bool = false) {
             self.baseImage = image
             self.customTintColor = tintColor
             self.isBadgeVisible = isBadgeVisible
             self.usesDimensionalIcon = usesDimensionalIcon
+            emphasisBackgroundView.isHidden = !showsEmphasisBackground
             titleLabelView.text = title
             self.tintColor = tintColor
             updateColors()
@@ -487,6 +517,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
             alpha = 1.0
 
             let isDark = traitCollection.userInterfaceStyle == .dark
+            let coral = UIColor.dashboardCoral.resolvedColor(with: traitCollection)
+            emphasisGradient.colors = [
+                coral.withAlphaComponent(isDark ? 0.18 : 0.07).cgColor,
+                coral.withAlphaComponent(isDark ? 0.30 : 0.18).cgColor
+            ]
+            emphasisBackgroundView.layer.borderColor = (isDark ? coral.withAlphaComponent(0.30) : UIColor.white.withAlphaComponent(0.75)).cgColor
+            emphasisBackgroundView.layer.shadowColor = coral.cgColor
+            emphasisBackgroundView.layer.shadowOpacity = isDark ? 0.12 : 0.16
+
             let borderColor = isDark ? UIColor.dashboardMutedInk : UIColor.dashboardCoral.withAlphaComponent(0.65)
             badgeView.layer.borderColor = borderColor.cgColor
             badgeView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(isDark ? 0.55 : 0.22)
@@ -603,6 +642,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         title: NSLocalizedString("Bolus", comment: "The label of the bolus entry button"),
         tintColor: .dashboardCoral,
         usesDimensionalIcon: true,
+        showsEmphasisBackground: true,
         action: #selector(presentBolusScreen)
     )
     private lazy var settingsButton = makeToolbarButton(
@@ -631,13 +671,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
         return button
     }
 
-    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, usesDimensionalIcon: Bool = false, action: Selector) -> ToolbarButton {
+    private func makeToolbarButton(systemName: String, title: String, tintColor: UIColor, usesDimensionalIcon: Bool = false, showsEmphasisBackground: Bool = false, action: Selector) -> ToolbarButton {
         let button = ToolbarButton()
         button.set(
             image: UIImage(systemName: systemName),
             title: title,
             tintColor: tintColor,
-            usesDimensionalIcon: usesDimensionalIcon
+            usesDimensionalIcon: usesDimensionalIcon,
+            showsEmphasisBackground: showsEmphasisBackground
         )
         button.addTarget(self, action: action, for: .touchUpInside)
         return button

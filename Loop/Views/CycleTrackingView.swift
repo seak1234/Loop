@@ -400,6 +400,7 @@ struct CycleTrackingView: View {
                 Image("DashboardMarbleBackground")
                     .resizable()
                     .scaledToFill()
+                    .scaleEffect(x: -1, y: 1)
                     .opacity(colorScheme == .dark ? 0.08 : 0.44)
             }
             .ignoresSafeArea()

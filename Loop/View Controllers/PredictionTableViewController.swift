@@ -50,6 +50,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
     private lazy var dashboardBackgroundImageView: UIImageView = {
         let imageView = UIImageView(image: UIImage(named: "DashboardMarbleBackground"))
         imageView.contentMode = .scaleAspectFill
+        imageView.transform = CGAffineTransform(scaleX: -1, y: 1)
         imageView.clipsToBounds = true
         imageView.backgroundColor = .dashboardBackground
         imageView.isAccessibilityElement = false
