@@ -144,6 +144,14 @@ struct ChartView: View {
                         .foregroundStyle(Color.dashboardMutedInk.opacity(0.65))
                 }
                 
+                ForEach(predicatedData) { item in
+                    LineMark (x: .value("Date", item.x),
+                              y: .value("Glucose level", item.y)
+                    )
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                    .foregroundStyle(colorGradient)
+                }
+
                 ForEach(glucoseSampleData) { item in
                     PointMark (x: .value("Date", item.x),
                                y: .value("Glucose level", item.y)
@@ -151,13 +159,13 @@ struct ChartView: View {
                     .symbolSize(10)
                     .foregroundStyle(by: .value("Color", item.color))
                 }
-                
-                ForEach(predicatedData) { item in
-                    LineMark (x: .value("Date", item.x),
-                              y: .value("Glucose level", item.y)
+
+                if let latestSample = glucoseSampleData.last {
+                    PointMark (x: .value("Date", latestSample.x),
+                               y: .value("Glucose level", latestSample.y)
                     )
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [6, 5]))
-                    .foregroundStyle(colorGradient)
+                    .symbolSize(18)
+                    .foregroundStyle(by: .value("Color", latestSample.color))
                 }
             }
             .chartForegroundStyleScale([

@@ -314,7 +314,7 @@ class GlucoseChartScene: SKScene {
             })
 
             predictedPathNode = SKShapeNode(path: predictedPath.copy(dashingWithPhase: 11, lengths: [5, 3]))
-            predictedPathNode?.zPosition = NodePlane.values.zPosition
+            predictedPathNode?.zPosition = NodePlane.values.zPosition - 0.5
             addChild(predictedPathNode!)
 
             if shouldAnimatePredictionPath {
