@@ -156,9 +156,13 @@ public class StatusBarHUDView: UIView, NibLoadable {
         )
         containerView.isLayoutMarginsRelativeArrangement = true
 
+        containerView.insertArrangedSubview(loopCompletionHUD, at: 0)
+        containerView.insertArrangedSubview(cgmStatusHUD, at: 1)
+        containerView.insertArrangedSubview(pumpStatusHUD, at: 2)
+
         let cards: [(view: BaseHUDView, title: String, accentColor: UIColor)] = [
-            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .dashboardCoral),
             (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .dashboardCoral),
+            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .dashboardCoral),
             (pumpStatusHUD, LocalizedString("Pump", comment: "Dashboard pump card title"), .dashboardCoral),
         ]
 
@@ -318,32 +322,51 @@ public class StatusBarHUDView: UIView, NibLoadable {
             return
         }
 
-        glucoseLabel.font = .dashboardRoundedDigits(ofSize: 26, weight: .bold)
+        glucoseLabel.font = .dashboardRoundedDigits(ofSize: 34, weight: .bold)
         glucoseLabel.textColor = .dashboardInk
-        glucoseLabel.textAlignment = .left
+        glucoseLabel.textAlignment = .center
         glucoseLabel.adjustsFontSizeToFitWidth = true
-        glucoseLabel.minimumScaleFactor = 0.75
+        glucoseLabel.minimumScaleFactor = 0.7
 
-        unitLabel.font = .dashboardRounded(ofSize: 10, weight: .medium)
+        unitLabel.font = .dashboardRounded(ofSize: 11, weight: .semibold)
         unitLabel.textColor = .dashboardMutedInk
         unitLabel.textAlignment = .left
         unitLabel.adjustsFontSizeToFitWidth = true
         unitLabel.minimumScaleFactor = 0.75
 
-        let verticalUnitConstraints = glucoseValueHUD.constraints.filter {
+        unitLabel.setContentHuggingPriority(.required, for: .horizontal)
+        unitLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        glucoseLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
+        let unitConstraints = glucoseValueHUD.constraints.filter {
             $0.firstItem === unitLabel || $0.secondItem === unitLabel
         }
-        let glucoseTrailingConstraints = glucoseValueHUD.constraints.filter {
-            ($0.firstItem === glucoseLabel &&
-             $0.firstAttribute == .trailing &&
-             $0.secondItem === glucoseValueHUD) ||
-            ($0.firstItem === glucoseValueHUD &&
-             $0.firstAttribute == .trailing &&
-             $0.secondItem === glucoseLabel)
+        let glucoseHorizontalConstraints = glucoseValueHUD.constraints.filter {
+            guard $0.firstItem === glucoseLabel || $0.secondItem === glucoseLabel else {
+                return false
+            }
+            return [.leading, .trailing, .leadingMargin, .trailingMargin, .left, .right].contains($0.firstAttribute) ||
+                   [.leading, .trailing, .leadingMargin, .trailingMargin, .left, .right].contains($0.secondAttribute)
         }
-        NSLayoutConstraint.deactivate(verticalUnitConstraints + glucoseTrailingConstraints)
+        NSLayoutConstraint.deactivate(unitConstraints + glucoseHorizontalConstraints)
+
+        let stackHorizontalConstraints = cgmStatusHUD.constraints.filter {
+            guard $0.firstItem === cgmStatusHUD.statusStackView || $0.secondItem === cgmStatusHUD.statusStackView else {
+                return false
+            }
+            return [.leading, .trailing, .leadingMargin, .trailingMargin, .left, .right].contains($0.firstAttribute) ||
+                   [.leading, .trailing, .leadingMargin, .trailingMargin, .left, .right].contains($0.secondAttribute)
+        }
+        NSLayoutConstraint.deactivate(stackHorizontalConstraints)
+
         NSLayoutConstraint.activate([
+            cgmStatusHUD.statusStackView.centerXAnchor.constraint(equalTo: cgmStatusHUD.centerXAnchor),
+            cgmStatusHUD.statusStackView.leadingAnchor.constraint(greaterThanOrEqualTo: cgmStatusHUD.leadingAnchor, constant: 6),
+            cgmStatusHUD.statusStackView.trailingAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.trailingAnchor, constant: -6),
+
+            glucoseValueHUD.leadingAnchor.constraint(equalTo: glucoseLabel.leadingAnchor),
             unitLabel.leadingAnchor.constraint(equalTo: glucoseLabel.trailingAnchor, constant: 3),
+            unitLabel.trailingAnchor.constraint(equalTo: glucoseValueHUD.trailingAnchor),
             unitLabel.lastBaselineAnchor.constraint(equalTo: glucoseLabel.lastBaselineAnchor),
         ])
 
@@ -353,7 +376,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
             constraint.firstAttribute == .top &&
             constraint.secondItem === glucoseValueHUD
         {
-            constraint.constant = 3
+            constraint.constant = 0
         }
 
         for constraint in trendView.constraints {
@@ -376,7 +399,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         let targetLabel = UILabel()
         targetLabel.translatesAutoresizingMaskIntoConstraints = false
         targetLabel.font = .dashboardRoundedDigits(ofSize: 9, weight: .medium)
-        targetLabel.textAlignment = .left
+        targetLabel.textAlignment = .center
         targetLabel.adjustsFontSizeToFitWidth = true
         targetLabel.minimumScaleFactor = 0.7
         targetLabel.isUserInteractionEnabled = false
@@ -401,8 +424,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
         NSLayoutConstraint.activate([
             targetLabel.topAnchor.constraint(equalTo: cgmStatusHUD.statusStackView.bottomAnchor, constant: 3),
-            targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 18),
-            targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -8),
+            targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 6),
+            targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -6),
             targetLabel.bottomAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.bottomAnchor, constant: -7),
             targetLabel.heightAnchor.constraint(equalToConstant: 12),
         ])
@@ -521,7 +544,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
         let borderColor = UIColor.dashboardBorder.resolvedColor(with: traitCollection)
 
-        for card in [cgmStatusHUD, loopCompletionHUD, pumpStatusHUD] {
+        for card in [loopCompletionHUD, cgmStatusHUD, pumpStatusHUD] {
             card?.backgroundColor = dashboardCardBackgroundColor
             card?.layer.borderColor = borderColor.cgColor
             card?.layer.shadowColor = UIColor.dashboardMutedInk.resolvedColor(with: traitCollection).cgColor
