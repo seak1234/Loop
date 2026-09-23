@@ -69,3 +69,53 @@ extension Color {
     public static let dashboardBackground = Color(UIColor.dashboardBackground)
     public static let dashboardBorder = Color(UIColor.dashboardBorder)
 }
+
+public struct DashboardActionButtonStyle: ButtonStyle {
+    public var isPrimary: Bool
+    public var tintColor: Color
+
+    @Environment(\.isEnabled) private var isEnabled: Bool
+
+    public init(isPrimary: Bool = true, tintColor: Color = .dashboardInsulinAccent) {
+        self.isPrimary = isPrimary
+        self.tintColor = tintColor
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(.headline, design: .rounded).bold())
+            .foregroundColor(isPrimary ? .white : tintColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                Group {
+                    if !isEnabled {
+                        Color(UIColor.systemGray4)
+                    } else if isPrimary {
+                        tintColor
+                    } else {
+                        tintColor.opacity(0.12)
+                    }
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isPrimary ? Color.clear : tintColor.opacity(0.3), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+extension View {
+    @ViewBuilder
+    public func dashboardScrollBackground() -> some View {
+        if #available(iOS 16.0, *) {
+            self.scrollContentBackground(.hidden)
+                .background(Color.dashboardBackground)
+        } else {
+            self.background(Color.dashboardBackground)
+        }
+    }
+}

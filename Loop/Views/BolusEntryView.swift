@@ -37,10 +37,12 @@ struct BolusEntryView: View {
             VStack(spacing: 0) {
                 List {
                     self.chartSection
+                        .listRowBackground(Color.dashboardSurface)
                     self.summarySection
+                        .listRowBackground(Color.dashboardSurface)
                 }
                 .insetGroupedListStyle()
-                
+                .dashboardScrollBackground()
             }
             .navigationBarTitle(self.title)
             .supportedInterfaceOrientations(.portrait)
@@ -89,8 +91,8 @@ struct BolusEntryView: View {
                 // without clipping the point label on highlight, which draws outside the view's bounds.
                 ZStack(alignment: .topLeading) {
                     Text("Glucose", comment: "Title for predicted glucose chart on bolus screen")
-                        .font(.subheadline)
-                        .bold()
+                        .font(.system(.subheadline, design: .rounded).bold())
+                        .foregroundColor(.dashboardGlucoseAccent)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .opacity(isInteractingWithChart ? 0 : 1)
 
@@ -108,12 +110,12 @@ struct BolusEntryView: View {
                     }) {
                         HStack {
                             Text("Forecasted blood glucose may still be higher than target range.")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
+                                .font(.system(.footnote, design: .rounded))
+                                .foregroundColor(.dashboardMutedInk)
                                 .fixedSize(horizontal: false, vertical: true)
                             Image(systemName: "info.circle")
-                                .font(.system(size: 25))
-                                .foregroundColor(.accentColor)
+                                .font(.system(size: 20))
+                                .foregroundColor(.dashboardInsulinAccent)
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -130,7 +132,8 @@ struct BolusEntryView: View {
         LabeledQuantity(
             label: Text("Active Carbs", comment: "Title describing quantity of still-absorbing carbohydrates"),
             quantity: viewModel.activeCarbs,
-            unit: .gram()
+            unit: .gram(),
+            accentColor: .dashboardCarbAccent
         )
     }
     
@@ -140,7 +143,8 @@ struct BolusEntryView: View {
             label: Text("Active Insulin", comment: "Title describing quantity of still-absorbing insulin"),
             quantity: viewModel.activeInsulin,
             unit: .internationalUnit(),
-            maxFractionDigits: 2
+            maxFractionDigits: 2,
+            accentColor: .dashboardInsulinAccent
         )
     }
 
@@ -162,7 +166,6 @@ struct BolusEntryView: View {
         Section {
             VStack(spacing: 16) {
                 titleText
-                    .bold()
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if viewModel.isManualGlucoseEntryEnabled {
@@ -187,8 +190,10 @@ struct BolusEntryView: View {
         }
     }
     
-    private var titleText: Text {
-        return Text("Bolus Summary", comment: "Title for card displaying carb entry and bolus recommendation")
+    private var titleText: some View {
+        Text("Bolus Summary", comment: "Title for card displaying carb entry and bolus recommendation")
+            .font(.system(.headline, design: .rounded).bold())
+            .foregroundColor(.dashboardInk)
     }
 
     private var glucoseFormatter: NumberFormatter {
@@ -201,15 +206,24 @@ struct BolusEntryView: View {
         if viewModel.carbEntryAmountAndEmojiString != nil && viewModel.carbEntryDateAndAbsorptionTimeString != nil {
             HStack {
                 Text("Carb Entry", comment: "Label for carb entry row on bolus screen")
+                    .font(.system(.body, design: .rounded))
+                    .foregroundColor(.dashboardInk)
 
                 Text(viewModel.carbEntryAmountAndEmojiString!)
-                    .foregroundColor(Color(.carbTintColor))
-                    .modifier(LabelBackground())
+                    .font(.system(.subheadline, design: .rounded).bold())
+                    .foregroundColor(.dashboardCarbAccent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.dashboardCarbAccent.opacity(0.12))
+                    )
 
                 Spacer()
 
                 Text(viewModel.carbEntryDateAndAbsorptionTimeString!)
-                    .foregroundColor(Color(.secondaryLabel))
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundColor(.dashboardMutedInk)
             }
         }
     }
@@ -217,11 +231,13 @@ struct BolusEntryView: View {
     private var recommendedBolusRow: some View {
         HStack {
             Text("Recommended Bolus", comment: "Label for recommended bolus row on bolus screen")
+                .font(.system(.body, design: .rounded))
+                .foregroundColor(.dashboardInk)
             Spacer()
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(viewModel.recommendedBolusString)
-                    .font(.title)
-                    .foregroundColor(Color(.label))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.dashboardInsulinAccent)
                 bolusUnitsLabel
             }
         }
@@ -238,15 +254,17 @@ struct BolusEntryView: View {
     private var bolusEntryRow: some View {
         HStack {
             Text("Bolus", comment: "Label for bolus entry row on bolus screen")
+                .font(.system(.headline, design: .rounded))
+                .foregroundColor(.dashboardInk)
             Spacer()
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 TextField(viewModel.formatBolusAmount(0.0), text: enteredBolusStringBinding)
                     .keyboardType(.decimalPad)
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
-                    .font(.title)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.trailing)
-                    .foregroundColor(.loopAccent)
+                    .foregroundColor(.dashboardInsulinAccent)
                     .focused($bolusFieldFocused)
                     .onChange(of: bolusFieldFocused) { focused in
                         if focused {
@@ -259,10 +277,22 @@ struct BolusEntryView: View {
                             viewModel.updateEnteredBolus(enteredBolusString)
                         }
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.dashboardInsulinAccent.opacity(0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.dashboardInsulinAccent.opacity(bolusFieldFocused ? 0.6 : 0.2), lineWidth: bolusFieldFocused ? 1.5 : 1)
+                    )
                     .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                             Spacer()
                             Button("Done") { bolusFieldFocused = false }
+                                .font(.system(.body, design: .rounded).bold())
+                                .foregroundColor(.dashboardInsulinAccent)
                         }
                     }
                 bolusUnitsLabel
@@ -273,7 +303,8 @@ struct BolusEntryView: View {
 
     private var bolusUnitsLabel: some View {
         Text(QuantityFormatter(for: .internationalUnit()).localizedUnitStringWithPlurality())
-            .foregroundColor(Color(.secondaryLabel))
+            .font(.system(.body, design: .rounded))
+            .foregroundColor(.dashboardMutedInk)
     }
 
     private var enteredBolusStringBinding: Binding<String> {
@@ -287,7 +318,7 @@ struct BolusEntryView: View {
     }
 
     private var actionArea: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             if viewModel.isNoticeVisible {
                 warning(for: viewModel.activeNotice!)
                     .padding([.top, .horizontal])
@@ -301,8 +332,19 @@ struct BolusEntryView: View {
 
             actionButton
         }
-        .padding(.bottom) // FIXME: unnecessary on iPhone 8 size devices
-        .background(Color(.secondarySystemGroupedBackground).shadow(radius: 5))
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(
+            Color.dashboardSurface
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: -3)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.dashboardBorder),
+                    alignment: .top
+                )
+        )
     }
 
     private func warning(for notice: BolusEntryViewModel.Notice) -> some View {
@@ -346,8 +388,8 @@ struct BolusEntryView: View {
             },
             label: { Text("Enter Fingerstick Glucose", comment: "Button text prompting manual glucose entry on bolus screen") }
         )
-        .buttonStyle(ActionButtonStyle(viewModel.primaryButton == .manualGlucoseEntry ? .primary : .secondary))
-        .padding([.top, .horizontal])
+        .buttonStyle(DashboardActionButtonStyle(isPrimary: viewModel.primaryButton == .manualGlucoseEntry))
+        .padding(.top, 4)
     }
 
     private var actionButton: some View {
@@ -376,9 +418,9 @@ struct BolusEntryView: View {
                 }
             }
         )
-        .buttonStyle(ActionButtonStyle(viewModel.primaryButton == .actionButton ? .primary : .secondary))
+        .buttonStyle(DashboardActionButtonStyle(isPrimary: viewModel.primaryButton == .actionButton))
         .disabled(viewModel.enacting)
-        .padding()
+        .padding(.bottom, 6)
     }
 
     private func alert(for alert: BolusEntryViewModel.Alert) -> SwiftUI.Alert {
@@ -447,18 +489,31 @@ struct LabeledQuantity: View {
     var quantity: HKQuantity?
     var unit: HKUnit
     var maxFractionDigits: Int?
+    var accentColor: Color? = nil
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             label
-                .bold()
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.medium)
+                .foregroundColor(accentColor != nil ? .dashboardInk : Color(.label))
             valueText
-                .foregroundColor(Color(.secondaryLabel))
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.bold)
+                .foregroundColor(accentColor ?? Color(.secondaryLabel))
                 .fixedSize(horizontal: true, vertical: false)
         }
         .accessibilityElement(children: .combine)
-        .font(.subheadline)
-        .modifier(LabelBackground())
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(accentColor?.opacity(0.12) ?? Color(.systemGray6))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(accentColor?.opacity(0.22) ?? Color.clear, lineWidth: 1)
+        )
     }
 
     var valueText: Text {
@@ -480,6 +535,7 @@ struct LabeledQuantity: View {
         return Text(string)
     }
 }
+
 
 struct LabelBackground: ViewModifier {
     func body(content: Content) -> some View {

@@ -522,7 +522,15 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
             let viewModel = SimpleBolusViewModel(delegate: deviceManager, displayMealEntry: true)
             let bolusEntryView = SimpleBolusView(viewModel: viewModel).environmentObject(DisplayGlucosePreference(displayGlucoseUnit: .milligramsPerDeciliter))
             let hostingController = DismissibleHostingController(rootView: bolusEntryView, isModalInPresentation: false)
+            hostingController.view.backgroundColor = .dashboardBackground
             let navigationWrapper = UINavigationController(rootViewController: hostingController)
+            navigationWrapper.navigationBar.tintColor = .dashboardCarbAccent
+            let navBarAppearance = UINavigationBarAppearance()
+            navBarAppearance.configureWithOpaqueBackground()
+            navBarAppearance.backgroundColor = .dashboardBackground
+            navBarAppearance.shadowColor = .clear
+            navigationWrapper.navigationBar.standardAppearance = navBarAppearance
+            navigationWrapper.navigationBar.scrollEdgeAppearance = navBarAppearance
             hostingController.navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: navigationWrapper, action: #selector(dismissWithAnimation))
             present(navigationWrapper, animated: true)
         } else {

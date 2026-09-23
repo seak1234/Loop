@@ -27,6 +27,8 @@ struct ManualGlucoseEntryRow: View {
     var body: some View {
         HStack {
             Text("Fingerstick Glucose", comment: "Label for manual glucose entry row on bolus screen")
+                .font(.system(.body, design: .rounded))
+                .foregroundColor(.dashboardInk)
             Spacer()
 
             HStack(alignment: .firstTextBaseline) {
@@ -38,7 +40,7 @@ struct ManualGlucoseEntryRow: View {
                     keyboardType: .decimalPad,
                     shouldBecomeFirstResponder: isManualGlucoseEntryRowVisible,
                     maxLength: 4,
-                    doneButtonColor: .loopAccent
+                    doneButtonColor: .dashboardGlucoseAccent
                 )
                 .onChange(of: valueText, perform: { value in
                     if let manualGlucoseValue = displayGlucosePreference.formatter.numberFormatter.number(from: valueText)?.doubleValue {
@@ -52,7 +54,8 @@ struct ManualGlucoseEntryRow: View {
                 })
 
                 Text(displayGlucosePreference.formatter.localizedUnitStringWithPlurality())
-                    .foregroundColor(Color(.secondaryLabel))
+                    .font(.system(.body, design: .rounded))
+                    .foregroundColor(.dashboardMutedInk)
             }
         }
         .onKeyboardStateChange { state in

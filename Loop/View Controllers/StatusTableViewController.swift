@@ -3088,9 +3088,27 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 enableManualGlucoseEntry: enableManualGlucoseEntry
             )
         )
+        hostingController.view.backgroundColor = .dashboardBackground
         
         let navigationWrapper = UINavigationController(rootViewController: hostingController)
-        hostingController.navigationItem.leftBarButtonItem = UIBarButtonItem(title: NSLocalizedString("Cancel", comment: ""), style: .plain, target: navigationWrapper, action: #selector(dismissWithAnimation))
+        navigationWrapper.navigationBar.tintColor = .dashboardInsulinAccent
+        let navBarAppearance = UINavigationBarAppearance()
+        navBarAppearance.configureWithOpaqueBackground()
+        navBarAppearance.backgroundColor = .dashboardBackground
+        navBarAppearance.shadowColor = .clear
+        navBarAppearance.titleTextAttributes = [
+            .foregroundColor: UIColor.dashboardInk,
+            .font: UIFont.dashboardRounded(ofSize: 17, weight: .bold)
+        ]
+        navigationWrapper.navigationBar.standardAppearance = navBarAppearance
+        navigationWrapper.navigationBar.scrollEdgeAppearance = navBarAppearance
+
+        let cancelButton = UIBarButtonItem(title: NSLocalizedString("Cancel", comment: ""), style: .plain, target: navigationWrapper, action: #selector(dismissWithAnimation))
+        cancelButton.setTitleTextAttributes([
+            .font: UIFont.dashboardRounded(ofSize: 17, weight: .medium),
+            .foregroundColor: UIColor.dashboardInsulinAccent
+        ], for: .normal)
+        hostingController.navigationItem.leftBarButtonItem = cancelButton
         present(navigationWrapper, animated: true)
         deviceManager.analyticsServicesManager.didDisplayBolusScreen()
     }

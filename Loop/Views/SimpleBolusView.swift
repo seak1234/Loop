@@ -11,6 +11,7 @@ import LoopKit
 import LoopKitUI
 import HealthKit
 import LoopCore
+import LoopUI
 
 struct SimpleBolusView: View {
     @EnvironmentObject private var displayGlucosePreference: DisplayGlucosePreference
@@ -46,7 +47,9 @@ struct SimpleBolusView: View {
             VStack(spacing: 0) {
                 List() {
                     self.infoSection
+                        .listRowBackground(Color.dashboardSurface)
                     self.summarySection
+                        .listRowBackground(Color.dashboardSurface)
                 }
                 // As of iOS 13, we can't programmatically scroll to the Bolus entry text field.  This ugly hack scoots the
                 // list up instead, so the summarySection is visible and the keyboard shows when you tap "Enter Bolus".
@@ -54,6 +57,7 @@ struct SimpleBolusView: View {
                 // TODO: Fix this in Xcode 12 when we're building for iOS 14.
                 .padding(.top, self.shouldAutoScroll(basedOn: geometry) ? -200 : 0)
                 .insetGroupedListStyle()
+                .dashboardScrollBackground()
                 .navigationBarTitle(Text(self.title), displayMode: .inline)
                 
                 self.actionArea
@@ -121,6 +125,8 @@ struct SimpleBolusView: View {
     private var carbEntryRow: some View {
         HStack(alignment: .center) {
             Text("Carbohydrates", comment: "Label for carbohydrates entry row on simple bolus screen")
+                .font(.system(.body, design: .rounded))
+                .foregroundColor(.dashboardInk)
             Spacer()
             HStack {
                 DismissibleKeyboardTextField(
@@ -129,7 +135,7 @@ struct SimpleBolusView: View {
                     textAlignment: .right,
                     keyboardType: .decimalPad,
                     maxLength: 5,
-                    doneButtonColor: .loopAccent
+                    doneButtonColor: .dashboardCarbAccent
                 )
                 carbUnitsLabel
             }
@@ -142,6 +148,8 @@ struct SimpleBolusView: View {
     private var glucoseEntryRow: some View {
         HStack {
             Text("Current Glucose", comment: "Label for glucose entry row on simple bolus screen")
+                .font(.system(.body, design: .rounded))
+                .foregroundColor(.dashboardInk)
             Spacer()
             HStack(alignment: .firstTextBaseline) {
                 DismissibleKeyboardTextField(
@@ -151,7 +159,7 @@ struct SimpleBolusView: View {
                     textAlignment: .right,
                     keyboardType: .decimalPad,
                     maxLength: 4,
-                    doneButtonColor: .loopAccent
+                    doneButtonColor: .dashboardGlucoseAccent
                 )
 
                 glucoseUnitsLabel
@@ -165,11 +173,13 @@ struct SimpleBolusView: View {
         VStack(alignment: .leading) {
             HStack {
                 Text("Recommended Bolus", comment: "Label for recommended bolus row on simple bolus screen")
+                    .font(.system(.body, design: .rounded))
+                    .foregroundColor(.dashboardInk)
                 Spacer()
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(viewModel.recommendedBolus)
-                        .font(.title)
-                        .foregroundColor(Color(.label))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.dashboardInsulinAccent)
                         .padding([.top, .bottom], 4)
                     bolusUnitsLabel
                 }
@@ -178,17 +188,18 @@ struct SimpleBolusView: View {
             if let activeInsulin = viewModel.activeInsulin {
                 HStack(alignment: .center, spacing: 3) {
                     Text("Adjusted for")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundColor(.dashboardMutedInk)
                     Text("Active Insulin")
-                        .font(.footnote)
+                        .font(.system(.footnote, design: .rounded))
                         .bold()
+                        .foregroundColor(.dashboardInsulinAccent)
                     Text(activeInsulin)
-                        .font(.footnote)
+                        .font(.system(.footnote, design: .rounded))
                         .bold()
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.dashboardInsulinAccent)
                     bolusUnitsLabel
-                        .font(.footnote)
+                        .font(.system(.footnote, design: .rounded))
                         .bold()
                 }
             }
@@ -198,18 +209,20 @@ struct SimpleBolusView: View {
     private var bolusEntryRow: some View {
         HStack {
             Text("Bolus", comment: "Label for bolus entry row on simple bolus screen")
+                .font(.system(.headline, design: .rounded))
+                .foregroundColor(.dashboardInk)
             Spacer()
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 DismissibleKeyboardTextField(
                     text: $viewModel.enteredBolusString,
                     placeholder: "",
-                    font: .preferredFont(forTextStyle: .title1),
-                    textColor: .loopAccent,
+                    font: .systemFont(ofSize: 28, weight: .bold),
+                    textColor: .dashboardInsulinAccent,
                     textAlignment: .right,
                     keyboardType: .decimalPad,
                     shouldBecomeFirstResponder: shouldBolusEntryBecomeFirstResponder,
                     maxLength: 5,
-                    doneButtonColor: .loopAccent
+                    doneButtonColor: .dashboardInsulinAccent
                 )
                 
                 bolusUnitsLabel
@@ -221,21 +234,25 @@ struct SimpleBolusView: View {
 
     private var carbUnitsLabel: some View {
         Text(QuantityFormatter(for: .gram()).localizedUnitStringWithPlurality())
+            .font(.system(.body, design: .rounded))
+            .foregroundColor(.dashboardMutedInk)
     }
     
     private var glucoseUnitsLabel: some View {
         Text(displayGlucosePreference.formatter.localizedUnitStringWithPlurality())
             .fixedSize()
-            .foregroundColor(Color(.secondaryLabel))
+            .font(.system(.body, design: .rounded))
+            .foregroundColor(.dashboardMutedInk)
     }
 
     private var bolusUnitsLabel: Text {
         Text(QuantityFormatter(for: .internationalUnit()).localizedUnitStringWithPlurality())
-            .foregroundColor(Color(.secondaryLabel))
+            .font(.system(.body, design: .rounded))
+            .foregroundColor(.dashboardMutedInk)
     }
 
     private var actionArea: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             if viewModel.isNoticeVisible {
                 warning(for: viewModel.activeNotice!)
                     .padding([.top, .horizontal])
@@ -243,7 +260,19 @@ struct SimpleBolusView: View {
             }
             actionButton
         }
-        .background(Color(.secondarySystemGroupedBackground).shadow(radius: 5))
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(
+            Color.dashboardSurface
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: -3)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.dashboardBorder),
+                    alignment: .top
+                )
+        )
     }
     
     private var actionButton: some View {
@@ -274,8 +303,8 @@ struct SimpleBolusView: View {
             }
         )
         .disabled(viewModel.actionButtonDisabled)
-        .buttonStyle(ActionButtonStyle(.primary))
-        .padding()
+        .buttonStyle(DashboardActionButtonStyle(isPrimary: true))
+        .padding(.bottom, 6)
     }
     
     private func alert(for alert: SimpleBolusViewModel.Alert) -> SwiftUI.Alert {
