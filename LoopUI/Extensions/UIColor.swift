@@ -49,8 +49,8 @@ extension UIColor {
 
     @nonobjc public static let dashboardInsulinAccent = UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.61, green: 0.81, blue: 0.96, alpha: 1.0)
-            : UIColor(red: 0.26, green: 0.52, blue: 0.74, alpha: 1.0)
+            ? UIColor(red: 0.68, green: 0.75, blue: 0.93, alpha: 1.0)
+            : UIColor(red: 0.40, green: 0.48, blue: 0.73, alpha: 1.0)
     }
 
     @nonobjc public static let dashboardCycleAccent = UIColor { traits in
