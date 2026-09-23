@@ -18935,6 +18935,9 @@
         }
       }
     },
+    "Expand or collapse cycle summary" : {
+      "comment" : "Accessibility label for toggling cycle summary card"
+    },
     "Export Critical Event Logs" : {
       "comment" : "The title of the export critical event logs in support",
       "localizations" : {
@@ -34934,6 +34937,9 @@
           }
         }
       }
+    },
+    "Show Cycle Tracking Details" : {
+      "comment" : "Accessibility label for opening cycle details"
     },
     "Shows last loop error" : {
       "comment" : "Loop Completion HUD accessibility hint",

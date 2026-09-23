@@ -1301,7 +1301,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
 
     private func isCollapsedChartRow(_ row: ChartRow) -> Bool {
-        row == .cycle || collapsedChartRows.contains(row)
+        collapsedChartRows.contains(row)
     }
 
     private func canBeginChartReorder(at location: CGPoint) -> Bool {
@@ -1417,7 +1417,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     // Keep the primary glucose graph visible and present the supporting metrics as
     // compact summary cards, matching the hierarchy of the redesigned dashboard.
-    private var collapsedChartRows: Set<ChartRow> = [.iob, .dose, .cob]
+    private var collapsedChartRows: Set<ChartRow> = [.iob, .dose, .cob, .cycle]
 
     // MARK: Glucose
 
@@ -1678,7 +1678,208 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
     }
 
+    private final class CycleProgressBarView: UIView {
+        private let barContainer = UIView()
+        private let trackGradientLayer = CAGradientLayer()
+        private let fillContainer = UIView()
+        private let fillGradientLayer = CAGradientLayer()
+
+        private let periodLabel = UILabel()
+        private let follicularLabel = UILabel()
+        private let ovulationLabel = UILabel()
+        private let lutealLabel = UILabel()
+
+        private var progress: Double = 0.0
+        private var transitions: [Double] = [5.0 / 28.0, 12.0 / 28.0, 15.0 / 28.0]
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            configureView()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            configureView()
+        }
+
+        private func configureView() {
+            backgroundColor = .clear
+            isAccessibilityElement = false
+
+            barContainer.layer.cornerRadius = 7
+            barContainer.layer.masksToBounds = true
+            barContainer.layer.addSublayer(trackGradientLayer)
+            barContainer.addSubview(fillContainer)
+
+            fillContainer.layer.masksToBounds = true
+            fillContainer.layer.addSublayer(fillGradientLayer)
+
+            addSubview(barContainer)
+
+            let labels = [periodLabel, follicularLabel, ovulationLabel, lutealLabel]
+            for label in labels {
+                label.font = .dashboardRounded(ofSize: 10, weight: .medium)
+                label.textColor = .dashboardMutedInk
+                label.adjustsFontSizeToFitWidth = true
+                label.minimumScaleFactor = 0.8
+                addSubview(label)
+            }
+
+            periodLabel.text = NSLocalizedString("Period", comment: "Cycle phase progress label")
+            follicularLabel.text = NSLocalizedString("Follicular", comment: "Cycle phase progress label")
+            follicularLabel.textAlignment = .center
+            ovulationLabel.text = NSLocalizedString("Ovulation", comment: "Cycle phase progress label")
+            ovulationLabel.textAlignment = .center
+            lutealLabel.text = NSLocalizedString("Luteal", comment: "Cycle phase progress label")
+            lutealLabel.textAlignment = .right
+
+            updateGradientLayers()
+        }
+
+        override var intrinsicContentSize: CGSize {
+            CGSize(width: UIView.noIntrinsicMetric, height: 34)
+        }
+
+        func configure(with summary: CycleTrackingStore.Summary) {
+            self.progress = summary.progress
+            if let t = summary.phaseTransitions, t.count == 3 {
+                self.transitions = t
+            } else {
+                let length = Double(max(20, summary.cycleLength))
+                let periodLength = 5.0
+                let ovulationDay = max(10.0, length - 14.0)
+                self.transitions = [
+                    periodLength / length,
+                    (ovulationDay - 2.0) / length,
+                    (ovulationDay + 1.0) / length
+                ]
+            }
+            updateGradientLayers()
+            setNeedsLayout()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let barWidth = bounds.width
+            guard barWidth > 0 else { return }
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+
+            barContainer.frame = CGRect(x: 0, y: 0, width: barWidth, height: 14)
+            trackGradientLayer.frame = barContainer.bounds
+
+            let clampedProgress = CGFloat(max(0.0, min(1.0, progress)))
+            let fillWidth = barWidth * clampedProgress
+            fillContainer.frame = CGRect(x: 0, y: 0, width: fillWidth, height: 14)
+            fillGradientLayer.frame = CGRect(x: 0, y: 0, width: barWidth, height: 14)
+
+            CATransaction.commit()
+
+            let labelY: CGFloat = 20
+            let labelHeight: CGFloat = 14
+
+            let isRTL = effectiveUserInterfaceLayoutDirection == .rightToLeft
+            let t0 = transitions.count > 0 ? transitions[0] : (5.0 / 28.0)
+            let t1 = transitions.count > 1 ? transitions[1] : (12.0 / 28.0)
+            let t2 = transitions.count > 2 ? transitions[2] : (15.0 / 28.0)
+
+            let follicularFraction = (t0 + t1) / 2.0
+            let ovulationFraction = (t1 + t2) / 2.0
+
+            let follicularX = isRTL ? barWidth * CGFloat(1.0 - follicularFraction) : barWidth * CGFloat(follicularFraction)
+            let ovulationX = isRTL ? barWidth * CGFloat(1.0 - ovulationFraction) : barWidth * CGFloat(ovulationFraction)
+
+            let periodSize = periodLabel.intrinsicContentSize
+            let lutealSize = lutealLabel.intrinsicContentSize
+            let follicularSize = follicularLabel.intrinsicContentSize
+            let ovulationSize = ovulationLabel.intrinsicContentSize
+
+            if isRTL {
+                periodLabel.frame = CGRect(x: barWidth - periodSize.width, y: labelY, width: periodSize.width, height: labelHeight)
+                lutealLabel.frame = CGRect(x: 0, y: labelY, width: lutealSize.width, height: labelHeight)
+            } else {
+                periodLabel.frame = CGRect(x: 0, y: labelY, width: periodSize.width, height: labelHeight)
+                lutealLabel.frame = CGRect(x: barWidth - lutealSize.width, y: labelY, width: lutealSize.width, height: labelHeight)
+            }
+
+            let minFollicularX = periodLabel.frame.maxX + 4
+            let maxFollicularX = barWidth - lutealSize.width - follicularSize.width - 4
+            let clampedFollicularX = max(minFollicularX, min(maxFollicularX, follicularX - follicularSize.width / 2))
+            follicularLabel.frame = CGRect(
+                x: clampedFollicularX,
+                y: labelY,
+                width: follicularSize.width,
+                height: labelHeight
+            )
+
+            let minOvulationX = follicularLabel.frame.maxX + 4
+            let maxOvulationX = barWidth - lutealSize.width - ovulationSize.width - 4
+            let clampedOvulationX = max(minOvulationX, min(maxOvulationX, ovulationX - ovulationSize.width / 2))
+            ovulationLabel.frame = CGRect(
+                x: clampedOvulationX,
+                y: labelY,
+                width: ovulationSize.width,
+                height: labelHeight
+            )
+        }
+
+        override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+            super.traitCollectionDidChange(previousTraitCollection)
+            updateGradientLayers()
+        }
+
+        func updateGradientLayers() {
+            let isDark = traitCollection.userInterfaceStyle == .dark
+            let trackAlpha: Float = isDark ? 0.20 : 0.13
+            let fillAlpha: Float = isDark ? 0.90 : 0.86
+
+            let periodColor = UIColor.dashboardPeriodProgress.resolvedColor(with: traitCollection)
+            let follicularColor = UIColor.dashboardFollicularProgress.resolvedColor(with: traitCollection)
+            let ovulationColor = UIColor.dashboardOvulationProgress.resolvedColor(with: traitCollection)
+            let lutealColor = UIColor.dashboardLutealProgress.resolvedColor(with: traitCollection)
+
+            let colors: [CGColor] = [
+                periodColor.cgColor, periodColor.cgColor,
+                follicularColor.cgColor, follicularColor.cgColor,
+                ovulationColor.cgColor, ovulationColor.cgColor,
+                lutealColor.cgColor, lutealColor.cgColor
+            ]
+
+            let t0Val = transitions.count > 0 ? transitions[0] : (5.0 / 28.0)
+            let t1Val = transitions.count > 1 ? transitions[1] : (12.0 / 28.0)
+            let t2Val = transitions.count > 2 ? transitions[2] : (15.0 / 28.0)
+
+            let t0 = NSNumber(value: max(0.01, min(0.97, t0Val)))
+            let t1 = NSNumber(value: max(t0.doubleValue + 0.01, min(0.98, t1Val)))
+            let t2 = NSNumber(value: max(t1.doubleValue + 0.01, min(0.99, t2Val)))
+            let locations: [NSNumber] = [0, t0, t0, t1, t1, t2, t2, 1]
+
+            trackGradientLayer.colors = colors
+            trackGradientLayer.locations = locations
+            trackGradientLayer.opacity = trackAlpha
+            trackGradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+            trackGradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+
+            fillGradientLayer.colors = colors
+            fillGradientLayer.locations = locations
+            fillGradientLayer.opacity = fillAlpha
+            fillGradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+            fillGradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+
+            periodLabel.textColor = .dashboardMutedInk
+            follicularLabel.textColor = .dashboardMutedInk
+            ovulationLabel.textColor = .dashboardMutedInk
+            lutealLabel.textColor = .dashboardMutedInk
+        }
+    }
+
     private final class CycleSummaryTableViewCell: UITableViewCell {
+        var onHeaderTap: (() -> Void)?
+        var onNavigate: (() -> Void)?
+
+        private var isCollapsed: Bool = true
+
         private let cardView = UIView()
         private let iconBackgroundView = UIView()
         private let iconView = CalendarDropIconView()
@@ -1694,6 +1895,26 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }()
         private let valueLabel = UILabel()
         private let chevronView = UIImageView()
+        private let progressBarView = CycleProgressBarView()
+
+        private lazy var headerButton: UIButton = {
+            let button = UIButton(type: .custom)
+            button.backgroundColor = .clear
+            button.accessibilityLabel = NSLocalizedString("Expand or collapse cycle summary", comment: "Accessibility label for toggling cycle summary card")
+            button.addTarget(self, action: #selector(headerButtonTapped), for: .touchUpInside)
+            return button
+        }()
+
+        private lazy var navigationButton: UIButton = {
+            let button = UIButton(type: .custom)
+            button.backgroundColor = .clear
+            button.accessibilityLabel = NSLocalizedString("Show Cycle Tracking Details", comment: "Accessibility label for opening cycle details")
+            button.addTarget(self, action: #selector(navigationButtonTapped), for: .touchUpInside)
+            return button
+        }()
+
+        private var collapsedConstraints: [NSLayoutConstraint] = []
+        private var expandedConstraints: [NSLayoutConstraint] = []
 
         private final class CalendarDropIconView: UIView {
             private let calendarView = UIImageView(image: UIImage(systemName: "calendar"))
@@ -1774,14 +1995,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private func configureView() {
             backgroundColor = .clear
             contentView.backgroundColor = .clear
-            selectionStyle = .default
+            selectionStyle = .none
             tintColor = .dashboardCycleAccent
 
-            let selectedView = UIView()
-            selectedView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.10)
-            selectedBackgroundView = selectedView
-
-            [cardView, iconBackgroundView, iconView, textStack, valueLabel, chevronView].forEach {
+            [cardView, iconBackgroundView, iconView, textStack, valueLabel, chevronView, progressBarView].forEach {
                 $0.translatesAutoresizingMaskIntoConstraints = false
             }
 
@@ -1790,6 +2007,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cardView.layer.cornerCurve = .continuous
             cardView.layer.borderWidth = 1
             contentView.addSubview(cardView)
+
+            contentView.addSubview(headerButton)
+            contentView.addSubview(navigationButton)
 
             iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
             iconBackgroundView.layer.cornerRadius = 24
@@ -1821,6 +2041,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
             chevronView.contentMode = .scaleAspectFit
             cardView.addSubview(chevronView)
 
+            cardView.addSubview(progressBarView)
+
             NSLayoutConstraint.activate([
                 cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
                 cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 14),
@@ -1828,7 +2050,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -5),
 
                 iconBackgroundView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
-                iconBackgroundView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
                 iconBackgroundView.widthAnchor.constraint(equalToConstant: 48),
                 iconBackgroundView.heightAnchor.constraint(equalTo: iconBackgroundView.widthAnchor),
 
@@ -1838,18 +2059,79 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 iconView.heightAnchor.constraint(equalToConstant: 28),
 
                 textStack.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: 14),
-                textStack.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+                textStack.centerYAnchor.constraint(equalTo: iconBackgroundView.centerYAnchor),
                 textStack.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -10),
 
                 chevronView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
-                chevronView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+                chevronView.centerYAnchor.constraint(equalTo: iconBackgroundView.centerYAnchor),
                 chevronView.widthAnchor.constraint(equalToConstant: 10),
 
                 valueLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -12),
-                valueLabel.centerYAnchor.constraint(equalTo: cardView.centerYAnchor)
+                valueLabel.centerYAnchor.constraint(equalTo: iconBackgroundView.centerYAnchor)
             ])
 
+            collapsedConstraints = [
+                iconBackgroundView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor)
+            ]
+
+            expandedConstraints = [
+                iconBackgroundView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 14),
+                progressBarView.topAnchor.constraint(equalTo: iconBackgroundView.bottomAnchor, constant: 14),
+                progressBarView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
+                progressBarView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
+                progressBarView.heightAnchor.constraint(equalToConstant: 34),
+                progressBarView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -14)
+            ]
+
+            NSLayoutConstraint.activate(collapsedConstraints)
+            progressBarView.isHidden = true
+
             updateColors()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+
+            let visualFrame = valueLabel.frame.union(chevronView.frame)
+                .insetBy(dx: -12, dy: -12)
+                .intersection(contentView.bounds)
+
+            let minimumWidth: CGFloat = 132
+            let leading = max(contentView.bounds.midX, min(visualFrame.minX, contentView.bounds.maxX - minimumWidth))
+            let headerHeight: CGFloat = isCollapsed ? contentView.bounds.height : 68
+
+            navigationButton.frame = CGRect(
+                x: leading,
+                y: 0,
+                width: contentView.bounds.maxX - leading,
+                height: headerHeight
+            )
+            navigationButton.isHidden = navigationButton.frame.isEmpty
+
+            headerButton.frame = CGRect(
+                x: 0,
+                y: 0,
+                width: leading,
+                height: headerHeight
+            )
+            headerButton.isHidden = headerButton.frame.isEmpty
+
+            contentView.bringSubviewToFront(headerButton)
+            contentView.bringSubviewToFront(navigationButton)
+        }
+
+        @objc private func headerButtonTapped() {
+            onHeaderTap?()
+        }
+
+        @objc private func navigationButtonTapped() {
+            onNavigate?()
+        }
+
+        override func prepareForReuse() {
+            super.prepareForReuse()
+            onHeaderTap = nil
+            onNavigate = nil
         }
 
         override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -1865,9 +2147,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
             valueLabel.textColor = .dashboardCycleAccent
             chevronView.tintColor = .dashboardCycleAccent
             iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
+            progressBarView.updateGradientLayers()
         }
 
-        func configure(with summary: CycleTrackingStore.Summary) {
+        func configure(with summary: CycleTrackingStore.Summary, isCollapsed: Bool = true) {
+            self.isCollapsed = isCollapsed
+
             titleLabel.text = summary.detail.uppercased()
             detailLabel.text = summary.nextPhaseDetail
             valueLabel.text = summary.cycleDay.map { day in
@@ -1876,7 +2161,20 @@ final class StatusTableViewController: LoopChartsTableViewController {
             accessibilityLabel = [titleLabel.text, detailLabel.text, valueLabel.text]
                 .compactMap { $0 }
                 .joined(separator: ", ")
+
+            if isCollapsed {
+                NSLayoutConstraint.deactivate(expandedConstraints)
+                NSLayoutConstraint.activate(collapsedConstraints)
+                progressBarView.isHidden = true
+            } else {
+                NSLayoutConstraint.deactivate(collapsedConstraints)
+                NSLayoutConstraint.activate(expandedConstraints)
+                progressBarView.isHidden = false
+                progressBarView.configure(with: summary)
+            }
+
             updateColors()
+            setNeedsLayout()
         }
     }
 
@@ -2022,7 +2320,23 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     withIdentifier: CycleSummaryTableViewCell.className,
                     for: indexPath
                 ) as! CycleSummaryTableViewCell
-                cell.configure(with: CycleTrackingStore.shared.summary())
+                cell.configure(
+                    with: CycleTrackingStore.shared.summary(),
+                    isCollapsed: isCollapsedChartRow(.cycle)
+                )
+                cell.onHeaderTap = { [weak self, weak tableView] in
+                    guard let self, let tableView else { return }
+                    if self.collapsedChartRows.contains(.cycle) {
+                        self.collapsedChartRows.remove(.cycle)
+                    } else {
+                        self.collapsedChartRows.insert(.cycle)
+                    }
+                    guard let rowIndex = self.chartOrder.firstIndex(of: .cycle) else { return }
+                    tableView.reloadRows(at: [IndexPath(row: rowIndex, section: Section.charts.rawValue)], with: .automatic)
+                }
+                cell.onNavigate = { [weak self, weak cell] in
+                    self?.navigateToDetails(for: .cycle, sender: cell)
+                }
                 return cell
             }
 
@@ -2409,7 +2723,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .iob, .dose, .cob:
                 return max(115, 0.22 * availableSize)
             case .cycle:
-                return 74
+                return 134
             }
         case .hud, .status, .alertWarning:
             return UITableView.automaticDimension
