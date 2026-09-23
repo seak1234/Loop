@@ -41,6 +41,48 @@ extension UIColor {
         UIColor(red: 116 / 255, green: 184 / 255, blue: 138 / 255, alpha: 1.0) // #74B88A
     }
 
+    @nonobjc public static let dashboardCarbAccent = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.59, green: 0.79, blue: 0.63, alpha: 1.0)
+            : UIColor(red: 0.34, green: 0.58, blue: 0.41, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardInsulinAccent = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.61, green: 0.81, blue: 0.96, alpha: 1.0)
+            : UIColor(red: 0.26, green: 0.52, blue: 0.74, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardCycleAccent = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.81, green: 0.68, blue: 0.88, alpha: 1.0)
+            : UIColor(red: 0.59, green: 0.42, blue: 0.66, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardPeriodProgress = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.59, green: 0.33, blue: 0.37, alpha: 1.0)
+            : UIColor(red: 0.96, green: 0.73, blue: 0.76, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardFollicularProgress = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.34, green: 0.48, blue: 0.37, alpha: 1.0)
+            : UIColor(red: 0.73, green: 0.86, blue: 0.76, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardOvulationProgress = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.64, green: 0.47, blue: 0.26, alpha: 1.0)
+            : UIColor(red: 0.95, green: 0.81, blue: 0.56, alpha: 1.0)
+    }
+
+    @nonobjc public static let dashboardLutealProgress = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.40, green: 0.46, blue: 0.64, alpha: 1.0)
+            : UIColor(red: 0.75, green: 0.79, blue: 0.93, alpha: 1.0)
+    }
+
     @nonobjc public static let dashboardInk = UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 1.00, green: 0.94, blue: 0.92, alpha: 1.0)

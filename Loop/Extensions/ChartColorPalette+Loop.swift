@@ -25,4 +25,15 @@ extension ChartColorPalette {
             carbTint: .dashboardCoral
         )
     }
+
+    static var pastelDashboard: ChartColorPalette {
+        return ChartColorPalette(
+            axisLine: .clear,
+            axisLabel: .dashboardMutedInk,
+            grid: UIColor.dashboardBorder.withAlphaComponent(0.65),
+            glucoseTint: .dashboardCoral,
+            insulinTint: .dashboardInsulinAccent,
+            carbTint: .dashboardCarbAccent
+        )
+    }
 }

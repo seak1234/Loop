@@ -559,9 +559,10 @@ struct CycleTrackingView: View {
                 let progress = summary.progress
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(phaseBarGradient.opacity(colorScheme == .dark ? 0.26 : 0.18))
+                        .fill(phaseBarGradient.opacity(colorScheme == .dark ? 0.20 : 0.13))
 
                     phaseBarGradient
+                        .opacity(colorScheme == .dark ? 0.90 : 0.86)
                         .frame(width: proxy.size.width)
                         .frame(width: proxy.size.width * progress, alignment: .leading)
                         .clipped()
@@ -900,18 +901,27 @@ struct CycleTrackingView: View {
     private var phaseBarGradient: LinearGradient {
         LinearGradient(
             gradient: Gradient(stops: [
-                .init(color: phaseColor(.period), location: 0),
-                .init(color: phaseColor(.period), location: 0.18),
-                .init(color: phaseColor(.follicular), location: 0.20),
-                .init(color: phaseColor(.follicular), location: 0.43),
-                .init(color: phaseColor(.ovulation), location: 0.46),
-                .init(color: phaseColor(.ovulation), location: 0.56),
-                .init(color: phaseColor(.luteal), location: 0.60),
-                .init(color: phaseColor(.luteal), location: 1)
+                .init(color: phaseProgressColor(.period), location: 0),
+                .init(color: phaseProgressColor(.period), location: 0.18),
+                .init(color: phaseProgressColor(.follicular), location: 0.20),
+                .init(color: phaseProgressColor(.follicular), location: 0.43),
+                .init(color: phaseProgressColor(.ovulation), location: 0.46),
+                .init(color: phaseProgressColor(.ovulation), location: 0.56),
+                .init(color: phaseProgressColor(.luteal), location: 0.60),
+                .init(color: phaseProgressColor(.luteal), location: 1)
             ]),
             startPoint: .leading,
             endPoint: .trailing
         )
+    }
+
+    private func phaseProgressColor(_ phase: CycleTrackingStore.Phase) -> Color {
+        switch phase {
+        case .period: return Color(uiColor: .dashboardPeriodProgress)
+        case .follicular: return Color(uiColor: .dashboardFollicularProgress)
+        case .ovulation: return Color(uiColor: .dashboardOvulationProgress)
+        case .luteal: return Color(uiColor: .dashboardLutealProgress)
+        }
     }
 
     private func phaseContinues(

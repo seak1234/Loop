@@ -791,7 +791,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         deviceManager.pumpManager?.addStatusObserver(self, queue: .main)
     }
     
-    private lazy var statusCharts = StatusChartsManager(colors: .dashboard, settings: .default, traitCollection: traitCollection)
+    private lazy var statusCharts = StatusChartsManager(colors: .pastelDashboard, settings: .default, traitCollection: traitCollection)
 
     override func createChartsManager() -> ChartsManager {
         return statusCharts
@@ -1155,6 +1155,15 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case cob
         case cycle
         case dose
+
+        var accentColor: UIColor {
+            switch self {
+            case .glucose: return .dashboardCoral
+            case .iob, .dose: return .dashboardInsulinAccent
+            case .cob: return .dashboardCarbAccent
+            case .cycle: return .dashboardCycleAccent
+            }
+        }
     }
 
     // Keep the primary glucose graph visible and present the supporting metrics as
@@ -1428,7 +1437,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private let detailLabel = UILabel()
         private let valueLabel = UILabel()
         private let chevronView = UIImageView()
-        private let progressTrack = UIView()
+        private let progressTrack = GradientView()
         private let progressMaskView = UIView()
         private let progressFill = GradientView()
         private var progressWidthConstraint: NSLayoutConstraint!
@@ -1496,8 +1505,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
             }
 
             private func updateColors() {
-                calendarView.tintColor = .dashboardCoral
-                badgeView.backgroundColor = .dashboardCoral
+                calendarView.tintColor = .dashboardCycleAccent
+                badgeView.backgroundColor = .dashboardCycleAccent
                 dropView.tintColor = .white
             }
 
@@ -1521,7 +1530,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             backgroundColor = .clear
             contentView.backgroundColor = .clear
             selectionStyle = .default
-            tintColor = .dashboardCoral
+            tintColor = .dashboardCycleAccent
 
             let selectedView = UIView()
             selectedView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.10)
@@ -1537,7 +1546,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cardView.layer.borderWidth = 0.5
             contentView.addSubview(cardView)
 
-            iconBackgroundView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.13)
+            iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
             iconBackgroundView.layer.cornerRadius = 27
             cardView.addSubview(iconBackgroundView)
 
@@ -1557,19 +1566,19 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cardView.addSubview(detailLabel)
 
             valueLabel.font = .dashboardRoundedDigits(ofSize: 19, weight: .bold)
-            valueLabel.textColor = .dashboardCoral
+            valueLabel.textColor = .dashboardCycleAccent
             valueLabel.textAlignment = .right
             valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
             cardView.addSubview(valueLabel)
 
             chevronView.image = UIImage(systemName: "chevron.right")
-            chevronView.tintColor = .dashboardCoral
+            chevronView.tintColor = .dashboardCycleAccent
             chevronView.contentMode = .scaleAspectFit
             chevronView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
             cardView.addSubview(chevronView)
 
-            progressTrack.backgroundColor = UIColor.dashboardBorder.withAlphaComponent(0.55)
             progressTrack.layer.cornerRadius = 5
+            progressTrack.isOpaque = false
             progressTrack.clipsToBounds = true
             cardView.addSubview(progressTrack)
 
@@ -1577,9 +1586,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
             progressMaskView.layer.cornerRadius = 5
             progressTrack.addSubview(progressMaskView)
 
-            progressFill.gradientLayer.locations = [0, 0.18, 0.20, 0.43, 0.46, 0.56, 0.60, 1]
-            progressFill.gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
-            progressFill.gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+            for gradient in [progressTrack.gradientLayer, progressFill.gradientLayer] {
+                gradient.locations = [0, 0.18, 0.20, 0.43, 0.46, 0.56, 0.60, 1]
+                gradient.startPoint = CGPoint(x: 0, y: 0.5)
+                gradient.endPoint = CGPoint(x: 1, y: 0.5)
+            }
             progressMaskView.addSubview(progressFill)
 
             progressWidthConstraint = progressMaskView.widthAnchor.constraint(equalTo: progressTrack.widthAnchor, multiplier: 0)
@@ -1641,24 +1652,25 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cardView.layer.borderColor = UIColor.dashboardBorder.resolvedColor(with: traitCollection).cgColor
             titleLabel.textColor = .dashboardInk
             detailLabel.textColor = .dashboardMutedInk
+            valueLabel.textColor = .dashboardCycleAccent
+            chevronView.tintColor = .dashboardCycleAccent
+            iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
 
-            let phaseColors: [UIColor]
-            if traitCollection.userInterfaceStyle == .dark {
-                phaseColors = [
-                    UIColor(red: 0.402, green: 0.239, blue: 0.254, alpha: 1),
-                    UIColor(red: 0.283, green: 0.271, blue: 0.228, alpha: 1),
-                    UIColor(red: 0.380, green: 0.263, blue: 0.139, alpha: 1),
-                    UIColor(red: 0.496, green: 0.483, blue: 0.517, alpha: 1)
-                ]
-            } else {
-                phaseColors = [
-                    UIColor(red: 0.978, green: 0.871, blue: 0.869, alpha: 1),
-                    UIColor(red: 0.923, green: 0.925, blue: 0.877, alpha: 1),
-                    UIColor(red: 0.974, green: 0.895, blue: 0.789, alpha: 1),
-                    UIColor(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0, alpha: 1)
-                ]
+            let phaseColors: [UIColor] = [
+                .dashboardPeriodProgress,
+                .dashboardFollicularProgress,
+                .dashboardOvulationProgress,
+                .dashboardLutealProgress
+            ]
+            let resolvedColors = phaseColors.map { $0.resolvedColor(with: traitCollection) }
+            progressTrack.gradientLayer.colors = resolvedColors.flatMap { color in
+                let faded = color.withAlphaComponent(traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.40).cgColor
+                return [faded, faded]
             }
-            progressFill.gradientLayer.colors = phaseColors.flatMap { [$0.cgColor, $0.cgColor] }
+            progressFill.gradientLayer.colors = resolvedColors.flatMap { color in
+                return [color.cgColor, color.cgColor]
+            }
+            progressFill.gradientLayer.opacity = traitCollection.userInterfaceStyle == .dark ? 0.90 : 0.86
         }
 
         func configure(with summary: CycleTrackingStore.Summary) {
@@ -1826,6 +1838,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             }
 
             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
+            cell.dashboardCardAccentColor = chartRow.accentColor
 
             switch chartRow {
             case .glucose:
@@ -2043,7 +2056,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 title: NSLocalizedString("Glucose", comment: "The title of the glucose summary card"),
                 detail: NSLocalizedString("Eventually", comment: "The subtitle of the glucose summary card"),
                 value: eventualGlucoseDescription,
-                tintColor: .dashboardCoral
+                tintColor: row.accentColor
             )
         case .iob:
             cell.setCollapsedAppearance(
@@ -2051,7 +2064,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 title: NSLocalizedString("Active Insulin", comment: "The title of the Insulin On-Board summary card"),
                 detail: NSLocalizedString("On board (IOB)", comment: "The subtitle of the Insulin On-Board summary card"),
                 value: currentIOBDescription,
-                tintColor: .dashboardCoral
+                tintColor: row.accentColor
             )
         case .dose:
             let value = totalDelivery.map { String(format: NSLocalizedString("%.0f U", comment: "Compact total insulin delivered value"), $0) }
@@ -2060,7 +2073,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 title: NSLocalizedString("Insulin Delivered", comment: "The title of the insulin delivery summary card"),
                 detail: NSLocalizedString("Total today", comment: "The subtitle of the insulin delivery summary card"),
                 value: value,
-                tintColor: .dashboardCoral
+                tintColor: row.accentColor
             )
         case .cob:
             cell.setCollapsedAppearance(
@@ -2068,7 +2081,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 title: NSLocalizedString("Active Carbohydrates", comment: "The title of the Carbs On-Board summary card"),
                 detail: NSLocalizedString("On board", comment: "The subtitle of the Carbs On-Board summary card"),
                 value: currentCOBDescription,
-                tintColor: .dashboardCoral
+                tintColor: row.accentColor
             )
         case .cycle:
             break
@@ -2089,7 +2102,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func tableView(_ tableView: UITableView, updateSubtitleFor cell: ChartTableViewCell, at indexPath: IndexPath) {
         switch Section(rawValue: indexPath.section)! {
         case .charts:
-            switch ChartRow(rawValue: indexPath.row)! {
+            let chartRow = ChartRow(rawValue: indexPath.row)!
+            switch chartRow {
             case .glucose:
                 if let eventualGlucose = eventualGlucoseDescription {
                     let fullText = String(format: NSLocalizedString("Eventually %@", comment: "The subtitle format describing eventual glucose. (1: localized glucose value description)"), eventualGlucose)
@@ -2104,7 +2118,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                         let nsRange = NSRange(range, in: fullText)
                         attrString.addAttributes([
                             .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.dashboardCoral
+                            .foregroundColor: chartRow.accentColor
                         ], range: nsRange)
                     }
                     cell.setAttributedSubtitleLabel(attrString)
@@ -2118,7 +2132,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                         string: currentIOB,
                         attributes: [
                             .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.dashboardCoral
+                            .foregroundColor: chartRow.accentColor
                         ]
                     )
                     cell.setAttributedSubtitleLabel(attrString)
@@ -2144,7 +2158,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                         let nsRange = NSRange(range, in: fullText)
                         attrString.addAttributes([
                             .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.dashboardCoral
+                            .foregroundColor: chartRow.accentColor
                         ], range: nsRange)
                     }
                     cell.setAttributedSubtitleLabel(attrString)
@@ -2157,7 +2171,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                         string: currentCOB,
                         attributes: [
                             .font: UIFont.dashboardRoundedDigits(ofSize: 13, weight: .bold),
-                            .foregroundColor: UIColor.dashboardCoral
+                            .foregroundColor: chartRow.accentColor
                         ]
                     )
                     cell.setAttributedSubtitleLabel(attrString)
