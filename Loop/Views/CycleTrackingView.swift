@@ -693,10 +693,14 @@ struct CycleTrackingView: View {
                 VStack(spacing: 3) {
                     ZStack {
                         if isSelected {
-                            Circle().fill(coral)
+                            Circle()
+                                .fill(coral)
+                                .frame(width: 30, height: 30)
                         }
                         if marker == .ovulation && !isSelected {
-                            Circle().stroke(gold, lineWidth: 2)
+                            Circle()
+                                .stroke(gold, lineWidth: 2)
+                                .frame(width: 30, height: 30)
                         }
                         Text("\(calendar.component(.day, from: date))")
                             .font(.system(size: 14, weight: isSelected ? .bold : .medium, design: .rounded))
@@ -707,6 +711,7 @@ struct CycleTrackingView: View {
                     Circle()
                         .fill(markerColor(marker) ?? Color.clear)
                         .frame(width: 6, height: 6)
+                        .offset(y: -3)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 43)

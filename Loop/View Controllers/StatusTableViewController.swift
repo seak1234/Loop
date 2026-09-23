@@ -1569,12 +1569,12 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cardView.addSubview(chevronView)
 
             progressTrack.backgroundColor = UIColor.dashboardBorder.withAlphaComponent(0.55)
-            progressTrack.layer.cornerRadius = 4
+            progressTrack.layer.cornerRadius = 5
             progressTrack.clipsToBounds = true
             cardView.addSubview(progressTrack)
 
             progressMaskView.clipsToBounds = true
-            progressMaskView.layer.cornerRadius = 4
+            progressMaskView.layer.cornerRadius = 5
             progressTrack.addSubview(progressMaskView)
 
             progressFill.gradientLayer.locations = [0, 0.18, 0.20, 0.43, 0.46, 0.56, 0.60, 1]
@@ -1600,7 +1600,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 iconView.widthAnchor.constraint(equalToConstant: 34),
                 iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
 
-                titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
+                titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
                 titleLabel.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: 14),
                 titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: valueLabel.leadingAnchor, constant: -8),
 
@@ -1618,7 +1618,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 progressTrack.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
                 progressTrack.trailingAnchor.constraint(equalTo: chevronView.trailingAnchor),
                 progressTrack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -11),
-                progressTrack.heightAnchor.constraint(equalToConstant: 8),
+                progressTrack.heightAnchor.constraint(equalToConstant: 10),
 
                 progressMaskView.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
                 progressMaskView.topAnchor.constraint(equalTo: progressTrack.topAnchor),
