@@ -1441,6 +1441,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private let progressMaskView = UIView()
         private let progressFill = GradientView()
         private var progressWidthConstraint: NSLayoutConstraint!
+        private var phaseTransitions: [Double]?
 
         private final class GradientView: UIView {
             override class var layerClass: AnyClass { CAGradientLayer.self }
@@ -1587,7 +1588,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             progressTrack.addSubview(progressMaskView)
 
             for gradient in [progressTrack.gradientLayer, progressFill.gradientLayer] {
-                gradient.locations = [0, 0.18, 0.20, 0.43, 0.46, 0.56, 0.60, 1]
                 gradient.startPoint = CGPoint(x: 0, y: 0.5)
                 gradient.endPoint = CGPoint(x: 1, y: 0.5)
             }
@@ -1656,13 +1656,25 @@ final class StatusTableViewController: LoopChartsTableViewController {
             chevronView.tintColor = .dashboardCycleAccent
             iconBackgroundView.backgroundColor = UIColor.dashboardCycleAccent.withAlphaComponent(0.13)
 
-            let phaseColors: [UIColor] = [
-                .dashboardPeriodProgress,
-                .dashboardFollicularProgress,
-                .dashboardOvulationProgress,
-                .dashboardLutealProgress
-            ]
+            let phaseColors: [UIColor] = phaseTransitions == nil
+                ? Array(repeating: .dashboardMutedInk, count: 4)
+                : [
+                    .dashboardPeriodProgress,
+                    .dashboardFollicularProgress,
+                    .dashboardOvulationProgress,
+                    .dashboardLutealProgress
+                ]
             let resolvedColors = phaseColors.map { $0.resolvedColor(with: traitCollection) }
+            let locations: [NSNumber]
+            if let transitions = phaseTransitions, transitions.count == 3 {
+                locations = [0, transitions[0], transitions[0], transitions[1], transitions[1], transitions[2], transitions[2], 1]
+                    .map { NSNumber(value: $0) }
+            } else {
+                locations = [0.0, 0.25, 0.25, 0.50, 0.50, 0.75, 0.75, 1.0]
+                    .map { NSNumber(value: $0) }
+            }
+            progressTrack.gradientLayer.locations = locations
+            progressFill.gradientLayer.locations = locations
             progressTrack.gradientLayer.colors = resolvedColors.flatMap { color in
                 let faded = color.withAlphaComponent(traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.40).cgColor
                 return [faded, faded]
@@ -1676,7 +1688,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
         func configure(with summary: CycleTrackingStore.Summary) {
             titleLabel.text = summary.detail
             detailLabel.text = summary.nextPhaseDetail
-            valueLabel.text = summary.cycleDay.map { "\($0) / \(summary.cycleLength)" } ?? "— / \(summary.cycleLength)"
+            valueLabel.text = summary.cycleDay.map { day in
+                day > summary.cycleLength ? "\(day) days" : "\(day) / \(summary.cycleLength)"
+            } ?? "— / \(summary.cycleLength)"
+            phaseTransitions = summary.phaseTransitions
 
             progressWidthConstraint.isActive = false
             progressWidthConstraint = progressMaskView.widthAnchor.constraint(

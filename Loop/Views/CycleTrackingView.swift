@@ -31,6 +31,7 @@ final class CycleTrackingStore: ObservableObject {
         let detail: String
         let nextPhaseDetail: String
         let progress: Double
+        let phaseTransitions: [Double]?
     }
 
     enum Marker: Equatable {
@@ -55,8 +56,9 @@ final class CycleTrackingStore: ObservableObject {
 
     private let defaults: UserDefaults
     private var calendar: Calendar
+    private let maximumUnconfirmedPeriodDays = 10
 
-    private init(defaults: UserDefaults = .standard, calendar: Calendar = .current) {
+    init(defaults: UserDefaults = .standard, calendar: Calendar = .current) {
         self.defaults = defaults
         self.calendar = calendar
         if
@@ -137,62 +139,69 @@ final class CycleTrackingStore: ObservableObject {
     }
 
     func cycleDay(on date: Date = Date()) -> Int? {
-        let day = calendar.startOfDay(for: date)
-        guard let anchor = periodEntry(anchoring: day) else {
-            return nil
-        }
-
-        guard let difference = calendar.dateComponents([.day], from: anchor.startDate, to: day).day else {
-            return nil
-        }
-
-        return (difference % cycleLength) + 1
+        cycleContext(on: date)?.day
     }
 
     func summary(on date: Date = Date()) -> Summary {
-        guard let cycleDay = cycleDay(on: date) else {
+        guard let context = cycleContext(on: date) else {
             return Summary(
                 cycleDay: nil,
                 cycleLength: cycleLength,
                 phaseName: NSLocalizedString("Cycle tracking", comment: "Cycle summary phase before a period is logged"),
                 detail: NSLocalizedString("Cycle tracking", comment: "Cycle summary phase before a period is logged"),
                 nextPhaseDetail: NSLocalizedString("Tap My period started", comment: "Cycle summary prompt before a period is logged"),
-                progress: 0
+                progress: 0,
+                phaseTransitions: nil
             )
         }
 
-        let phase = phaseName(for: cycleDay, on: date)
+        let phase = phase(for: context, on: date)
+        let phaseName = phase.map { localizedName(for: $0) } ?? NSLocalizedString(
+            "Timing uncertain", comment: "Cycle phase when a period has not been confirmed"
+        )
         return Summary(
-            cycleDay: cycleDay,
-            cycleLength: cycleLength,
-            phaseName: phase,
-            detail: phase,
-            nextPhaseDetail: nextPhaseDetail(for: cycleDay, on: date),
-            progress: Double(cycleDay) / Double(cycleLength)
+            cycleDay: context.day,
+            cycleLength: context.length,
+            phaseName: phaseName,
+            detail: phaseName,
+            nextPhaseDetail: nextPhaseDetail(for: context, phase: phase),
+            progress: min(1, Double(context.day) / Double(context.length)),
+            phaseTransitions: phaseTransitions(for: context)
         )
     }
 
-    private func nextPhaseDetail(for cycleDay: Int, on date: Date) -> String {
-        let activePeriodLength = periodLength(forCycleContaining: date)
-        let ovulationDay = max(activePeriodLength + 2, cycleLength - 14)
+    private func nextPhaseDetail(for context: CycleContext, phase: Phase?) -> String {
+        if context.isOpen {
+            return NSLocalizedString("Confirm period end", comment: "Prompt when a period is still open")
+        }
+        let isRecordedPeriod = phase == .period
+        guard let phase, let ovulationDay = context.ovulationDay else {
+            return context.day > context.length && !isRecordedPeriod
+                ? NSLocalizedString("Log next period start", comment: "Cycle summary after an estimated period is overdue")
+                : NSLocalizedString("Review period dates", comment: "Cycle summary when phase timing cannot be estimated")
+        }
+
         let nextPhaseDay: Int
         let nextPhaseName: String
 
-        if cycleDay <= activePeriodLength {
-            nextPhaseDay = activePeriodLength + 1
-            nextPhaseName = NSLocalizedString("Follicular", comment: "Menstrual cycle follicular phase")
-        } else if cycleDay < ovulationDay - 1 {
+        switch phase {
+        case .period:
+            nextPhaseDay = context.periodLength + 1
+            nextPhaseName = nextPhaseDay == ovulationDay - 1
+                ? NSLocalizedString("Ovulation", comment: "Predicted menstrual cycle ovulation phase")
+                : NSLocalizedString("Follicular", comment: "Menstrual cycle follicular phase")
+        case .follicular:
             nextPhaseDay = ovulationDay - 1
-            nextPhaseName = NSLocalizedString("Ovulation", comment: "Menstrual cycle ovulation phase")
-        } else if cycleDay <= ovulationDay + 1 {
+            nextPhaseName = NSLocalizedString("Ovulation", comment: "Predicted menstrual cycle ovulation phase")
+        case .ovulation:
             nextPhaseDay = ovulationDay + 2
             nextPhaseName = NSLocalizedString("Luteal", comment: "Menstrual cycle luteal phase")
-        } else {
-            nextPhaseDay = cycleLength + 1
-            nextPhaseName = NSLocalizedString("Period", comment: "Menstrual cycle period phase")
+        case .luteal:
+            nextPhaseDay = context.length + 1
+            nextPhaseName = NSLocalizedString("Period", comment: "Predicted next menstrual period")
         }
 
-        let days = max(1, nextPhaseDay - cycleDay)
+        let days = nextPhaseDay - context.day
         if days == 1 {
             return String(
                 format: NSLocalizedString("1 day until %@", comment: "Countdown until the next menstrual cycle phase"),
@@ -206,35 +215,27 @@ final class CycleTrackingStore: ObservableObject {
         )
     }
 
-    private func phaseName(for cycleDay: Int, on date: Date) -> String {
-        localizedName(for: phase(for: cycleDay, on: date))
-    }
-
     func phase(for date: Date) -> Phase? {
-        let day = calendar.startOfDay(for: date)
-        guard let cycleDay = cycleDay(on: day) else {
-            return nil
-        }
-
-        let phase = phase(for: cycleDay, on: day)
-        if phase == .period,
-           periodEntry(anchoring: day)?.endDate == nil,
-           day > calendar.startOfDay(for: Date())
-        {
-            return nil
-        }
-        return phase
+        guard let context = cycleContext(on: date) else { return nil }
+        return phase(for: context, on: date)
     }
 
-    private func phase(for cycleDay: Int, on date: Date) -> Phase {
-        let activePeriodLength = periodLength(forCycleContaining: date)
-        let ovulationDay = max(activePeriodLength + 2, cycleLength - 14)
-
-        if cycleDay <= activePeriodLength {
+    private func phase(for context: CycleContext, on date: Date) -> Phase? {
+        if context.isOpen {
+            guard calendar.startOfDay(for: date) <= calendar.startOfDay(for: Date()),
+                  context.day <= maximumUnconfirmedPeriodDays
+            else { return nil }
             return .period
-        } else if cycleDay < ovulationDay - 1 {
+        }
+        if context.day <= context.periodLength {
+            return .period
+        }
+        guard context.day <= context.length, let ovulationDay = context.ovulationDay else {
+            return nil
+        }
+        if context.day < ovulationDay - 1 {
             return .follicular
-        } else if cycleDay <= ovulationDay + 1 {
+        } else if context.day <= ovulationDay + 1 {
             return .ovulation
         } else {
             return .luteal
@@ -248,7 +249,7 @@ final class CycleTrackingStore: ObservableObject {
         case .follicular:
             return NSLocalizedString("Follicular", comment: "Menstrual cycle follicular phase")
         case .ovulation:
-            return NSLocalizedString("Ovulation", comment: "Menstrual cycle ovulation phase")
+            return NSLocalizedString("Ovulation", comment: "Predicted menstrual cycle ovulation phase")
         case .luteal:
             return NSLocalizedString("Luteal", comment: "Menstrual cycle luteal phase")
         }
@@ -259,37 +260,47 @@ final class CycleTrackingStore: ObservableObject {
             return .period
         }
 
-        let day = calendar.startOfDay(for: date)
-        guard let cycleDay = cycleDay(on: day) else {
-            return nil
-        }
+        guard let context = cycleContext(on: date) else { return nil }
+        return marker(for: context, on: date)
+    }
 
-        let activePeriodLength = periodLength(forCycleContaining: day)
-        let ovulationDay = max(activePeriodLength + 2, cycleLength - 14)
-        if cycleDay <= activePeriodLength {
-            if periodEntry(anchoring: day)?.endDate == nil && day > calendar.startOfDay(for: Date()) {
-                return nil
-            }
+    func calendarPhase(for date: Date) -> Phase? {
+        guard let context = projectedCalendarContext(on: date) ?? cycleContext(on: date) else { return nil }
+        return phase(for: context, on: date)
+    }
+
+    func calendarMarker(for date: Date) -> Marker? {
+        if isRecordedPeriodDay(date) { return .period }
+        guard let context = projectedCalendarContext(on: date) ?? cycleContext(on: date) else { return nil }
+        return marker(for: context, on: date)
+    }
+
+    private func marker(for context: CycleContext, on date: Date) -> Marker? {
+        guard phase(for: context, on: date) != nil else { return nil }
+
+        if context.day <= context.periodLength {
             return .period
         }
-        if cycleDay == ovulationDay {
+        guard let ovulationDay = context.ovulationDay else { return nil }
+        if context.day == ovulationDay {
             return .ovulation
         }
-        if ((ovulationDay - 3)...(ovulationDay + 2)).contains(cycleDay) {
+        if ((ovulationDay - 5)...(ovulationDay + 1)).contains(context.day) {
             return .fertile
         }
         return nil
     }
 
     func nextPeriodDate(from date: Date = Date()) -> Date? {
-        guard let cycleDay = cycleDay(on: date) else {
-            return nil
-        }
+        guard let context = cycleContext(on: date),
+              !context.isOpen,
+              context.day <= context.length
+        else { return nil }
 
         return calendar.date(
             byAdding: .day,
-            value: cycleLength - cycleDay + 1,
-            to: calendar.startOfDay(for: date)
+            value: context.length,
+            to: context.anchor.startDate
         )
     }
 
@@ -311,31 +322,91 @@ final class CycleTrackingStore: ObservableObject {
             .max { $0.startDate < $1.startDate }
     }
 
-    private func periodLength(forCycleContaining date: Date) -> Int {
-        guard let entry = periodEntry(anchoring: calendar.startOfDay(for: date)) else {
-            return periodLength
+    private struct CycleContext {
+        let anchor: PeriodEntry
+        let day: Int
+        let length: Int
+        let periodLength: Int
+        let isOpen: Bool
+
+        var ovulationDay: Int? {
+            guard (15...60).contains(length), periodLength < length - 3 else { return nil }
+            let day = max(periodLength + 2, length - 14)
+            return day + 1 < length ? day : nil
         }
-        if entry.endDate == nil {
-            if calendar.startOfDay(for: date) <= calendar.startOfDay(for: Date()) {
-                return max(periodLength, cycleDay(on: date) ?? periodLength)
-            }
-            return periodLength
+    }
+
+    private func cycleContext(on date: Date) -> CycleContext? {
+        let day = calendar.startOfDay(for: date)
+        guard let anchor = periodEntry(anchoring: day),
+              let elapsed = calendar.dateComponents([.day], from: anchor.startDate, to: day).day
+        else { return nil }
+
+        let nextStart = periodEntries.first { $0.startDate > anchor.startDate }?.startDate
+        let actualLength = nextStart.flatMap {
+            calendar.dateComponents([.day], from: anchor.startDate, to: $0).day
         }
-        guard let endDate = entry.endDate,
-              let days = calendar.dateComponents([.day], from: entry.startDate, to: endDate).day
-        else {
-            return periodLength
+        let length = max(1, actualLength ?? cycleLength)
+        let isOpen = anchor.endDate == nil && nextStart == nil
+        let recordedEnd = anchor.endDate.map { end -> Date in
+            guard let nextStart,
+                  let lastDay = calendar.date(byAdding: .day, value: -1, to: nextStart)
+            else { return end }
+            return min(end, lastDay)
         }
-        return min(10, max(1, days + 1))
+        let recordedLength = recordedEnd.flatMap {
+            calendar.dateComponents([.day], from: anchor.startDate, to: $0).day
+        }.map { max(1, $0 + 1) }
+
+        return CycleContext(
+            anchor: anchor,
+            day: elapsed + 1,
+            length: length,
+            periodLength: recordedLength ?? periodLength,
+            isOpen: isOpen
+        )
+    }
+
+    private func projectedCalendarContext(on date: Date) -> CycleContext? {
+        guard let context = cycleContext(on: date),
+              !context.isOpen,
+              periodEntries.last?.id == context.anchor.id,
+              context.day > context.length
+        else { return nil }
+
+        let length = context.length
+        return CycleContext(
+            anchor: context.anchor,
+            day: (context.day - 1) % length + 1,
+            length: length,
+            periodLength: periodLength,
+            isOpen: false
+        )
+    }
+
+    private func phaseTransitions(for context: CycleContext) -> [Double]? {
+        guard !context.isOpen,
+              context.day <= context.length,
+              let ovulationDay = context.ovulationDay
+        else { return nil }
+
+        let length = Double(context.length)
+        return [
+            Double(context.periodLength) / length,
+            Double(ovulationDay - 2) / length,
+            Double(ovulationDay + 1) / length
+        ]
     }
 
     private func isRecordedPeriodDay(_ date: Date) -> Bool {
         let day = calendar.startOfDay(for: date)
         let today = calendar.startOfDay(for: Date())
-        return periodEntries.contains { entry in
-            let end = entry.endDate ?? today
-            return day >= entry.startDate && day <= end
+        guard let context = cycleContext(on: day) else { return false }
+        if context.isOpen {
+            return day <= today && context.day <= maximumUnconfirmedPeriodDays
         }
+        guard let end = context.anchor.endDate else { return false }
+        return day <= end
     }
 
     private func normalized(_ entries: [PeriodEntry]) -> [PeriodEntry] {
@@ -461,11 +532,16 @@ struct CycleTrackingView: View {
                                 .foregroundStyle(coral)
 
                             Text(
-                                String(
-                                    format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
-                                    cycleDay,
-                                    summary.cycleLength
-                                )
+                                cycleDay > summary.cycleLength
+                                    ? String(
+                                        format: NSLocalizedString("Usual cycle: %d days", comment: "Usual cycle length after the estimated next period has passed"),
+                                        summary.cycleLength
+                                    )
+                                    : String(
+                                        format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
+                                        cycleDay,
+                                        summary.cycleLength
+                                    )
                             )
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(mutedInk)
@@ -636,6 +712,14 @@ struct CycleTrackingView: View {
                     legendItem(color: gold, label: NSLocalizedString("Fertile window", comment: "Cycle calendar legend"))
                     ovulationLegend
                 }
+
+                Text(NSLocalizedString(
+                    "Unlogged cycles repeat as estimates based on logged periods.",
+                    comment: "Cycle calendar prediction explanation"
+                ))
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(mutedInk)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(16)
@@ -674,8 +758,8 @@ struct CycleTrackingView: View {
     private func calendarDay(_ date: Date) -> some View {
         let isDisplayedMonth = calendar.isDate(date, equalTo: displayedMonth, toGranularity: .month)
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
-        let marker = store.marker(for: date)
-        let phase = store.phase(for: date)
+        let marker = store.calendarMarker(for: date)
+        let phase = store.calendarPhase(for: date)
         let roundsLeadingEdge = phase.map { !phaseContinues(from: date, direction: -1, phase: $0) } ?? false
         let roundsTrailingEdge = phase.map { !phaseContinues(from: date, direction: 1, phase: $0) } ?? false
 
@@ -726,9 +810,7 @@ struct CycleTrackingView: View {
             statCard(
                 icon: "calendar",
                 title: NSLocalizedString("Next period", comment: "Cycle tracker next period title"),
-                value: store.daysUntilNextPeriod().map {
-                    String(format: NSLocalizedString("%d days", comment: "Days until the next period"), $0)
-                } ?? "—"
+                value: nextPeriodValue
             )
             statCard(
                 icon: "chart.bar.fill",
@@ -736,6 +818,17 @@ struct CycleTrackingView: View {
                 value: String(format: NSLocalizedString("%d days", comment: "Cycle length in days"), store.cycleLength)
             )
         }
+    }
+
+    private var nextPeriodValue: String {
+        if let days = store.daysUntilNextPeriod() {
+            return String(format: NSLocalizedString("%d days", comment: "Days until the next period"), days)
+        }
+        if store.periodEntries.isEmpty { return "—" }
+        if store.isPeriodInProgress {
+            return NSLocalizedString("Confirm end", comment: "Next period timing while the current period is still open")
+        }
+        return NSLocalizedString("Estimate passed", comment: "Next period timing after the estimate has passed")
     }
 
     private func statCard(icon: String, title: String, value: String) -> some View {
@@ -857,7 +950,7 @@ struct CycleTrackingView: View {
     private var ovulationLegend: some View {
         HStack(spacing: 5) {
             Circle().stroke(gold, lineWidth: 2).frame(width: 11, height: 11)
-            Text(NSLocalizedString("Ovulation day", comment: "Cycle calendar exact ovulation day legend"))
+            Text(NSLocalizedString("Ovulation day", comment: "Cycle calendar predicted ovulation day legend"))
         }
         .font(.system(size: 10, weight: .medium, design: .rounded))
         .foregroundStyle(mutedInk)
@@ -899,15 +992,25 @@ struct CycleTrackingView: View {
     }
 
     private var phaseBarGradient: LinearGradient {
-        LinearGradient(
+        guard let transitions = summary.phaseTransitions,
+              transitions.count == 3
+        else {
+            return LinearGradient(
+                colors: [mutedInk.opacity(0.40), mutedInk.opacity(0.40)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+
+        return LinearGradient(
             gradient: Gradient(stops: [
                 .init(color: phaseProgressColor(.period), location: 0),
-                .init(color: phaseProgressColor(.period), location: 0.18),
-                .init(color: phaseProgressColor(.follicular), location: 0.20),
-                .init(color: phaseProgressColor(.follicular), location: 0.43),
-                .init(color: phaseProgressColor(.ovulation), location: 0.46),
-                .init(color: phaseProgressColor(.ovulation), location: 0.56),
-                .init(color: phaseProgressColor(.luteal), location: 0.60),
+                .init(color: phaseProgressColor(.period), location: transitions[0]),
+                .init(color: phaseProgressColor(.follicular), location: transitions[0]),
+                .init(color: phaseProgressColor(.follicular), location: transitions[1]),
+                .init(color: phaseProgressColor(.ovulation), location: transitions[1]),
+                .init(color: phaseProgressColor(.ovulation), location: transitions[2]),
+                .init(color: phaseProgressColor(.luteal), location: transitions[2]),
                 .init(color: phaseProgressColor(.luteal), location: 1)
             ]),
             startPoint: .leading,
@@ -936,7 +1039,7 @@ struct CycleTrackingView: View {
         else {
             return false
         }
-        return store.phase(for: adjacentDate) == phase
+        return store.calendarPhase(for: adjacentDate) == phase
     }
 }
 

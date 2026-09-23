@@ -4,21 +4,6 @@
     "" : {
 
     },
-    "Hormone shifts may change insulin sensitivity. Some people notice higher glucose." : {
-      "comment" : "Insulin sensitivity insight for the ovulation phase"
-    },
-    "INSULIN SENSITIVITY" : {
-      "comment" : "Cycle phase insulin sensitivity insight heading"
-    },
-    "Insulin sensitivity is often higher, so insulin may have a stronger effect." : {
-      "comment" : "Insulin sensitivity insight for the follicular phase"
-    },
-    "Insulin sensitivity may decrease, especially before your period, so glucose may run higher." : {
-      "comment" : "Insulin sensitivity insight for the luteal phase"
-    },
-    "You may be more sensitive to insulin as your period begins." : {
-      "comment" : "Insulin sensitivity insight for the menstrual period phase"
-    },
     " (pending: %@)" : {
       "comment" : "The string format appended to active insulin that describes pending insulin. (1: pending insulin)",
       "extractionState" : "manual",
@@ -13568,6 +13553,12 @@
         }
       }
     },
+    "Confirm end" : {
+      "comment" : "Next period timing while the current period is still open"
+    },
+    "Confirm period end" : {
+      "comment" : "Prompt when a period is still open"
+    },
     "Continue" : {
       "comment" : "Button label for continue\nDefault alert dismissal",
       "localizations" : {
@@ -18433,6 +18424,9 @@
         }
       }
     },
+    "Estimate passed" : {
+      "comment" : "Next period timing after the estimate has passed"
+    },
     "Event History" : {
       "comment" : "Segmented button title for insulin delivery log event history",
       "localizations" : {
@@ -21324,6 +21318,9 @@
         }
       }
     },
+    "Hormone shifts may change insulin sensitivity. Some people notice higher glucose." : {
+      "comment" : "Insulin sensitivity insight for the ovulation phase"
+    },
     "How can I silence non-Critical Alerts?" : {
       "localizations" : {
         "da" : {
@@ -22904,6 +22901,15 @@
           }
         }
       }
+    },
+    "INSULIN SENSITIVITY" : {
+      "comment" : "Cycle phase insulin sensitivity insight heading"
+    },
+    "Insulin sensitivity is often higher, so insulin may have a stronger effect." : {
+      "comment" : "Insulin sensitivity insight for the follicular phase"
+    },
+    "Insulin sensitivity may decrease, especially before your period, so glucose may run higher." : {
+      "comment" : "Insulin sensitivity insight for the luteal phase"
     },
     "Insulin Sensitivity Schedule" : {
       "comment" : "Details for configuration error when insulin sensitivity schedule is missing",
@@ -24861,6 +24867,9 @@
           }
         }
       }
+    },
+    "Log next period start" : {
+      "comment" : "Cycle summary after an estimated period is overdue"
     },
     "Logged Insulin Dose" : {
       "comment" : "The title of the screen displaying a manually entered insulin dose",
@@ -30032,19 +30041,22 @@
       }
     },
     "Ovulation" : {
-      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle ovulation phase"
+      "comment" : "Cycle calendar legend\nCycle phase progress label\nPredicted menstrual cycle ovulation phase"
     },
     "Ovulation day" : {
-      "comment" : "Cycle calendar exact ovulation day legend"
+      "comment" : "Cycle calendar predicted ovulation day legend"
     },
     "Period" : {
-      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle period phase"
+      "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle period phase\nPredicted next menstrual period"
     },
     "Period ended" : {
       "comment" : "Confirmation after recording the end of a period\nPeriod history ended toggle"
     },
     "Period started" : {
       "comment" : "Confirmation after recording the start of a period"
+    },
+    "Phases and fertile days are estimates based on logged periods." : {
+      "comment" : "Cycle calendar prediction explanation"
     },
     "Possible Missed Meal" : {
       "comment" : "The notification title for a meal that was possibly not logged in Loop.",
@@ -34106,6 +34118,9 @@
           }
         }
       }
+    },
+    "Review period dates" : {
+      "comment" : "Cycle summary when phase timing cannot be estimated"
     },
     "Save" : {
       "comment" : "Save period history edits",
@@ -38382,6 +38397,9 @@
         }
       }
     },
+    "Timing uncertain" : {
+      "comment" : "Cycle phase when a period has not been confirmed"
+    },
     "Total today" : {
       "comment" : "The subtitle of the insulin delivery summary card"
     },
@@ -40680,6 +40698,9 @@
         }
       }
     },
+    "Usual cycle: %d days" : {
+      "comment" : "Usual cycle length after the estimated next period has passed"
+    },
     "Walsh" : {
       "comment" : "Title of insulin model setting",
       "extractionState" : "manual",
@@ -41953,6 +41974,9 @@
           }
         }
       }
+    },
+    "You may be more sensitive to insulin as your period begins." : {
+      "comment" : "Insulin sensitivity insight for the menstrual period phase"
     },
     "You may not get sound, visual or vibration alerts regarding critical safety information.\n\nTo fix the issue, tap ‘Settings’ and make sure Notifications, Critical Alerts and Time Sensitive Notifications are turned ON." : {
       "comment" : "Format for Notifications permissions disabled alert body. (1: app name)",
