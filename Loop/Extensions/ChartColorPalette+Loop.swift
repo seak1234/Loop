@@ -36,4 +36,15 @@ extension ChartColorPalette {
             carbTint: .dashboardCarbAccent
         )
     }
+
+    static var carbDetail: ChartColorPalette {
+        return ChartColorPalette(
+            axisLine: .axisLineColor,
+            axisLabel: .axisLabelColor,
+            grid: .gridColor,
+            glucoseTint: .glucoseTintColor,
+            insulinTint: .insulinTintColor,
+            carbTint: .dashboardCarbAccent
+        )
+    }
 }

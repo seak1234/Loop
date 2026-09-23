@@ -66,7 +66,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     override public func tintColorDidChange() {
         super.tintColorDidChange()
         
-        glucoseValueHUD.tintColor = dashboardTint(for: viewModel.glucoseValueTintColor)
+        glucoseValueHUD.tintColor = dashboardGlucoseValueTint(for: viewModel.glucoseValueTintColor)
         glucoseTrendHUD.tintColor = dashboardTint(for: viewModel.glucoseTrendTintColor)
     }
 
@@ -207,7 +207,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     func updateDisplay() {
         glucoseValueHUD.glucoseLabel.text = viewModel.glucoseValueString
         glucoseValueHUD.unitLabel.text = viewModel.unitsString
-        glucoseValueHUD.tintColor = dashboardTint(for: viewModel.glucoseValueTintColor)
+        glucoseValueHUD.tintColor = dashboardGlucoseValueTint(for: viewModel.glucoseValueTintColor)
         presentStatusHighlight(viewModel.statusHighlight)
         
         accessibilityValue = viewModel.accessibilityString
@@ -244,6 +244,18 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
             return color
         }
         return .dashboardCoral
+    }
+
+    private func dashboardGlucoseValueTint(for color: UIColor) -> UIColor {
+        guard usesDashboardCardStyle else { return color }
+
+        let resolvedColor = color.resolvedColor(with: traitCollection)
+        let normalColor = UIColor.glucoseTintColor.resolvedColor(with: traitCollection)
+        let defaultColor = UIColor.label.resolvedColor(with: traitCollection)
+        if resolvedColor.isEqual(normalColor) || resolvedColor.isEqual(defaultColor) {
+            return .dashboardInk
+        }
+        return color
     }
 }
 

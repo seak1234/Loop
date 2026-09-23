@@ -319,7 +319,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         }
 
         glucoseLabel.font = .dashboardRoundedDigits(ofSize: 26, weight: .bold)
-        glucoseLabel.textColor = .dashboardCoral
+        glucoseLabel.textColor = .dashboardInk
         glucoseLabel.textAlignment = .left
         glucoseLabel.adjustsFontSizeToFitWidth = true
         glucoseLabel.minimumScaleFactor = 0.75

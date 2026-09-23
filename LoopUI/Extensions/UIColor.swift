@@ -43,20 +43,20 @@ extension UIColor {
 
     @nonobjc public static let dashboardCarbAccent = UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.59, green: 0.79, blue: 0.63, alpha: 1.0)
-            : UIColor(red: 0.34, green: 0.58, blue: 0.41, alpha: 1.0)
+            ? UIColor(red: 0.70, green: 0.83, blue: 0.72, alpha: 1.0)
+            : UIColor(red: 0.43, green: 0.59, blue: 0.48, alpha: 1.0)
     }
 
     @nonobjc public static let dashboardInsulinAccent = UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.68, green: 0.75, blue: 0.93, alpha: 1.0)
-            : UIColor(red: 0.40, green: 0.48, blue: 0.73, alpha: 1.0)
+            ? UIColor(red: 0.72, green: 0.79, blue: 0.96, alpha: 1.0)
+            : UIColor(red: 0.46, green: 0.54, blue: 0.78, alpha: 1.0)
     }
 
     @nonobjc public static let dashboardCycleAccent = UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.81, green: 0.68, blue: 0.88, alpha: 1.0)
-            : UIColor(red: 0.59, green: 0.42, blue: 0.66, alpha: 1.0)
+            ? UIColor(red: 0.84, green: 0.74, blue: 0.91, alpha: 1.0)
+            : UIColor(red: 0.63, green: 0.49, blue: 0.72, alpha: 1.0)
     }
 
     @nonobjc public static let dashboardPeriodProgress = UIColor { traits in

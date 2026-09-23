@@ -106,7 +106,7 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
     private let carbEffectChart = CarbEffectChart()
 
     override func createChartsManager() -> ChartsManager {
-        return ChartsManager(colors: .primary, settings: .default, charts: [carbEffectChart], traitCollection: traitCollection)
+        return ChartsManager(colors: .carbDetail, settings: .default, charts: [carbEffectChart], traitCollection: traitCollection)
     }
 
     override func glucoseUnitDidChange() {
@@ -306,6 +306,7 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
         switch Section(rawValue: indexPath.section)! {
         case .charts:
             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
+            cell.dashboardCardAccentColor = .dashboardCarbAccent
 
             switch ChartRow(rawValue: indexPath.row)! {
             case .carbEffect:
@@ -367,7 +368,7 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
                     )
 
                     if absorption.isActive {
-                        cell.observedValueTextColor = UIColor.carbTintColor
+                        cell.observedValueTextColor = .dashboardCarbAccent
                     } else if 0.9 <= observedProgress && observedProgress <= 1.1 {
                         cell.observedValueTextColor = UIColor.systemGray
                     } else {
@@ -381,7 +382,7 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
 
                 // Absorbed time
                 if absorption.isActive {
-                    cell.observedDateTextColor = UIColor.carbTintColor
+                    cell.observedDateTextColor = .dashboardCarbAccent
                 } else {
                     cell.observedDateTextColor = UIColor.systemGray
 
@@ -401,6 +402,9 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
 
     private func updateCell(_ cell: HeaderValuesTableViewCell) {
         let unit = HKUnit.gram()
+
+        cell.COBValueLabel.textColor = .dashboardCarbAccent
+        cell.totalValueLabel.textColor = .dashboardCarbAccent
 
         if let carbsOnBoard = carbsOnBoard, carbsOnBoard.quantity.doubleValue(for: unit) > 0 {
             cell.COBDateLabel.text = String(
