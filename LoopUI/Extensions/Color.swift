@@ -60,6 +60,9 @@ extension Color {
 extension Color {
     public static let dashboardCoral = Color(UIColor.dashboardCoral)
     public static let dashboardLoopFresh = Color(UIColor.dashboardLoopFresh)
+    public static let dashboardGlucoseAccent = Color(UIColor.dashboardGlucoseAccent)
+    public static let dashboardInsulinAccent = Color(UIColor.dashboardInsulinAccent)
+    public static let dashboardCarbAccent = Color(UIColor.dashboardCarbAccent)
     public static let dashboardInk = Color(UIColor.dashboardInk)
     public static let dashboardMutedInk = Color(UIColor.dashboardMutedInk)
     public static let dashboardSurface = Color(UIColor.dashboardSurface)

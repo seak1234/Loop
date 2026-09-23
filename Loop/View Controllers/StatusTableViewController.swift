@@ -1247,7 +1247,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         var accentColor: UIColor {
             switch self {
-            case .glucose: return .dashboardCoral
+            case .glucose: return .dashboardGlucoseAccent
             case .iob, .dose: return .dashboardInsulinAccent
             case .cob: return .dashboardCarbAccent
             case .cycle: return .dashboardCycleAccent
@@ -2161,7 +2161,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     let progressCell = tableView.dequeueReusableCell(withIdentifier: BolusProgressTableViewCell.className, for: indexPath) as! BolusProgressTableViewCell
                     progressCell.selectionStyle = .none
                     progressCell.totalUnits = dose.programmedUnits
-                    progressCell.tintColor = .dashboardCoral
+                    progressCell.tintColor = .dashboardInsulinAccent
                     progressCell.deliveredUnits = bolusProgressReporter?.progress.deliveredUnits
                     progressCell.backgroundColor = .dashboardSurface
                     return progressCell
@@ -2204,7 +2204,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     cell.subtitleLabel.text = NSLocalizedString("Tap to Add", comment: "The subtitle of the cell displaying an action to add a manually measurement glucose value")
                     cell.selectionStyle = .default
                     let imageView = UIImageView(image: UIImage(named: "drop.circle"))
-                    imageView.tintColor = .dashboardCoral
+                    imageView.tintColor = .dashboardGlucoseAccent
                     cell.accessoryView = imageView
                     return cell
                 }
@@ -2951,9 +2951,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
             updateLoopStatusHUD()
 
             hudView.cgmStatusHUD.stateColors = .cgmStatus
-            hudView.cgmStatusHUD.tintColor = .dashboardCoral
+            hudView.cgmStatusHUD.tintColor = .dashboardGlucoseAccent
             hudView.pumpStatusHUD.stateColors = .dashboardPumpStatus
-            hudView.pumpStatusHUD.tintColor = .dashboardCoral
+            hudView.pumpStatusHUD.tintColor = .dashboardInsulinAccent
             hudView.setPumpExpiration(date: deviceManager.pumpExpiresAt)
 
             refreshContext.update(with: .status)

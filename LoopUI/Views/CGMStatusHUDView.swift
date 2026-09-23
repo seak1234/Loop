@@ -219,7 +219,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
 
         let trend = viewModel.trend
         dashboardTrendLabel?.text = trend?.dashboardArrowText ?? "→"
-        dashboardTrendLabel?.textColor = .dashboardCoral
+        dashboardTrendLabel?.textColor = .dashboardGlucoseAccent
         dashboardTrendLabel?.alpha = trend == nil ? 0.75 : 1
         dashboardTrendLabel?.isHidden = false
     }
@@ -243,7 +243,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         guard usesDashboardCardStyle, resolvedColor.isEqual(resolvedDefault) else {
             return color
         }
-        return .dashboardCoral
+        return .dashboardGlucoseAccent
     }
 
     private func dashboardGlucoseValueTint(for color: UIColor) -> UIColor {

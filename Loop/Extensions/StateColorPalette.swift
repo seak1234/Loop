@@ -17,5 +17,5 @@ extension StateColorPalette {
 
     static let pumpStatus = StateColorPalette(unknown: .unknownColor, normal: .pumpStatusNormal, warning: .agingColor, error: .staleColor)
 
-    static let dashboardPumpStatus = StateColorPalette(unknown: .unknownColor, normal: .dashboardCoral, warning: .agingColor, error: .staleColor)
+    static let dashboardPumpStatus = StateColorPalette(unknown: .unknownColor, normal: .dashboardInsulinAccent, warning: .agingColor, error: .staleColor)
 }

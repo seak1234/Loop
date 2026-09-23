@@ -73,7 +73,12 @@ public final class InsulinDeliveryTableViewController: UITableViewController {
         }
     }
     
-    public var headerValueLabelColor: UIColor = .label
+    public var headerValueLabelColor: UIColor = .label {
+        didSet {
+            iobValueLabel?.textColor = headerValueLabelColor
+            totalValueLabel?.textColor = headerValueLabelColor
+        }
+    }
 
     private var updateTimer: Timer? {
         willSet {
@@ -85,6 +90,10 @@ public final class InsulinDeliveryTableViewController: UITableViewController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
+
+        tableView.tintColor = headerValueLabelColor
+        iobValueLabel?.textColor = headerValueLabelColor
+        totalValueLabel?.textColor = headerValueLabelColor
 
         state = .display
         

@@ -20,9 +20,9 @@ extension ChartColorPalette {
             axisLine: .clear,
             axisLabel: .dashboardMutedInk,
             grid: UIColor.dashboardBorder.withAlphaComponent(0.65),
-            glucoseTint: .dashboardCoral,
-            insulinTint: .dashboardCoral,
-            carbTint: .dashboardCoral
+            glucoseTint: .dashboardGlucoseAccent,
+            insulinTint: .dashboardInsulinAccent,
+            carbTint: .dashboardCarbAccent
         )
     }
 
@@ -31,7 +31,7 @@ extension ChartColorPalette {
             axisLine: .clear,
             axisLabel: .dashboardMutedInk,
             grid: UIColor.dashboardBorder.withAlphaComponent(0.65),
-            glucoseTint: .dashboardCoral,
+            glucoseTint: .dashboardGlucoseAccent,
             insulinTint: .dashboardInsulinAccent,
             carbTint: .dashboardCarbAccent
         )

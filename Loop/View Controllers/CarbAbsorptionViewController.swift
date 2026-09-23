@@ -34,6 +34,7 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
         super.viewDidLoad()
 
         self.tableView.allowsSelectionDuringEditing = true
+        self.tableView.tintColor = .dashboardCarbAccent
 
         carbEffectChart.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBound
 

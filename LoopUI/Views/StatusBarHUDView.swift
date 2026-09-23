@@ -169,8 +169,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
         let cards: [(view: BaseHUDView, title: String, accentColor: UIColor)] = [
             (loopCompletionHUD, LocalizedString("Loop Status", comment: "Dashboard loop status card title"), .dashboardCoral),
-            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .dashboardCoral),
-            (pumpStatusHUD, LocalizedString("Pump", comment: "Dashboard pump card title"), .dashboardCoral),
+            (cgmStatusHUD, LocalizedString("Glucose", comment: "Dashboard glucose card title"), .dashboardGlucoseAccent),
+            (pumpStatusHUD, LocalizedString("Pump", comment: "Dashboard pump card title"), .dashboardInsulinAccent),
         ]
 
         for card in cards {
@@ -188,7 +188,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         applyDashboardCardOrder()
 
         cgmStatusHUD.configureForDashboardCard()
-        pumpStatusHUD.configureForDashboardCard(normalColor: .dashboardCoral)
+        pumpStatusHUD.configureForDashboardCard(normalColor: .dashboardInsulinAccent)
         pumpStatusHUD.basalRateHUD.configureForDashboardCard()
         configureCompactGlucoseTrend()
         configureGlucoseTargetLabel()
@@ -314,7 +314,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
             trendLabel.text = "→"
             trendLabel.font = .dashboardRounded(ofSize: 18, weight: .bold)
             trendLabel.textAlignment = .center
-            trendLabel.textColor = .dashboardCoral
+            trendLabel.textColor = .dashboardGlucoseAccent
             trendLabel.isUserInteractionEnabled = false
             trendLabel.accessibilityElementsHidden = true
             view.addSubview(trendLabel)
@@ -528,7 +528,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         if let range = fullText.range(of: targetRangeText) {
             attributedText.addAttribute(
                 .foregroundColor,
-                value: UIColor.dashboardCoral,
+                value: UIColor.dashboardGlucoseAccent,
                 range: NSRange(range, in: fullText)
             )
         }

@@ -65,7 +65,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         tableView.backgroundColor = .dashboardBackground
         tableView.backgroundView = dashboardBackgroundImageView
         tableView.separatorStyle = .none
-        tableView.tintColor = .dashboardCoral
+        tableView.tintColor = .dashboardGlucoseAccent
         tableView.sectionHeaderTopPadding = 4
         tableView.contentInset = UIEdgeInsets(top: 6, left: 0, bottom: 12, right: 0)
         updateDashboardBackgroundAppearance()
@@ -123,7 +123,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         navigationController?.navigationBar.standardAppearance = appearance
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
         navigationController?.navigationBar.compactAppearance = appearance
-        navigationController?.navigationBar.tintColor = .dashboardCoral
+        navigationController?.navigationBar.tintColor = .dashboardGlucoseAccent
     }
 
     private func updateDashboardBackgroundAppearance() {
@@ -168,7 +168,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
     let glucoseChart = PredictedGlucoseChart(yAxisStepSizeMGDLOverride: FeatureFlags.predictedGlucoseChartClampEnabled ? 40 : nil)
 
     override func createChartsManager() -> ChartsManager {
-        glucoseChart.targetGlucoseFillColor = .dashboardCoral
+        glucoseChart.targetGlucoseFillColor = .dashboardGlucoseAccent
         return ChartsManager(colors: .dashboard, settings: .default, charts: [glucoseChart], traitCollection: traitCollection)
     }
 
@@ -297,6 +297,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         switch Section(rawValue: indexPath.section)! {
         case .charts:
             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
+            cell.dashboardCardAccentColor = .dashboardGlucoseAccent
             cell.contentView.layoutMargins.left = tableView.separatorInset.left
             cell.setChartGenerator(generator: { [weak self] (frame) in
                 return self?.charts.chart(atIndex: 0, frame: frame)?.view
@@ -347,7 +348,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
                 let nsRange = NSRange(range, in: fullText)
                 attrString.addAttributes([
                     .font: UIFont.predictionDashboardRoundedDigits(ofSize: 13, weight: .bold),
-                    .foregroundColor: UIColor.dashboardCoral
+                    .foregroundColor: UIColor.dashboardGlucoseAccent
                 ], range: nsRange)
             }
             cell.setAttributedSubtitleLabel(attrString)
@@ -365,7 +366,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
 
         cell.titleLabel?.text = input.localizedTitle
         cell.accessoryType = selectedInputs.contains(input) ? .checkmark : .none
-        cell.tintColor = .dashboardCoral
+        cell.tintColor = .dashboardGlucoseAccent
 
         var subtitleText = input.localizedDescription(forGlucoseUnit: glucoseChart.glucoseUnit) ?? ""
 

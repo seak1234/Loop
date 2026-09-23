@@ -35,7 +35,7 @@ class PredictionInputEffectTableViewCell: UITableViewCell {
     func applyDashboardAppearance() {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
-        tintColor = .dashboardCoral
+        tintColor = .dashboardGlucoseAccent
 
         let cardView = backgroundView ?? UIView()
         cardView.backgroundColor = .dashboardSurface
@@ -46,7 +46,7 @@ class PredictionInputEffectTableViewCell: UITableViewCell {
         backgroundView = cardView
 
         let selectedCardView = selectedBackgroundView ?? UIView()
-        selectedCardView.backgroundColor = UIColor.dashboardCoral.withAlphaComponent(0.14)
+        selectedCardView.backgroundColor = UIColor.dashboardGlucoseAccent.withAlphaComponent(0.14)
         selectedCardView.layer.cornerRadius = 14
         selectedCardView.layer.cornerCurve = .continuous
         selectedBackgroundView = selectedCardView
