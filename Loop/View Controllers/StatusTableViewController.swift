@@ -997,7 +997,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
         let chartStartDate = now.addingTimeInterval(-TimeInterval(hours: historyHours))
         let chartEndDate = statusCharts.showsFutureData
             ? now.addingTimeInterval(TimeInterval(hours: 6))
-            : now
+            // Keep readings later in the current minute visible without
+            // shifting the chart's axis on every refresh.
+            : now.addingTimeInterval(.minutes(1))
 
         switch (statusCharts.showsFutureData, selectedHistoryHours) {
         case (false, 1):
