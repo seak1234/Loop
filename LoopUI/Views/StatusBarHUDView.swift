@@ -187,7 +187,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         dashboardCardOrder.append(contentsOf: defaultDashboardCardOrder.filter { !dashboardCardOrder.contains($0) })
         applyDashboardCardOrder()
 
-        cgmStatusHUD.configureForDashboardCard()
+        cgmStatusHUD.configureForDashboardCard(normalColor: .dashboardGlucoseAccent)
         pumpStatusHUD.configureForDashboardCard(normalColor: .dashboardInsulinAccent)
         pumpStatusHUD.basalRateHUD.configureForDashboardCard()
         configureCompactGlucoseTrend()
@@ -492,22 +492,45 @@ public class StatusBarHUDView: UIView, NibLoadable {
                constraint.secondItem === cgmStatusHUD.statusStackView,
                constraint.constant == 20
             {
-                constraint.constant = 24
-            } else if constraint.firstAttribute == .bottom,
-                       constraint.secondItem is UIProgressView,
-                       constraint.constant == 8
-            {
-                constraint.constant = 3
+                constraint.constant = 26
             }
         }
 
-        NSLayoutConstraint.activate([
-            targetLabel.topAnchor.constraint(equalTo: cgmStatusHUD.statusStackView.bottomAnchor, constant: 3),
-            targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 6),
-            targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -6),
-            targetLabel.bottomAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.bottomAnchor, constant: -7),
-            targetLabel.heightAnchor.constraint(equalToConstant: 12),
-        ])
+        if let progressView = cgmStatusHUD.progressView {
+            let legacyProgressConstraints = cgmStatusHUD.constraints.filter {
+                $0.firstItem === progressView || $0.secondItem === progressView
+            }
+            NSLayoutConstraint.deactivate(legacyProgressConstraints)
+
+            let progressInternalConstraints = progressView.constraints.filter {
+                $0.firstAttribute == .height
+            }
+            NSLayoutConstraint.deactivate(progressInternalConstraints)
+
+            let targetBottomConstraint = targetLabel.bottomAnchor.constraint(equalTo: cgmStatusHUD.bottomAnchor, constant: -7)
+            targetBottomConstraint.priority = .defaultHigh
+
+            NSLayoutConstraint.activate([
+                progressView.topAnchor.constraint(equalTo: cgmStatusHUD.statusStackView.bottomAnchor, constant: 2),
+                progressView.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 14),
+                progressView.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -14),
+                progressView.heightAnchor.constraint(equalToConstant: 3),
+
+                targetLabel.topAnchor.constraint(equalTo: progressView.bottomAnchor, constant: 2),
+                targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 6),
+                targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -6),
+                targetLabel.heightAnchor.constraint(equalToConstant: 12),
+                targetBottomConstraint,
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                targetLabel.topAnchor.constraint(equalTo: cgmStatusHUD.statusStackView.bottomAnchor, constant: 3),
+                targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 6),
+                targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -6),
+                targetLabel.bottomAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.bottomAnchor, constant: -7),
+                targetLabel.heightAnchor.constraint(equalToConstant: 12),
+            ])
+        }
     }
 
     public func setGlucoseTargetRangeText(_ targetRangeText: String?) {

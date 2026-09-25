@@ -27,7 +27,7 @@ import LoopKitUI
         }
     }
     
-    @IBOutlet private weak var progressView: UIProgressView! {
+    @IBOutlet public private(set) weak var progressView: UIProgressView! {
         didSet {
             progressView.isHidden = true
             progressView.tintColor = .systemGray
@@ -96,6 +96,12 @@ import LoopKitUI
         dashboardNormalColor = normalColor
         backgroundView.backgroundColor = .clear
         backgroundView.layer.cornerRadius = 0
+
+        progressView?.layer.cornerRadius = 1.5
+        progressView?.clipsToBounds = true
+        progressView?.layer.sublayers?.forEach { $0.cornerRadius = 1.5 }
+        progressView?.subviews.forEach { $0.clipsToBounds = true }
+        progressView?.trackTintColor = UIColor.dashboardBorder.withAlphaComponent(0.5)
 
         if let lifecycleProgress = lifecycleProgress {
             progressView.tintColor = color(for: lifecycleProgress.progressState)

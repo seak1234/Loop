@@ -62,6 +62,19 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         super.configureForDashboardCard()
         usesDashboardCardStyle = true
     }
+
+    override func configureForDashboardCard(normalColor: UIColor?) {
+        super.configureForDashboardCard(normalColor: normalColor)
+        usesDashboardCardStyle = true
+    }
+
+    override public var lifecycleProgress: DeviceLifecycleProgress? {
+        didSet {
+            if isStatusHighlightActive {
+                progressView?.isHidden = true
+            }
+        }
+    }
     
     override public func tintColorDidChange() {
         super.tintColorDidChange()
@@ -110,6 +123,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         }
         statusStackView.isHidden = true
         dashboardTargetLabel?.isHidden = true
+        progressView?.isHidden = true
 
         presentCenteredStatusHighlight()
     }
@@ -152,6 +166,7 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         glucoseValueHUD.isHidden = false
         glucoseTrendHUD.isHidden = dashboardTrendLabel != nil
         dashboardTargetLabel?.isHidden = dashboardTargetLabel?.attributedText == nil
+        progressView?.isHidden = (lifecycleProgress == nil)
     }
 
     private func presentCenteredStatusHighlight() {
