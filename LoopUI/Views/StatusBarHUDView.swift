@@ -81,8 +81,6 @@ public class StatusBarHUDView: UIView, NibLoadable {
     private var dashboardCardSnapshot: UIView?
     private var dashboardCardDragOffset = CGPoint.zero
 
-    private weak var glucoseTargetLabel: UILabel?
-
     private weak var loopTitleLabel: UILabel?
 
     private weak var loopDosingModeLabel: UILabel?
@@ -191,7 +189,7 @@ public class StatusBarHUDView: UIView, NibLoadable {
         pumpStatusHUD.configureForDashboardCard(normalColor: .dashboardInsulinAccent)
         pumpStatusHUD.basalRateHUD.configureForDashboardCard()
         configureCompactGlucoseTrend()
-        configureGlucoseTargetLabel()
+        configureCGMProgressBar()
         configureLoopDosingModeLabel()
         updateDashboardCardColors()
     }
@@ -401,17 +399,17 @@ public class StatusBarHUDView: UIView, NibLoadable {
             return
         }
 
-        glucoseLabel.font = .dashboardRoundedDigits(ofSize: 34, weight: .bold)
+        glucoseLabel.font = .dashboardRoundedDigits(ofSize: 38, weight: .bold)
         glucoseLabel.textColor = .dashboardInk
         glucoseLabel.textAlignment = .center
         glucoseLabel.adjustsFontSizeToFitWidth = true
         glucoseLabel.minimumScaleFactor = 0.7
 
-        unitLabel.font = .dashboardRounded(ofSize: 11, weight: .semibold)
+        unitLabel.font = .dashboardRounded(ofSize: 12, weight: .semibold)
         unitLabel.textColor = .dashboardMutedInk
         unitLabel.textAlignment = .left
         unitLabel.adjustsFontSizeToFitWidth = true
-        unitLabel.minimumScaleFactor = 0.75
+        unitLabel.minimumScaleFactor = 0.7
 
         unitLabel.setContentHuggingPriority(.required, for: .horizontal)
         unitLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -440,8 +438,8 @@ public class StatusBarHUDView: UIView, NibLoadable {
 
         NSLayoutConstraint.activate([
             cgmStatusHUD.statusStackView.centerXAnchor.constraint(equalTo: cgmStatusHUD.centerXAnchor),
-            cgmStatusHUD.statusStackView.leadingAnchor.constraint(greaterThanOrEqualTo: cgmStatusHUD.leadingAnchor, constant: 6),
-            cgmStatusHUD.statusStackView.trailingAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.trailingAnchor, constant: -6),
+            cgmStatusHUD.statusStackView.leadingAnchor.constraint(greaterThanOrEqualTo: cgmStatusHUD.leadingAnchor, constant: 4),
+            cgmStatusHUD.statusStackView.trailingAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.trailingAnchor, constant: -4),
 
             glucoseValueHUD.leadingAnchor.constraint(equalTo: glucoseLabel.leadingAnchor),
             unitLabel.leadingAnchor.constraint(equalTo: glucoseLabel.trailingAnchor, constant: 3),
@@ -474,89 +472,37 @@ public class StatusBarHUDView: UIView, NibLoadable {
         }
     }
 
-    private func configureGlucoseTargetLabel() {
-        let targetLabel = UILabel()
-        targetLabel.translatesAutoresizingMaskIntoConstraints = false
-        targetLabel.font = .dashboardRoundedDigits(ofSize: 9, weight: .medium)
-        targetLabel.textAlignment = .center
-        targetLabel.adjustsFontSizeToFitWidth = true
-        targetLabel.minimumScaleFactor = 0.7
-        targetLabel.isUserInteractionEnabled = false
-        targetLabel.accessibilityElementsHidden = true
-        cgmStatusHUD.addSubview(targetLabel)
-        glucoseTargetLabel = targetLabel
-        cgmStatusHUD.configureDashboardTargetLabel(targetLabel)
-
+    private func configureCGMProgressBar() {
         for constraint in cgmStatusHUD.constraints {
             if constraint.firstAttribute == .bottom,
-               constraint.secondItem === cgmStatusHUD.statusStackView,
-               constraint.constant == 20
+               constraint.secondItem === cgmStatusHUD.statusStackView
             {
-                constraint.constant = 26
+                constraint.constant = 14
             }
         }
 
-        if let progressView = cgmStatusHUD.progressView {
-            let legacyProgressConstraints = cgmStatusHUD.constraints.filter {
-                $0.firstItem === progressView || $0.secondItem === progressView
-            }
-            NSLayoutConstraint.deactivate(legacyProgressConstraints)
+        guard let progressView = cgmStatusHUD.progressView else { return }
 
-            let progressInternalConstraints = progressView.constraints.filter {
-                $0.firstAttribute == .height
-            }
-            NSLayoutConstraint.deactivate(progressInternalConstraints)
-
-            let targetBottomConstraint = targetLabel.bottomAnchor.constraint(equalTo: cgmStatusHUD.bottomAnchor, constant: -7)
-            targetBottomConstraint.priority = .defaultHigh
-
-            NSLayoutConstraint.activate([
-                progressView.topAnchor.constraint(equalTo: cgmStatusHUD.statusStackView.bottomAnchor, constant: 2),
-                progressView.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 14),
-                progressView.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -14),
-                progressView.heightAnchor.constraint(equalToConstant: 3),
-
-                targetLabel.topAnchor.constraint(equalTo: progressView.bottomAnchor, constant: 2),
-                targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 6),
-                targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -6),
-                targetLabel.heightAnchor.constraint(equalToConstant: 12),
-                targetBottomConstraint,
-            ])
-        } else {
-            NSLayoutConstraint.activate([
-                targetLabel.topAnchor.constraint(equalTo: cgmStatusHUD.statusStackView.bottomAnchor, constant: 3),
-                targetLabel.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 6),
-                targetLabel.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -6),
-                targetLabel.bottomAnchor.constraint(lessThanOrEqualTo: cgmStatusHUD.bottomAnchor, constant: -7),
-                targetLabel.heightAnchor.constraint(equalToConstant: 12),
-            ])
+        let legacyProgressConstraints = cgmStatusHUD.constraints.filter {
+            $0.firstItem === progressView || $0.secondItem === progressView
         }
+        NSLayoutConstraint.deactivate(legacyProgressConstraints)
+
+        let progressInternalConstraints = progressView.constraints.filter {
+            $0.firstAttribute == .height
+        }
+        NSLayoutConstraint.deactivate(progressInternalConstraints)
+
+        NSLayoutConstraint.activate([
+            progressView.leadingAnchor.constraint(equalTo: cgmStatusHUD.leadingAnchor, constant: 14),
+            progressView.trailingAnchor.constraint(equalTo: cgmStatusHUD.trailingAnchor, constant: -14),
+            progressView.bottomAnchor.constraint(equalTo: cgmStatusHUD.bottomAnchor, constant: -7),
+            progressView.heightAnchor.constraint(equalToConstant: 3),
+        ])
     }
 
     public func setGlucoseTargetRangeText(_ targetRangeText: String?) {
-        guard let targetRangeText = targetRangeText, !targetRangeText.isEmpty else {
-            glucoseTargetLabel?.attributedText = nil
-            glucoseTargetLabel?.isHidden = true
-            return
-        }
-
-        let fullText = String(
-            format: LocalizedString("Target: %@", comment: "Format for the current glucose target range shown on the dashboard card"),
-            targetRangeText
-        )
-        let attributedText = NSMutableAttributedString(
-            string: fullText,
-            attributes: [.foregroundColor: UIColor.dashboardMutedInk]
-        )
-        if let range = fullText.range(of: targetRangeText) {
-            attributedText.addAttribute(
-                .foregroundColor,
-                value: UIColor.dashboardGlucoseAccent,
-                range: NSRange(range, in: fullText)
-            )
-        }
-        glucoseTargetLabel?.attributedText = attributedText
-        glucoseTargetLabel?.isHidden = cgmStatusHUD.isStatusHighlightActive
+        // Target range information is removed from the dashboard glucose card.
     }
 
     private func configureLoopDosingModeLabel() {

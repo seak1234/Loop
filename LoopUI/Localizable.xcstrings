@@ -3305,9 +3305,6 @@
         }
       }
     },
-    "Target: %@" : {
-      "comment" : "Format for the current glucose target range shown on the dashboard card"
-    },
     "U" : {
       "comment" : "The short unit display string for international units of insulin",
       "localizations" : {

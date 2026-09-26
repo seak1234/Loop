@@ -20,7 +20,6 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
     @IBOutlet public weak var glucoseTrendHUD: GlucoseTrendHUDView!
 
     private weak var dashboardTrendLabel: UILabel?
-    private weak var dashboardTargetLabel: UILabel?
     private(set) var usesDashboardCardStyle = false
     public private(set) var isStatusHighlightActive: Bool = false
     private var statusHighlightConstraints: [NSLayoutConstraint] = []
@@ -122,7 +121,6 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
             statusStackView.removeArrangedSubview(glucoseTrendHUD)
         }
         statusStackView.isHidden = true
-        dashboardTargetLabel?.isHidden = true
         progressView?.isHidden = true
 
         presentCenteredStatusHighlight()
@@ -165,7 +163,6 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         }
         glucoseValueHUD.isHidden = false
         glucoseTrendHUD.isHidden = dashboardTrendLabel != nil
-        dashboardTargetLabel?.isHidden = dashboardTargetLabel?.attributedText == nil
         progressView?.isHidden = (lifecycleProgress == nil)
     }
 
@@ -243,13 +240,6 @@ public final class CGMStatusHUDView: DeviceStatusHUDView, NibLoadable {
         dashboardTrendLabel = label
         glucoseTrendHUD.isHidden = true
         updateTrendIcon()
-    }
-
-    func configureDashboardTargetLabel(_ label: UILabel) {
-        dashboardTargetLabel = label
-        if isStatusHighlightActive {
-            dashboardTargetLabel?.isHidden = true
-        }
     }
 
     private func dashboardTint(for color: UIColor) -> UIColor {
