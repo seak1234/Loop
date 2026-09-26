@@ -1777,10 +1777,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
             super.layoutSubviews()
 
             let imageFrame = graphicImageView.frame
-            // The Dexcom G7 sensor center is located at 65.6% width and 68.5% height in the new banner
-            let centerX = imageFrame.minX + imageFrame.width * 0.656
-            let centerY = imageFrame.minY + imageFrame.height * 0.685
-            let buttonSize = max(52, imageFrame.height * 0.47)
+            // The Dexcom G7 sensor center is located at 66.0% width and 61.5% height in the banner
+            let centerX = imageFrame.minX + imageFrame.width * 0.660
+            let centerY = imageFrame.minY + imageFrame.height * 0.615
+            let buttonSize = max(52, imageFrame.height * 0.52)
             sensorButton.frame = CGRect(
                 x: centerX - buttonSize / 2,
                 y: centerY - buttonSize / 2,
@@ -2839,7 +2839,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         switch Section(rawValue: indexPath.section)! {
         case .branding:
             let availableWidth = max(0, tableView.bounds.width - 20)
-            let graphicAspectRatio: CGFloat = 285.0 / 1024.0
+            let graphicAspectRatio: CGFloat = 342.0 / 1024.0
             return ceil(availableWidth * graphicAspectRatio)
         case .charts:
             if isCollapsedChartRow(chartRow(at: indexPath)) {
