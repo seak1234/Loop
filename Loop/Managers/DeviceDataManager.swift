@@ -456,6 +456,12 @@ final class DeviceDataManager {
         
         setupPump()
         setupCGM()
+
+        // Local companion rules follow data updates independently of whether chat is open.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            CompanionController.shared.attach(to: self)
+        }
                 
         cgmStalenessMonitor.$cgmDataIsStale
             .combineLatest($cgmHasValidSensorSession)

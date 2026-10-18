@@ -529,6 +529,10 @@ extension LoopAppManager: DeviceOrientationController {
 
 extension LoopAppManager: UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        if notification.request.identifier.hasPrefix("mochi.") {
+            completionHandler([.sound, .list, .banner])
+            return
+        }
         switch notification.request.identifier {
         // TODO: Until these notifications are converted to use the new alert system, they shall still show in the foreground
         case LoopNotificationCategory.bolusFailure.rawValue,
@@ -548,6 +552,16 @@ extension LoopAppManager: UNUserNotificationCenterDelegate {
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+           let value = response.notification.request.content.userInfo["mochiRuleID"] as? String,
+           let id = UUID(uuidString: value) {
+            DispatchQueue.main.async {
+                CompanionController.shared.notificationRuleID = id
+                NotificationCenter.default.post(name: .companionOpenRequested, object: nil)
+                completionHandler()
+            }
+            return
+        }
         switch response.actionIdentifier {
         case NotificationManager.Action.retryBolus.rawValue:
             if  let units = response.notification.request.content.userInfo[LoopNotificationUserInfoKey.bolusAmount.rawValue] as? Double,

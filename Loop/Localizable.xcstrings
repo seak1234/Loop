@@ -590,6 +590,16 @@
     "%.0f U" : {
       "comment" : "Compact total insulin delivered value"
     },
+    "%.1f g · %@ · %.1f h absorption" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.1f g · %2$@ · %3$.1f h absorption"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "comment" : "The format for an active custom preset. (1: preset symbol)(2: preset name)",
       "localizations" : {
@@ -4472,6 +4482,9 @@
         }
       }
     },
+    "Action history" : {
+
+    },
     "Active Carbohydrates" : {
       "comment" : "The title of the Carbs On-Board graph\nThe title of the Carbs On-Board summary card",
       "localizations" : {
@@ -6598,6 +6611,9 @@
         }
       }
     },
+    "Allow health data for Mochi" : {
+
+    },
     "Amount Consumed" : {
       "comment" : "Label for carb quantity entry row on carb entry screen",
       "localizations" : {
@@ -7616,6 +7632,9 @@
         }
       }
     },
+    "Apply" : {
+
+    },
     "Are you sure you want to delete all history entries?" : {
       "comment" : "Action sheet confirmation message for pump history deletion",
       "localizations" : {
@@ -8316,6 +8335,12 @@
           }
         }
       }
+    },
+    "Ask Mochi anything…" : {
+
+    },
+    "Ask Mochi to set up a daily review or a glucose reminder." : {
+
     },
     "at %@" : {
       "comment" : "Format fragment for a specific time",
@@ -11704,6 +11729,12 @@
         }
       }
     },
+    "Chat history, rules and preferences are stored on this device and excluded from backups. Notification previews may show glucose information; control previews in iOS Settings." : {
+
+    },
+    "Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; energy, mood, sleep and cravings are not tracked unless you describe them in chat. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent." : {
+
+    },
     "Check settings" : {
       "comment" : "Details for configuration error when one or more loop settings are missing",
       "extractionState" : "manual",
@@ -12319,8 +12350,17 @@
         }
       }
     },
+    "Choose model" : {
+
+    },
+    "Clear conversation" : {
+
+    },
     "Clear selection" : {
       "comment" : "Button to deselect a favorite food and reset the carb entry"
+    },
+    "Clear the conversation and its action cards? Saved rules and personality will stay." : {
+
     },
     "Close" : {
       "comment" : "Button title to close view\nThe button label of the action used to dismiss the unsafe notification permission alert",
@@ -13573,6 +13613,12 @@
     "Confirm period end" : {
       "comment" : "Prompt when a period is still open"
     },
+    "Connect OpenRouter to chat" : {
+
+    },
+    "Connection & personality" : {
+
+    },
     "Continue" : {
       "comment" : "Button label for continue\nDefault alert dismissal",
       "localizations" : {
@@ -14695,6 +14741,9 @@
         }
       }
     },
+    "Custom personality prompt" : {
+
+    },
     "Custom preset" : {
       "comment" : "The title of the cell indicating a generic custom preset is enabled",
       "localizations" : {
@@ -14838,6 +14887,9 @@
     },
     "Cycle tracking" : {
       "comment" : "Cycle summary phase before a period is logged"
+    },
+    "Data & privacy" : {
+
     },
     "Date" : {
       "comment" : "Date picker label",
@@ -15687,6 +15739,9 @@
     "Delete period" : {
       "comment" : "Delete a saved period entry"
     },
+    "Delete rule" : {
+
+    },
     "Delete Service" : {
       "comment" : "Button title to delete a service",
       "extractionState" : "manual",
@@ -16095,6 +16150,9 @@
         }
       }
     },
+    "Delete this rule?" : {
+
+    },
     "Deliver" : {
       "comment" : "Button text to deliver a bolus",
       "localizations" : {
@@ -16328,6 +16386,9 @@
         }
       }
     },
+    "Describe tone, length, humor, and how you like encouragement. This does not grant additional app permissions." : {
+
+    },
     "Diabetes Treatment" : {
       "comment" : "Descriptive text for Therapy Settings",
       "localizations" : {
@@ -16493,6 +16554,9 @@
           }
         }
       }
+    },
+    "Direct" : {
+
     },
     "Disables" : {
       "comment" : "The action hint of the workout mode toggle button when enabled",
@@ -19469,6 +19533,9 @@
         }
       }
     },
+    "Finding new topics…" : {
+
+    },
     "Fingerstick Glucose" : {
       "comment" : "Label for manual glucose entry row on bolus screen",
       "localizations" : {
@@ -20301,6 +20368,9 @@
           }
         }
       }
+    },
+    "Gentle" : {
+
     },
     "Get help with Alert Permissions" : {
       "comment" : "Get help with Alert Permissions support button text",
@@ -21346,6 +21416,9 @@
           }
         }
       }
+    },
+    "Higher effort can take longer and cost more. Model default lets the provider choose." : {
+
     },
     "Hormone shifts may change insulin sensitivity. Some people notice higher glucose." : {
       "comment" : "Insulin sensitivity insight for the ovulation phase"
@@ -24213,6 +24286,9 @@
         }
       }
     },
+    "Key connected" : {
+
+    },
     "Large Meal Entered" : {
       "comment" : "Title of the warning shown when a large meal was entered",
       "localizations" : {
@@ -25993,6 +26069,12 @@
     "Luteal" : {
       "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle luteal phase"
     },
+    "Make Mochi feel like you" : {
+
+    },
+    "Manage OpenRouter keys" : {
+
+    },
     "Manage Permissions in Settings" : {
       "comment" : "Manage Permissions in Settings button text",
       "localizations" : {
@@ -27124,6 +27206,18 @@
         }
       }
     },
+    "Mochi" : {
+
+    },
+    "Mochi is thinking…" : {
+
+    },
+    "Mochi settings" : {
+
+    },
+    "Mochi settings and rules" : {
+
+    },
     "Mode" : {
       "comment" : "Title for mode live activity toggle",
       "localizations" : {
@@ -27158,6 +27252,9 @@
           }
         }
       }
+    },
+    "Model" : {
+
     },
     "Momentum effects" : {
       "comment" : "Details for missing data error when momentum effects are missing",
@@ -28301,6 +28398,9 @@
         }
       }
     },
+    "No matching models." : {
+
+    },
     "No Maximum Bolus Configured" : {
       "comment" : "Alert title for a missing maximum bolus setting error",
       "localizations" : {
@@ -28990,6 +29090,9 @@
           }
         }
       }
+    },
+    "Not connected" : {
+
     },
     "Notification Delivery" : {
       "comment" : "Notification Delivery Status text",
@@ -29947,6 +30050,18 @@
     "On board (IOB)" : {
       "comment" : "The subtitle of the Insulin On-Board summary card"
     },
+    "Only text models with tool calling are listed. Availability and billing depend on your OpenRouter account." : {
+
+    },
+    "Open Mochi to learn about your diabetes" : {
+
+    },
+    "OpenRouter API key" : {
+
+    },
+    "OpenRouter connection" : {
+
+    },
     "Override Presets" : {
       "comment" : "The title text for the override presets",
       "extractionState" : "manual",
@@ -30087,6 +30202,9 @@
     },
     "Period started" : {
       "comment" : "Confirmation after recording the start of a period"
+    },
+    "Playful" : {
+
     },
     "Possible Missed Meal" : {
       "comment" : "The notification title for a meal that was possibly not logged in Loop.",
@@ -32995,6 +33113,12 @@
         }
       }
     },
+    "Reasoning effort" : {
+
+    },
+    "Recent activity" : {
+
+    },
     "Recommendation expired: %1$@ old" : {
       "comment" : "The error message when a recommendation has expired. (1: age of recommendation in minutes)",
       "localizations" : {
@@ -33550,6 +33674,12 @@
         }
       }
     },
+    "Refresh model list" : {
+
+    },
+    "Refreshing models…" : {
+
+    },
     "Remote Bolus Entry: %@ U" : {
       "comment" : "The notification title for a remote bolus. (1: Bolus amount)\nThe notification title for a remote failure. (1: Bolus amount)",
       "localizations" : {
@@ -33715,6 +33845,12 @@
           }
         }
       }
+    },
+    "Remove API key" : {
+
+    },
+    "Replace key (optional)" : {
+
     },
     "Reservoir" : {
       "comment" : "Segmented button title for insulin delivery log reservoir history",
@@ -34149,8 +34285,20 @@
         }
       }
     },
+    "Review before applying" : {
+
+    },
+    "Review carb entry" : {
+
+    },
     "Review period dates" : {
       "comment" : "Cycle summary when phase timing cannot be estimated"
+    },
+    "Rules & activity" : {
+
+    },
+    "Rules are checked when the app receives fresh CGM data. Missing data or suspended app execution can delay checks. Existing Loop safety alerts remain separate. Daily reviews are scheduled reminders; summaries refresh when opened." : {
+
     },
     "Save" : {
       "comment" : "Save period history edits",
@@ -34489,6 +34637,9 @@
         }
       }
     },
+    "Search models, e.g. GPT‑6.1" : {
+
+    },
     "Select Lock Screen Display Options" : {
       "comment" : "A section header for the lock screen display options.",
       "isCommentAutoGenerated" : true,
@@ -34524,6 +34675,9 @@
           }
         }
       }
+    },
+    "Selected" : {
+
     },
     "Selecting a favorite food in the carb entry screen automatically fills in the carb quantity, food type, and absorption time fields! Tap the add button below to create your first favorite food!" : {
       "localizations" : {
@@ -34582,6 +34736,9 @@
           }
         }
       }
+    },
+    "Send message" : {
+
     },
     "Sensor Failed" : {
       "localizations" : {
@@ -35943,6 +36100,9 @@
           }
         }
       }
+    },
+    "Stop" : {
+
     },
     "Support" : {
       "comment" : "Section title for Support\nThe title of the support section in settings",
@@ -38103,6 +38263,9 @@
         }
       }
     },
+    "The next screen lets you edit and save. Carb entries affect Loop’s glucose model and subsequent dosing." : {
+
+    },
     "Therapy Settings" : {
       "comment" : "Title text for button to Therapy Settings",
       "localizations" : {
@@ -38297,6 +38460,9 @@
           }
         }
       }
+    },
+    "This will pause the rule." : {
+
     },
     "Time Sensitive Alerts" : {
       "localizations" : {
@@ -40749,6 +40915,9 @@
         }
       }
     },
+    "Use your own OpenRouter key and credits. Your key stays in this device’s Keychain. Choose a model that supports tool calling." : {
+
+    },
     "Usual cycle: %d days" : {
       "comment" : "Usual cycle length after the estimated next period has passed"
     },
@@ -41059,6 +41228,9 @@
           }
         }
       }
+    },
+    "What’s on your mind?" : {
+
     },
     "When current or forecasted glucose is below the glucose safety limit, Loop will not recommend a bolus, and will always recommend a temporary basal rate of 0 units per hour." : {
       "comment" : "Explanation of glucose safety limit",
@@ -42025,6 +42197,9 @@
           }
         }
       }
+    },
+    "You control what Mochi remembers and shares." : {
+
     },
     "You may be more sensitive to insulin as your period begins." : {
       "comment" : "Insulin sensitivity insight for the menstrual period phase"

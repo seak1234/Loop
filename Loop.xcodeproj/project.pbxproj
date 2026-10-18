@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0C050000000000000000002 /* CompanionCycleIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */; };
+		D0C040000000000000000002 /* CompanionCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C040000000000000000001 /* CompanionCoreTests.swift */; };
+		D0C020000000000000000001 /* CompanionCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C010000000000000000001 /* CompanionCore.swift */; };
+		D0C020000000000000000002 /* CompanionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C010000000000000000002 /* CompanionProvider.swift */; };
+		D0C020000000000000000003 /* CompanionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C010000000000000000003 /* CompanionController.swift */; };
+		D0C020000000000000000004 /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C010000000000000000004 /* CompanionView.swift */; };
+
 		D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */; };
 		D748E9F52F93329100C54301 /* GlucoseGraphSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */; };
 		D748E9F32F93329100C54301 /* GlucoseGraphSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */; };
@@ -764,6 +771,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCycleIntegrationTests.swift; sourceTree = "<group>"; };
+		D0C040000000000000000001 /* CompanionCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCoreTests.swift; sourceTree = "<group>"; };
+		D0C010000000000000000001 /* CompanionCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCore.swift; sourceTree = "<group>"; };
+		D0C010000000000000000002 /* CompanionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionProvider.swift; sourceTree = "<group>"; };
+		D0C010000000000000000003 /* CompanionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionController.swift; sourceTree = "<group>"; };
+		D0C010000000000000000004 /* CompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionView.swift; sourceTree = "<group>"; };
+
 		D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettingsTests.swift; sourceTree = "<group>"; };
 		D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettingsView.swift; sourceTree = "<group>"; };
 		D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettings.swift; sourceTree = "<group>"; };
@@ -1534,6 +1548,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D0C030000000000000000001 /* Companion */ = {
+			isa = PBXGroup;
+			children = (
+				D0C010000000000000000001 /* CompanionCore.swift */,
+				D0C010000000000000000002 /* CompanionProvider.swift */,
+				D0C010000000000000000003 /* CompanionController.swift */,
+				D0C010000000000000000004 /* CompanionView.swift */,
+			);
+			path = Companion;
+			sourceTree = "<group>";
+		};
+
 		14B1736128AED9EC006CCD7C /* Loop Widget Extension */ = {
 			isa = PBXGroup;
 			children = (
@@ -1737,6 +1763,7 @@
 		43776F8E1B8022E90074EA36 /* Loop */ = {
 			isa = PBXGroup;
 			children = (
+				D0C030000000000000000001 /* Companion */,
 				C16DA84022E8E104008624C2 /* Plugins */,
 				B66D1F322E6A5D6600471149 /* Localizable.xcstrings */,
 				B66D1F382E6A5D6600471149 /* InfoPlist.xcstrings */,
@@ -2072,6 +2099,8 @@
 				43E2D90F1D20C581004DA55F /* Info.plist */,
 				A9DF02CA24F72B9E00B7C988 /* CriticalEventLogTests.swift */,
 				A96DAC292838EF8A00D94E38 /* DiagnosticLogTests.swift */,
+				D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */,
+				D0C040000000000000000001 /* CompanionCoreTests.swift */,
 				D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */,
 				A9DAE7CF2332D77F006AE942 /* LoopTests.swift */,
 				8968B113240C55F10074BB48 /* LoopSettingsTests.swift */,
@@ -3397,6 +3426,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C020000000000000000001 /* CompanionCore.swift in Sources */,
+				D0C020000000000000000002 /* CompanionProvider.swift in Sources */,
+				D0C020000000000000000003 /* CompanionController.swift in Sources */,
+				D0C020000000000000000004 /* CompanionView.swift in Sources */,
+
 				C17824A51E1AD4D100D9D25C /* ManualBolusRecommendation.swift in Sources */,
 				897A5A9624C2175B00C4E71D /* BolusEntryView.swift in Sources */,
 				4F70C2131DE90339006380B7 /* StatusExtensionContext.swift in Sources */,
@@ -3774,6 +3808,8 @@
 				E98A55F324EDD9530008715D /* MockSettingsStore.swift in Sources */,
 				C165756F2534C468004AE16E /* SimpleBolusViewModelTests.swift in Sources */,
 				A96DAC2A2838EF8A00D94E38 /* DiagnosticLogTests.swift in Sources */,
+				D0C050000000000000000002 /* CompanionCycleIntegrationTests.swift in Sources */,
+				D0C040000000000000000002 /* CompanionCoreTests.swift in Sources */,
 				D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */,
 				A9DAE7D02332D77F006AE942 /* LoopTests.swift in Sources */,
 				E93E86B024DDE1BD00FF40C8 /* MockGlucoseStore.swift in Sources */,

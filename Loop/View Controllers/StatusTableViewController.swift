@@ -81,6 +81,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
         tableView.register(MuteAlertsWarningCell.self, forCellReuseIdentifier: MuteAlertsWarningCell.className)
         tableView.register(DashboardGraphicTableViewCell.self, forCellReuseIdentifier: DashboardGraphicTableViewCell.className)
         tableView.register(CycleSummaryTableViewCell.self, forCellReuseIdentifier: CycleSummaryTableViewCell.className)
+        tableView.register(CompanionTableViewCell.self, forCellReuseIdentifier: "CompanionCell")
+
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .companionOpenRequested, object: nil, queue: .main) { [weak self] _ in
+            self?.presentCompanion()
+        })
 
         if FeatureFlags.predictedGlucoseChartClampEnabled {
             statusCharts.glucose.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBoundClamped
@@ -237,6 +242,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
     override func viewDidAppear(_ animated: Bool) {
 
         super.viewDidAppear(animated)
+
+        if CompanionController.shared.notificationRuleID != nil { presentCompanion() }
 
         if !appearedOnce {
             appearedOnce = true
@@ -1330,6 +1337,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case branding
         case hud
         case status
+        case companion
         case charts
     }
 
@@ -1632,9 +1640,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case (false, true):
             tableView.insertRows(at: [IndexPath(row: 0, section: Section.branding.rawValue)], with: animated ? .top : .none)
             tableView.insertRows(at: [IndexPath(row: 0, section: Section.hud.rawValue)], with: animated ? .top : .none)
+            tableView.insertRows(at: [IndexPath(row: 0, section: Section.companion.rawValue)], with: animated ? .top : .none)
         case (true, false):
             tableView.deleteRows(at: [IndexPath(row: 0, section: Section.branding.rawValue)], with: animated ? .top : .none)
             tableView.deleteRows(at: [IndexPath(row: 0, section: Section.hud.rawValue)], with: animated ? .top : .none)
+            tableView.deleteRows(at: [IndexPath(row: 0, section: Section.companion.rawValue)], with: animated ? .top : .none)
         default:
             break
         }
@@ -1729,6 +1739,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case .alertWarning:
             return shouldShowBannerWarning ? 1 : 0
         case .branding:
+            return shouldShowHUD ? 1 : 0
+        case .companion:
             return shouldShowHUD ? 1 : 0
         case .hud:
             return shouldShowHUD ? 1 : 0
@@ -2467,6 +2479,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 self?.toggleGlucoseUnit()
             }
             return cell
+        case .companion:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "CompanionCell", for: indexPath) as! CompanionTableViewCell
+            cell.configure(owner: self) { [weak self] in self?.presentCompanion() }
+            return cell
         case .hud:
             let cell = tableView.dequeueReusableCell(withIdentifier: HUDViewTableViewCell.className, for: indexPath) as! HUDViewTableViewCell
             hudView = cell.hudView
@@ -2855,7 +2871,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .cycle:
                 break
             }
-        case .branding, .hud, .status, .alertWarning:
+        case .branding, .hud, .status, .alertWarning, .companion:
             break
         }
     }
@@ -2895,7 +2911,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .cycle:
                 return 134
             }
-        case .hud, .status, .alertWarning:
+        case .hud, .status, .alertWarning, .companion:
             return UITableView.automaticDimension
         }
     }
@@ -2910,7 +2926,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 tableView.deselectRow(at: indexPath, animated: true)
                 presentUnmuteAlertConfirmation()
             }
-        case .branding, .hud:
+        case .branding, .hud, .companion:
             break
         case .status:
             switch StatusRow(rawValue: indexPath.row)! {
@@ -3057,6 +3073,45 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     @IBAction func userTappedAddCarbs() {
         presentCarbEntryScreen(nil)
+    }
+
+    private func presentCompanion() {
+        guard viewIfLoaded?.window != nil, presentedViewController == nil else { return }
+        let controller = UIHostingController(rootView: CompanionView(deviceManager: deviceManager))
+        present(controller, animated: true)
+    }
+
+    private final class CompanionTableViewCell: UITableViewCell {
+        private var hostingController: UIHostingController<CompanionDashboardCard>?
+
+        func configure(owner: UIViewController, open: @escaping () -> Void) {
+            let card = CompanionDashboardCard(open: open, onMessageChanged: { [weak self, weak owner] in
+                DispatchQueue.main.async {
+                    self?.hostingController?.view.invalidateIntrinsicContentSize()
+                    (owner as? UITableViewController)?.tableView.performBatchUpdates(nil)
+                }
+            })
+            if let hostingController {
+                hostingController.rootView = card
+                return
+            }
+            backgroundColor = .clear
+            selectionStyle = .none
+            let controller = UIHostingController(rootView: card)
+            if #available(iOS 16.0, *) { controller.sizingOptions = .intrinsicContentSize }
+            owner.addChild(controller)
+            controller.view.backgroundColor = .clear
+            controller.view.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(controller.view)
+            NSLayoutConstraint.activate([
+                controller.view.topAnchor.constraint(equalTo: contentView.topAnchor),
+                controller.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+                controller.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                controller.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
+            ])
+            controller.didMove(toParent: owner)
+            hostingController = controller
+        }
     }
 
     func presentCarbEntryScreen(_ activity: NSUserActivity?) {

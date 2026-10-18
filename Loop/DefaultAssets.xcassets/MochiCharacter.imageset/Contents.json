@@ -1,0 +1,22 @@
+{
+  "images": [
+    {
+      "filename": "mochi.png",
+      "idiom": "universal"
+    },
+    {
+      "filename": "mochi-dark.png",
+      "idiom": "universal",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
