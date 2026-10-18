@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */; };
+		D748E9F52F93329100C54301 /* GlucoseGraphSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */; };
+		D748E9F32F93329100C54301 /* GlucoseGraphSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */; };
 		1419606428D9550400BA86E0 /* LoopKitUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 437AFEE6203688CF008C4892 /* LoopKitUI.framework */; };
 		1419606928D9554E00BA86E0 /* LoopKitUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 437AFEE6203688CF008C4892 /* LoopKitUI.framework */; };
 		1419606A28D955BC00BA86E0 /* MockKitUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C101947127DD473C004E7EB8 /* MockKitUI.framework */; };
@@ -761,6 +764,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettingsTests.swift; sourceTree = "<group>"; };
+		D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettingsView.swift; sourceTree = "<group>"; };
+		D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettings.swift; sourceTree = "<group>"; };
 		142CB7582A60BF2E0075748A /* EditMode.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditMode.swift; sourceTree = "<group>"; };
 		142CB75A2A60BFC30075748A /* FavoriteFoodsView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FavoriteFoodsView.swift; sourceTree = "<group>"; };
 		1452F4A82A851C9400F8B9E4 /* AddEditFavoriteFoodViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEditFavoriteFoodViewModel.swift; sourceTree = "<group>"; };
@@ -1675,6 +1681,7 @@
 				C1C660D0252E4DD5009B5C32 /* LoopConstants.swift */,
 				436A0DA41D236A2A00104B24 /* LoopError.swift */,
 				E9C00EF424C623EF00628F35 /* LoopSettings+Loop.swift */,
+				D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */,
 				A9B996EF27235191002DC09C /* LoopWarning.swift */,
 				C17824A41E1AD4D100D9D25C /* ManualBolusRecommendation.swift */,
 				4F526D601DF8D9A900A04910 /* NetBasal.swift */,
@@ -1997,6 +2004,7 @@
 				438D42FA1D7D11A4003244B0 /* PredictionInputEffectTableViewCell.swift */,
 				439706E522D2E84900C81566 /* PredictionSettingTableViewCell.swift */,
 				1DE09BA824A3E23F009EE9F9 /* SettingsView.swift */,
+				D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */,
 				DDC389FB2A2BC6670066E2E8 /* SettingsView+algorithmExperimentsSection.swift */,
 				C1DE5D22251BFC4D00439E49 /* SimpleBolusView.swift */,
 				43F64DD81D9C92C900D24DC6 /* TitleSubtitleTableViewCell.swift */,
@@ -2064,6 +2072,7 @@
 				43E2D90F1D20C581004DA55F /* Info.plist */,
 				A9DF02CA24F72B9E00B7C988 /* CriticalEventLogTests.swift */,
 				A96DAC292838EF8A00D94E38 /* DiagnosticLogTests.swift */,
+				D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */,
 				A9DAE7CF2332D77F006AE942 /* LoopTests.swift */,
 				8968B113240C55F10074BB48 /* LoopSettingsTests.swift */,
 				E93E86AC24DDE02C00FF40C8 /* Mock Stores */,
@@ -3480,6 +3489,7 @@
 				E98A55EF24EDD6E60008715D /* DosingDecisionStoreProtocol.swift in Sources */,
 				B4001CEE28CBBC82002FB414 /* AlertManagementView.swift in Sources */,
 				E9C00EF524C623EF00628F35 /* LoopSettings+Loop.swift in Sources */,
+				D748E9F32F93329100C54301 /* GlucoseGraphSettings.swift in Sources */,
 				4389916B1E91B689000EEF90 /* ChartSettings+Loop.swift in Sources */,
 				C178249A1E1999FA00D9D25C /* CaseCountable.swift in Sources */,
 				B4F3D25124AF890C0095CE44 /* BluetoothStateManager.swift in Sources */,
@@ -3528,6 +3538,7 @@
 				435400341C9F878D00D5819C /* SetBolusUserInfo.swift in Sources */,
 				A9DCF32A25B0FABF00C89088 /* LoopUIColorPalette+Default.swift in Sources */,
 				1DDE273E24AEA4B000796622 /* SettingsView.swift in Sources */,
+				D748E9F52F93329100C54301 /* GlucoseGraphSettingsView.swift in Sources */,
 				A9B607B0247F000F00792BE4 /* UserNotifications+Loop.swift in Sources */,
 				84AB0A833008A62400A13446 /* SceneDelegate.swift in Sources */,
 				43F89CA322BDFBBD006BB54E /* UIActivityIndicatorView.swift in Sources */,
@@ -3763,6 +3774,7 @@
 				E98A55F324EDD9530008715D /* MockSettingsStore.swift in Sources */,
 				C165756F2534C468004AE16E /* SimpleBolusViewModelTests.swift in Sources */,
 				A96DAC2A2838EF8A00D94E38 /* DiagnosticLogTests.swift in Sources */,
+				D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */,
 				A9DAE7D02332D77F006AE942 /* LoopTests.swift in Sources */,
 				E93E86B024DDE1BD00FF40C8 /* MockGlucoseStore.swift in Sources */,
 				1DFE9E172447B6270082C280 /* UserNotificationAlertSchedulerTests.swift in Sources */,

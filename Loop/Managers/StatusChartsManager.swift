@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HealthKit
 import LoopKit
 import LoopUI
 import LoopKitUI
@@ -76,6 +77,17 @@ class StatusChartsManager: ChartsManager {
 }
 
 extension StatusChartsManager {
+    func setInRangeDisplaySettings(_ settings: GlucoseGraphSettings) {
+        if settings.isEnabled {
+            let lower = HKQuantity(unit: .milligramsPerDeciliter, doubleValue: settings.lowerBoundMGDL)
+            let upper = HKQuantity(unit: .milligramsPerDeciliter, doubleValue: settings.upperBoundMGDL)
+            glucose.inRangeDisplayRange = lower...upper
+        } else {
+            glucose.inRangeDisplayRange = nil
+        }
+        invalidateChart(atIndex: ChartIndex.glucose.rawValue)
+    }
+
     func setGlucoseValues(_ glucoseValues: [GlucoseValue]) {
         glucose.setGlucoseValues(glucoseValues)
         invalidateChart(atIndex: ChartIndex.glucose.rawValue)

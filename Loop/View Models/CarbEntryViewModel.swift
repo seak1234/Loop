@@ -66,7 +66,7 @@ final class CarbEntryViewModel: ObservableObject {
     }
     
     @Published var foodType = ""
-    @Published var selectedDefaultAbsorptionTimeEmoji: String = ""
+    @Published var selectedDefaultAbsorptionTimeEmoji: String = "🍗"
     @Published var usesCustomFoodType = false
     @Published var absorptionTimeWasEdited = false // if true, selecting an emoji will not alter the absorption time
     private var absorptionEditIsProgrammatic = false // needed for when absorption time is changed due to favorite food selection, so that absorptionTimeWasEdited does not get set to true
@@ -89,7 +89,7 @@ final class CarbEntryViewModel: ObservableObject {
     /// Initalizer for when`CarbEntryView` is presented from the home screen
     init(delegate: CarbEntryViewModelDelegate) {
         self.delegate = delegate
-        self.absorptionTime = delegate.defaultAbsorptionTimes.medium
+        self.absorptionTime = delegate.defaultAbsorptionTimes.slow
         self.defaultAbsorptionTimes = delegate.defaultAbsorptionTimes
         self.shouldBeginEditingQuantity = true
         
@@ -242,7 +242,8 @@ final class CarbEntryViewModel: ObservableObject {
         if index == -1 {
             self.carbsQuantity = 0
             self.foodType = ""
-            self.absorptionTime = defaultAbsorptionTimes.medium
+            self.selectedDefaultAbsorptionTimeEmoji = "🍗"
+            self.absorptionTime = defaultAbsorptionTimes.slow
             self.absorptionTimeWasEdited = false
             self.usesCustomFoodType = false
         }

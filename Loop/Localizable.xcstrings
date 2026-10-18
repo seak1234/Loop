@@ -16718,6 +16718,9 @@
         }
       }
     },
+    "Display" : {
+      "comment" : "Display preferences section in settings"
+    },
     "Display colors for glucose" : {
       "comment" : "Title for glucose coloring",
       "localizations" : {
@@ -16782,6 +16785,9 @@
           }
         }
       }
+    },
+    "Display only. Does not affect insulin dosing or alerts." : {
+      "comment" : "Explanation for glucose graph display range"
     },
     "Display prediction in plot" : {
       "comment" : "Title for prediction line toggle",
@@ -17957,6 +17963,9 @@
           }
         }
       }
+    },
+    "Enter positive values with the lower boundary below the upper boundary." : {
+      "comment" : "Invalid glucose graph display range"
     },
     "Enter suspend threshold" : {
       "comment" : "The placeholder text instructing users to enter a suspend treshold",
@@ -21008,6 +21017,9 @@
           }
         }
       }
+    },
+    "Glucose Graph" : {
+      "comment" : "Glucose graph display settings title\nLink to glucose graph display settings"
     },
     "Glucose Momentum" : {
       "comment" : "Title of the prediction input effect for glucose momentum",
@@ -25961,6 +25973,9 @@
         }
       }
     },
+    "Lower boundary" : {
+      "comment" : "Lower glucose graph range boundary"
+    },
     "Luteal" : {
       "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle luteal phase"
     },
@@ -29460,7 +29475,7 @@
       }
     },
     "Off" : {
-      "comment" : "Notification Setting Status is Off",
+      "comment" : "Glucose graph range shading disabled\nNotification Setting Status is Off",
       "localizations" : {
         "cs" : {
           "stringUnit" : {
@@ -34941,6 +34956,9 @@
     "Show Cycle Tracking Details" : {
       "comment" : "Accessibility label for opening cycle details"
     },
+    "Show in-range area" : {
+
+    },
     "Shows last loop error" : {
       "comment" : "Loop Completion HUD accessibility hint",
       "localizations" : {
@@ -40240,6 +40258,9 @@
           }
         }
       }
+    },
+    "Upper boundary" : {
+      "comment" : "Upper glucose graph range boundary"
     },
     "Urgent Low" : {
       "localizations" : {

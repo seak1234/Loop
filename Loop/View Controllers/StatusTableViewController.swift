@@ -88,6 +88,18 @@ final class StatusTableViewController: LoopChartsTableViewController {
             statusCharts.glucose.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBound
         }
 
+        GlucoseGraphSettingsStore.shared.$settings
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] settings in
+                guard let self else { return }
+                self.statusCharts.setInRangeDisplaySettings(settings)
+                if self.view.window != nil {
+                    self.redrawCharts()
+                }
+            }
+            .store(in: &cancellables)
+
         registerPumpManager()
         registerCGMManager()
 
