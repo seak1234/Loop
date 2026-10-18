@@ -236,6 +236,9 @@ struct CompanionView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
+                        if let fact = controller.dashboardFact {
+                            Link(destination: fact.source) { Label("Source for this fact", systemImage: "book") }
+                        }
                         Button { showRules = true } label: { Label("Rules & activity", systemImage: "bell.badge") }
                         Button { showSettings = true } label: { Label("Connection & personality", systemImage: "slider.horizontal.3") }
                         Button(role: .destructive) { confirmClear = true } label: { Label("Clear conversation", systemImage: "trash") }

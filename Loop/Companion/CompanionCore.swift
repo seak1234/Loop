@@ -354,10 +354,70 @@ struct CompanionDashboardMessage: Codable {
     var includesHealthData: Bool
     // Missing on older cached messages, which should be regenerated in the shorter style.
     var styleVersion: Int? = CompanionDashboardRefresh.styleVersion
+    var factID: String?
+}
+
+/// Conservative permission to celebrate recent readings, not a clinical assessment or alert.
+struct CompanionGlucoseEncouragement: Codable {
+    let canCelebrateRecentTarget: Bool
+    let basis: String
+
+    init(points: [CompanionGlucosePoint], now: Date, lower: Double?, upper: Double?, safetyFloor: Double = 70, sourceIsReliable: Bool = true) {
+        guard sourceIsReliable else {
+            canCelebrateRecentTarget = false; basis = "Recent manual or display-only readings prevent a reliable CGM-only comparison."; return
+        }
+        guard let lower, let upper, lower.isFinite, upper.isFinite, safetyFloor.isFinite,
+              lower >= max(70, safetyFloor), upper >= lower else {
+            canCelebrateRecentTarget = false; basis = "No usable configured target."; return
+        }
+        let recent = points.filter { $0.date >= now.addingTimeInterval(-1800) && $0.date <= now }.sorted { $0.date < $1.date }
+        guard recent.count >= 5, let first = recent.first, let last = recent.last,
+              now.timeIntervalSince(last.date) <= 600, last.date.timeIntervalSince(first.date) >= 1440,
+              recent.allSatisfy({ $0.mgdl.isFinite && $0.mgdl >= lower && $0.mgdl <= upper }),
+              zip(recent, recent.dropFirst()).allSatisfy({
+                  let gap = $1.date.timeIntervalSince($0.date)
+                  return gap > 0 && gap <= 420
+              }) else {
+            canCelebrateRecentTarget = false; basis = "Recent data are missing, incomplete, stale, or outside the configured target."; return
+        }
+        let previous = recent[recent.count - 2]
+        let recentRate = (last.mgdl - previous.mgdl) / (last.date.timeIntervalSince(previous.date) / 60)
+        guard recentRate > -1 else {
+            canCelebrateRecentTarget = false; basis = "Recent readings are falling; do not celebrate them as settled."; return
+        }
+        canCelebrateRecentTarget = true
+        basis = "Available CGM readings span at least 24 of the last 30 minutes, with no gap over 7 minutes, and are all within the current configured target. This does not establish a whole-day result or its cause."
+    }
+}
+
+struct CompanionDashboardFact: Encodable, Identifiable {
+    let id: String
+    let fact: String
+    let source: URL
+
+    static let catalog: [Self] = [
+        .init(id: "insulin-nobel-1923", fact: "The discovery of insulin was recognized with the 1923 Nobel Prize in Physiology or Medicine.", source: URL(string: "https://www.nobelprize.org/prizes/medicine/1923/summary/")!),
+        .init(id: "insulin-chemistry-1958", fact: "Frederick Sanger received the 1958 Chemistry Nobel Prize for work on protein structure, especially insulin.", source: URL(string: "https://www.nobelprize.org/prizes/chemistry/1958/summary/")!),
+        .init(id: "cgm-between-cells", fact: "CGMs estimate glucose in fluid between cells rather than measuring blood directly.", source: URL(string: "https://www.niddk.nih.gov/health-information/diabetes/overview/managing-diabetes/continuous-glucose-monitoring")!),
+        .init(id: "pancreatic-islets", fact: "Insulin-producing beta cells live in pancreatic cell clusters called islets.", source: URL(string: "https://www.niddk.nih.gov/health-information/diabetes/overview/what-is-diabetes/type-1-diabetes")!),
+        .init(id: "t1d-any-age", fact: "Type 1 diabetes can develop at any age, including adulthood.", source: URL(string: "https://www.niddk.nih.gov/health-information/diabetes/overview/what-is-diabetes/type-1-diabetes")!),
+        .init(id: "protein-later-glucose", fact: "Protein can be converted to glucose slowly; low-carb meals are not necessarily glucose-neutral.", source: URL(string: "https://www.diabetesincontrol.com/the-diabetes-diet-chapter-3-part-1/")!)
+    ]
+
+    static func next(cursor: Int?) -> Self { catalog[max(0, cursor ?? 0) % catalog.count] }
+}
+
+enum CompanionDashboardKind: String {
+    case motivation, insight, fact
+
+    static func next(rotation: Int?, allowHealthData: Bool) -> Self {
+        if rotation == 3 { return .fact }
+        return allowHealthData && rotation == 2 ? .insight : .motivation
+    }
 }
 
 enum CompanionDashboardRefresh {
-    static let styleVersion = 3
+    static let styleVersion = 6
     static let maximumCharacters = 90
     static let maximumWords = 12
 
@@ -391,6 +451,8 @@ struct CompanionState: Codable {
     var reasoningEffort: CompanionReasoningEffort? = .medium
     var allowHealthData = false
     var dashboardMessage: CompanionDashboardMessage?
+    var dashboardRotation: Int?
+    var dashboardFactCursor: Int?
     var messages: [CompanionMessage] = []
     var rules: [CompanionRule] = []
     var actions: [CompanionAction] = []

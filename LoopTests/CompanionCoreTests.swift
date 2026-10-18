@@ -60,6 +60,57 @@ final class CompanionCoreTests: XCTestCase {
         XCTAssertThrowsError(try CompanionTopic.decodeSuggestions(#"{"topics":[{"title":"Food labels","prompt":""},{"title":"Sleep and glucose","prompt":"Learn."}]}"#))
     }
 
+    func testDashboardRotationPrefersMotivationAndPersists() throws {
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: nil, allowHealthData: true), .motivation)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: 0, allowHealthData: true), .motivation)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: 1, allowHealthData: true), .motivation)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: 2, allowHealthData: true), .insight)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: 2, allowHealthData: false), .motivation)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: 3, allowHealthData: true), .fact)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: 3, allowHealthData: false), .fact)
+        var state = CompanionState()
+        state.dashboardRotation = 2
+        let restored = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
+        XCTAssertEqual(restored.dashboardRotation, 2)
+        XCTAssertEqual(CompanionDashboardKind.next(rotation: restored.dashboardRotation, allowHealthData: true), .insight)
+    }
+
+    func testFactRotationPersistsAndDoesNotImmediatelyRepeat() throws {
+        var state = CompanionState()
+        let first = CompanionDashboardFact.next(cursor: state.dashboardFactCursor)
+        state.dashboardFactCursor = 1
+        let restored = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
+        let second = CompanionDashboardFact.next(cursor: restored.dashboardFactCursor)
+        XCTAssertFalse(first.id == second.id)
+        XCTAssertEqual(CompanionDashboardFact.next(cursor: CompanionDashboardFact.catalog.count).id, first.id)
+        XCTAssertTrue(CompanionDashboardFact.catalog.allSatisfy { $0.source.scheme == "https" })
+    }
+
+    private func recentEncouragementPoints(_ value: Double = 105) -> [CompanionGlucosePoint] {
+        (0..<7).map { CompanionGlucosePoint(date: now.addingTimeInterval(Double($0 - 6) * 300), mgdl: value) }
+    }
+
+    func testGlucosePraiseRequiresFreshCoveredReadingsInConfiguredTarget() {
+        XCTAssertTrue(CompanionGlucoseEncouragement(points: recentEncouragementPoints(), now: now, lower: 100, upper: 110).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: recentEncouragementPoints(), now: now, lower: 100, upper: 110, sourceIsReliable: false).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: recentEncouragementPoints(), now: now, lower: nil, upper: nil).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: [], now: now, lower: 100, upper: 110).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: Array(recentEncouragementPoints().suffix(3)), now: now, lower: 100, upper: 110).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: recentEncouragementPoints(), now: now.addingTimeInterval(900), lower: 100, upper: 110).canCelebrateRecentTarget)
+    }
+
+    func testGlucosePraiseDoesNotCelebrateLowsHighsGapsOrRapidFalls() {
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: recentEncouragementPoints(65), now: now, lower: 60, upper: 80).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: recentEncouragementPoints(180), now: now, lower: 100, upper: 110).canCelebrateRecentTarget)
+        var gapped = recentEncouragementPoints()
+        gapped.remove(at: 3)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: gapped, now: now, lower: 100, upper: 110).canCelebrateRecentTarget)
+        var falling = recentEncouragementPoints(110)
+        falling[6].mgdl = 100
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: falling, now: now, lower: 100, upper: 110).canCelebrateRecentTarget)
+        XCTAssertFalse(CompanionGlucoseEncouragement(points: recentEncouragementPoints(), now: now, lower: 100, upper: 110, safetyFloor: 110).canCelebrateRecentTarget)
+    }
+
     private var cycleCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

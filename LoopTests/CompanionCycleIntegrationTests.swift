@@ -102,6 +102,9 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
     func testDashboardReadsAllContextCachesAndThrottlesRequests() async throws {
         let (store, tracker, cleanup) = try fixture(shareHealth: true)
         defer { cleanup() }
+        var initial = try store.load()
+        initial.dashboardRotation = 2
+        try store.save(initial)
         let provider = CycleProviderProbe()
         var queries: [String] = []
         let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" },
@@ -185,6 +188,39 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue((futureProvider.messages.first?["content"] as? String)?.contains("call me Michelle") == true)
     }
 
+    func testMotivationMixSurvivesRelaunchWithGlucoseGroundedEncouragement() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: true)
+        defer { cleanup() }
+        let provider = CycleProviderProbe()
+        var queries = 0
+        for expectedRotation in [1, 2, 3, 0] {
+            var saved = try store.load()
+            saved.dashboardMessage?.generatedAt = Date().addingTimeInterval(-901)
+            try store.save(saved)
+            let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" },
+                dashboardHealthReader: { _, _, _ in queries += 1; return [:] }, applicationIsActive: { true })
+            controller.setDashboardVisible(true)
+            try await waitForDashboard(controller)
+            XCTAssertNil(controller.dashboardRefreshError)
+            XCTAssertEqual(try store.load().dashboardRotation, expectedRotation)
+            let isInsight = expectedRotation == 3
+            let isFact = expectedRotation == 0
+            let context = try XCTUnwrap(provider.messages.last?["content"] as? String)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(context.utf8)) as? [String: Any])
+            XCTAssertEqual(payload["cycle"] != nil, isInsight)
+            XCTAssertEqual(controller.state.dashboardMessage?.includesHealthData, !isFact)
+            XCTAssertTrue((provider.messages.first?["content"] as? String)?.contains("Message type: " + (isFact ? "fact" : isInsight ? "insight" : "motivation")) == true)
+            XCTAssertEqual(queries, isInsight || isFact ? 5 : expectedRotation)
+            XCTAssertEqual(payload["curated_fact"] != nil, isFact)
+            if isFact {
+                XCTAssertEqual(try store.load().dashboardFactCursor, 1)
+                XCTAssertEqual(controller.dashboardFact?.id, CompanionDashboardFact.catalog.first?.id)
+            }
+            controller.setDashboardVisible(false)
+        }
+        XCTAssertEqual(provider.requestCount, 4)
+    }
+
     func testSuggestedTopicsRegenerateOnEntryWithoutReadingHealthStores() async throws {
         let (store, tracker, cleanup) = try fixture(shareHealth: true)
         defer { cleanup() }
@@ -216,6 +252,9 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
     func testCancelledDashboardResponseCannotRestoreHealthContext() async throws {
         let (store, tracker, cleanup) = try fixture(shareHealth: true)
         defer { cleanup() }
+        var initial = try store.load()
+        initial.dashboardRotation = 2
+        try store.save(initial)
         let provider = CycleProviderProbe()
         provider.handler = { _, _ in
             // Simulate a provider finishing despite cancellation.
