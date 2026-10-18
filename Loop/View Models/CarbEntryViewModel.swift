@@ -17,13 +17,14 @@ protocol CarbEntryViewModelDelegate: AnyObject, BolusEntryViewModelDelegate {
 }
 
 final class CarbEntryViewModel: ObservableObject {
-    enum Alert: Identifiable {
+    enum Alert: Identifiable, Hashable {
         var id: Self {
             return self
         }
         
         case maxQuantityExceded
         case warningQuantityValidation
+        case deleteFavoriteFood(id: String, name: String)
     }
     
     enum Warning: Identifiable {
@@ -81,6 +82,7 @@ final class CarbEntryViewModel: ObservableObject {
     
     @Published var favoriteFoods = UserDefaults.standard.favoriteFoods
     @Published var selectedFavoriteFoodIndex = -1
+    private var isUpdatingFavoriteSelection = false
     
     weak var delegate: CarbEntryViewModelDelegate?
     
@@ -216,12 +218,26 @@ final class CarbEntryViewModel: ObservableObject {
         favoriteFoods.append(newStoredFood)
         selectedFavoriteFoodIndex = favoriteFoods.count - 1
     }
+
+    func onFavoriteFoodDelete(_ food: StoredFavoriteFood) {
+        guard let index = favoriteFoods.firstIndex(where: { $0.id == food.id }) else { return }
+
+        // Removing a saved shortcut must not change the carb entry being composed.
+        isUpdatingFavoriteSelection = true
+        defer { isUpdatingFavoriteSelection = false }
+        favoriteFoods.remove(at: index)
+        if selectedFavoriteFoodIndex == index {
+            selectedFavoriteFoodIndex = -1
+        } else if selectedFavoriteFoodIndex > index {
+            selectedFavoriteFoodIndex -= 1
+        }
+    }
     
     private func observeFavoriteFoodIndexChange() {
         $selectedFavoriteFoodIndex
-            .receive(on: RunLoop.main)
             .dropFirst()
             .sink { [weak self] index in
+                guard self?.isUpdatingFavoriteSelection == false else { return }
                 self?.favoriteFoodSelected(at: index)
             }
             .store(in: &cancellables)
@@ -238,6 +254,7 @@ final class CarbEntryViewModel: ObservableObject {
     }
 
     private func favoriteFoodSelected(at index: Int) {
+        guard index == -1 || favoriteFoods.indices.contains(index) else { return }
         self.absorptionEditIsProgrammatic = true
         if index == -1 {
             self.carbsQuantity = 0

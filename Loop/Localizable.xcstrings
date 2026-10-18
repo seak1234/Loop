@@ -846,6 +846,16 @@
         }
       }
     },
+    "%@ carbs, %@ absorption" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ carbs, %2$@ absorption"
+          }
+        }
+      }
+    },
     "%@ remaining" : {
       "comment" : "Estimated remaining duration with more than a minute",
       "localizations" : {
@@ -12257,6 +12267,7 @@
     },
     "Choose Favorite:" : {
       "comment" : "The label for the row where you choose saved Favorite Food",
+      "extractionState" : "stale",
       "localizations" : {
         "da" : {
           "stringUnit" : {
@@ -12307,6 +12318,9 @@
           }
         }
       }
+    },
+    "Clear selection" : {
+      "comment" : "Button to deselect a favorite food and reset the carb entry"
     },
     "Close" : {
       "comment" : "Button title to close view\nThe button label of the action used to dismiss the unsafe notification permission alert",
@@ -28847,6 +28861,7 @@
     },
     "None" : {
       "comment" : "Indicates no favorite food is selected",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

@@ -181,6 +181,17 @@ extension CarbEntryView {
     
     private func alert(for alert: CarbEntryViewModel.Alert) -> SwiftUI.Alert {
         switch alert {
+        case .deleteFavoriteFood(let id, let name):
+            return SwiftUI.Alert(
+                title: Text("Delete “\(name)”?"),
+                message: Text("Are you sure you want to delete this food?"),
+                primaryButton: .cancel(),
+                secondaryButton: .destructive(Text("Delete")) {
+                    if let food = viewModel.favoriteFoods.first(where: { $0.id == id }) {
+                        viewModel.onFavoriteFoodDelete(food)
+                    }
+                }
+            )
         case .maxQuantityExceded:
             let message = String(
                 format: NSLocalizedString("The maximum allowed amount is %@ grams.", comment: "Alert body displayed for quantity greater than max (1: maximum quantity in grams)"),
@@ -217,46 +228,31 @@ extension CarbEntryView {
                 .padding(.horizontal, 26)
             
             VStack(spacing: 10) {
-                if !viewModel.favoriteFoods.isEmpty {
-                    VStack {
-                        HStack {
-                            Text("Choose Favorite:", comment: "The label for the row where you choose saved Favorite Food")
-                            
-                            let selectedFavorite = favoritedFoodTextFromIndex(viewModel.selectedFavoriteFoodIndex)
-                            Text(selectedFavorite)
-                                .minimumScaleFactor(0.8)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                        }
-                        
-                        if expandedRow == .favoriteFoodSelection {
-                            Picker(String(""), selection: $viewModel.selectedFavoriteFoodIndex) {
-                                ForEach(-1..<viewModel.favoriteFoods.count, id: \.self) { index in
-                                    Text(favoritedFoodTextFromIndex(index))
-                                        .tag(index)
-                                }
-                            }
-                            .pickerStyle(.wheel)
-                        }
-                    }
-                    .onTapGesture {
-                        withAnimation {
-                            if expandedRow == .favoriteFoodSelection {
-                                expandedRow = nil
-                            }
-                            else {
-                                expandedRow = .favoriteFoodSelection
-                            }
-                        }
-                    }
-                    
-                    CardSectionDivider()
-                }
-                
                 Button(action: saveAsFavoriteFood) {
-                    Text("Save as favorite food", comment: "Button label for saving current carb entry as a new Favorite Food")
-                        .frame(maxWidth: .infinity)
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Save as favorite food", comment: "Button label for saving current carb entry as a new Favorite Food")
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .disabled(viewModel.saveFavoriteFoodButtonDisabled)
+
+                ForEach(Array(viewModel.favoriteFoods.enumerated()), id: \.element.id) { favorite in
+                    CardSectionDivider()
+                    favoriteFoodRow(at: favorite.offset)
+                }
+
+                if viewModel.selectedFavoriteFoodIndex != -1 {
+                    CardSectionDivider()
+                    Button {
+                        viewModel.selectedFavoriteFoodIndex = -1
+                        clearExpandedRow()
+                    } label: {
+                        Text("Clear selection", comment: "Button to deselect a favorite food and reset the carb entry")
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                }
             }
             .padding(.vertical, 12)
             .padding(.horizontal)
@@ -265,14 +261,57 @@ extension CarbEntryView {
         }
     }
     
-    private func favoritedFoodTextFromIndex(_ index: Int) -> String {
-        if index == -1 {
-            return String(localized: "None", comment: "Indicates no favorite food is selected")
+    private func favoriteFoodRow(at index: Int) -> some View {
+        let food = viewModel.favoriteFoods[index]
+        let isSelected = viewModel.selectedFavoriteFoodIndex == index
+        let carbFormatter = QuantityFormatter(for: viewModel.preferredCarbUnit)
+
+        return HStack(spacing: 4) {
+            Button {
+                viewModel.selectedFavoriteFoodIndex = index
+                clearExpandedRow()
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(food.title)
+                            .font(.body.weight(.medium))
+                            .foregroundColor(.primary)
+                        Text("\(food.carbsString(formatter: carbFormatter)) carbs, \(food.absorptionTimeString(formatter: favoriteAbsorptionTimeFormatter)) absorption")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundColor(isSelected ? .accentColor : Color(UIColor.tertiaryLabel))
+                        .accessibilityHidden(true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .background(isSelected ? Color.accentColor.opacity(0.08) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+            Button(role: .destructive) {
+                viewModel.alert = .deleteFavoriteFood(id: food.id, name: food.name)
+            } label: {
+                Image(systemName: "trash")
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Delete “\(food.name)”?"))
         }
-        else {
-            let food = viewModel.favoriteFoods[index]
-            return "\(food.name) \(food.foodType)"
-        }
+    }
+
+    private var favoriteAbsorptionTimeFormatter: DateComponentsFormatter {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        return formatter
     }
     
     private func saveAsFavoriteFood() {
@@ -314,6 +353,6 @@ extension CarbEntryView {
 
 extension CarbEntryView {
     enum Row {
-        case amountConsumed, time, foodType, absorptionTime, favoriteFoodSelection
+        case amountConsumed, time, foodType, absorptionTime
     }
 }
