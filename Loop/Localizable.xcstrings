@@ -37216,6 +37216,9 @@
         }
       }
     },
+    "The 15-minute option is an absorption estimate, not a guarantee that glucose tablets are fully absorbed in 15 minutes. Predictions also account for a delay and adjust using glucose readings." : {
+      "comment" : "Explains the short carb absorption option and its effect on predictions"
+    },
     "The bolus amount entered is smaller than the minimum deliverable." : {
       "comment" : "Alert message for a bolus too small validation error",
       "localizations" : {

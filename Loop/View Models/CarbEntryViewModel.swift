@@ -161,7 +161,7 @@ final class CarbEntryViewModel: ObservableObject {
     }
     
     private func validateInputAndContinue() {
-        guard absorptionTime <= maxAbsorptionTime else {
+        guard absorptionRimesRange.contains(absorptionTime) else {
             return
         }
         

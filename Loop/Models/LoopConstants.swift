@@ -21,7 +21,7 @@ enum LoopConstants {
     
     static let validManualGlucoseEntryRange = HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 10)...HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 600)
     
-    static let minCarbAbsorptionTime = TimeInterval(minutes: 30)
+    static let minCarbAbsorptionTime = TimeInterval(minutes: 15)
     static let maxCarbAbsorptionTime = TimeInterval(hours: 8)
     
     static let maxCarbEntryPastTime = TimeInterval(hours: (-12))

@@ -221,12 +221,13 @@ final class CycleTrackingStore: ObservableObject {
     }
 
     private func phase(for context: CycleContext, on date: Date) -> Phase? {
-        if context.isOpen {
-            guard calendar.startOfDay(for: date) <= calendar.startOfDay(for: Date()),
-                  context.day <= maximumUnconfirmedPeriodDays
-            else { return nil }
+        if context.isOpen,
+           calendar.startOfDay(for: date) <= calendar.startOfDay(for: Date()),
+           context.day <= maximumUnconfirmedPeriodDays
+        {
             return .period
         }
+        // Keep forecasting with the usual period length until its end is logged.
         if context.day <= context.periodLength {
             return .period
         }
@@ -293,7 +294,6 @@ final class CycleTrackingStore: ObservableObject {
 
     func nextPeriodDate(from date: Date = Date()) -> Date? {
         guard let context = cycleContext(on: date),
-              !context.isOpen,
               context.day <= context.length
         else { return nil }
 
@@ -369,7 +369,6 @@ final class CycleTrackingStore: ObservableObject {
 
     private func projectedCalendarContext(on date: Date) -> CycleContext? {
         guard let context = cycleContext(on: date),
-              !context.isOpen,
               periodEntries.last?.id == context.anchor.id,
               context.day > context.length
         else { return nil }
@@ -385,8 +384,7 @@ final class CycleTrackingStore: ObservableObject {
     }
 
     private func phaseTransitions(for context: CycleContext) -> [Double]? {
-        guard !context.isOpen,
-              context.day <= context.length,
+        guard context.day <= context.length,
               let ovulationDay = context.ovulationDay
         else { return nil }
 

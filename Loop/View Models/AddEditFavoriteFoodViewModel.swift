@@ -81,7 +81,7 @@ final class AddEditFavoriteFoodViewModel: ObservableObject {
     }
     
     func save() {
-        guard let updatedFavoriteFood, absorptionTime <= maxAbsorptionTime else { return }
+        guard let updatedFavoriteFood, absorptionRimesRange.contains(absorptionTime) else { return }
 
         guard let carbsQuantity, carbsQuantity > 0 else { return }
         let quantity = HKQuantity(unit: preferredCarbUnit, doubleValue: carbsQuantity)

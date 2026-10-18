@@ -7,10 +7,71 @@
 //
 
 import XCTest
+import HealthKit
+import LoopKit
 
 @testable import Loop
 
 class LoopTests: XCTestCase {}
+
+final class CarbAbsorptionTimeTests: XCTestCase {
+    func testFifteenMinuteFavoriteCanBeSavedAndReopened() throws {
+        var savedFood: NewFavoriteFood?
+        let viewModel = AddEditFavoriteFoodViewModel(
+            carbsQuantity: 12,
+            foodType: "Glucose tablets",
+            absorptionTime: .minutes(15),
+            onSave: { savedFood = $0 }
+        )
+        viewModel.name = "Glucose tablets"
+        viewModel.save()
+
+        let food = try XCTUnwrap(savedFood)
+        XCTAssertEqual(food.absorptionTime, .minutes(15))
+        let storedFood = StoredFavoriteFood(
+            name: food.name,
+            carbsQuantity: food.carbsQuantity,
+            foodType: food.foodType,
+            absorptionTime: food.absorptionTime
+        )
+        let restoredFood = try JSONDecoder().decode(StoredFavoriteFood.self, from: JSONEncoder().encode(storedFood))
+        let editor = AddEditFavoriteFoodViewModel(originalFavoriteFood: restoredFood, onSave: { _ in })
+
+        XCTAssertEqual(editor.absorptionTime, .minutes(15))
+        XCTAssertTrue(editor.absorptionRimesRange.contains(editor.absorptionTime))
+    }
+
+    func testFavoriteRejectsAbsorptionTimesOutsideSupportedRange() {
+        for duration in [TimeInterval.minutes(14), .hours(8) + .minutes(15)] {
+            var didSave = false
+            let viewModel = AddEditFavoriteFoodViewModel(
+                carbsQuantity: 12,
+                foodType: "Glucose tablets",
+                absorptionTime: duration,
+                onSave: { _ in didSave = true }
+            )
+            viewModel.name = "Glucose tablets"
+            viewModel.save()
+
+            XCTAssertFalse(didSave)
+        }
+    }
+
+    func testFifteenMinuteEstimateMovesAbsorptionEarlierWithoutChangingTotalCarbs() {
+        let model = PiecewiseLinearAbsorption()
+        let shortDuration = LoopConstants.minCarbAbsorptionTime
+        let standardFastDuration = TimeInterval.minutes(30)
+        let modeledTime = TimeInterval.minutes(10)
+
+        let shortAbsorption = model.absorbedCarbs(of: 12, atTime: modeledTime, absorptionTime: shortDuration)
+        let standardAbsorption = model.absorbedCarbs(of: 12, atTime: modeledTime, absorptionTime: standardFastDuration)
+
+        XCTAssertGreaterThan(shortAbsorption, standardAbsorption)
+        XCTAssertEqual(model.absorbedCarbs(of: 12, atTime: 0, absorptionTime: shortDuration), 0)
+        XCTAssertEqual(model.absorbedCarbs(of: 12, atTime: standardFastDuration, absorptionTime: shortDuration), 12)
+        XCTAssertEqual(model.absorbedCarbs(of: 12, atTime: standardFastDuration, absorptionTime: standardFastDuration), 12)
+    }
+}
 
 final class CycleTrackingStoreTests: XCTestCase {
     private var defaults: UserDefaults!
@@ -100,17 +161,70 @@ final class CycleTrackingStoreTests: XCTestCase {
         XCTAssertEqual(tracker.summary(on: lateJanuary).phaseTransitions!, [5.0 / 35, 19.0 / 35, 22.0 / 35])
     }
 
-    func testOpenPeriodStopsPredictingAfterTenUnconfirmedDays() {
+    func testOpenPeriodContinuesPredictingAfterTenUnconfirmedDays() {
         let today = calendar.startOfDay(for: Date())
         let start = calendar.date(byAdding: .day, value: -12, to: today)!
         let tracker = store([.init(startDate: start)])
 
         XCTAssertEqual(tracker.phase(for: calendar.date(byAdding: .day, value: 4, to: start)!), .period)
         XCTAssertEqual(tracker.cycleDay(on: today), 13)
-        XCTAssertNil(tracker.phase(for: today))
-        XCTAssertNil(tracker.marker(for: today))
-        XCTAssertNil(tracker.nextPeriodDate(from: today))
-        XCTAssertNil(tracker.phase(for: calendar.date(byAdding: .day, value: 1, to: today)!))
+        XCTAssertEqual(tracker.phase(for: today), .ovulation)
+        XCTAssertEqual(tracker.marker(for: today), .fertile)
+        XCTAssertEqual(tracker.nextPeriodDate(from: today), calendar.date(byAdding: .day, value: 28, to: start)!)
+        XCTAssertEqual(tracker.phase(for: calendar.date(byAdding: .day, value: 1, to: today)!), .ovulation)
+        XCTAssertNotNil(tracker.summary(on: today).phaseTransitions)
+    }
+
+    func testStartingPeriodKeepsFuturePhasesAndRepeatingCalendarPredictions() {
+        let today = calendar.startOfDay(for: Date())
+        let tracker = store([])
+        tracker.startPeriod(on: today)
+
+        for cycle in [0, 1, 2, 12] {
+            let offset = cycle * 28
+            let predictedStart = calendar.date(byAdding: .day, value: offset, to: today)!
+            let follicularDay = calendar.date(byAdding: .day, value: offset + 5, to: today)!
+            let ovulationDay = calendar.date(byAdding: .day, value: offset + 13, to: today)!
+            let lutealDay = calendar.date(byAdding: .day, value: offset + 15, to: today)!
+
+            XCTAssertEqual(tracker.calendarPhase(for: predictedStart), .period)
+            XCTAssertEqual(tracker.calendarMarker(for: predictedStart), .period)
+            XCTAssertEqual(tracker.calendarPhase(for: follicularDay), .follicular)
+            XCTAssertEqual(tracker.calendarPhase(for: ovulationDay), .ovulation)
+            XCTAssertEqual(tracker.calendarMarker(for: ovulationDay), .ovulation)
+            XCTAssertEqual(tracker.calendarPhase(for: lutealDay), .luteal)
+        }
+
+        XCTAssertEqual(tracker.daysUntilNextPeriod(from: today), 28)
+        XCTAssertEqual(tracker.summary(on: today).phaseTransitions!, [5.0 / 28, 12.0 / 28, 15.0 / 28])
+        XCTAssertTrue(tracker.isPeriodInProgress)
+        XCTAssertEqual(tracker.periodEntries.count, 1)
+        XCTAssertNil(tracker.periodEntries.first?.endDate)
+    }
+
+    func testLoggingPeriodEndUpdatesCurrentAndFuturePeriodEstimates() {
+        let today = calendar.startOfDay(for: Date())
+        let previousStart = calendar.date(byAdding: .day, value: -28, to: today)!
+        let previousEnd = calendar.date(byAdding: .day, value: 1, to: previousStart)!
+        let tracker = store([.init(startDate: previousStart, endDate: previousEnd)])
+        tracker.startPeriod(on: today)
+
+        let currentThirdDay = calendar.date(byAdding: .day, value: 2, to: today)!
+        let nextThirdDay = calendar.date(byAdding: .day, value: 30, to: today)!
+        XCTAssertEqual(tracker.periodLength, 2)
+        XCTAssertEqual(tracker.calendarPhase(for: currentThirdDay), .follicular)
+        XCTAssertEqual(tracker.calendarPhase(for: nextThirdDay), .follicular)
+
+        tracker.endCurrentPeriod(on: calendar.date(byAdding: .day, value: 7, to: today)!)
+
+        XCTAssertFalse(tracker.isPeriodInProgress)
+        XCTAssertEqual(tracker.periodLength, 5)
+        XCTAssertEqual(tracker.calendarPhase(for: currentThirdDay), .period)
+        XCTAssertEqual(tracker.calendarMarker(for: currentThirdDay), .period)
+        XCTAssertEqual(tracker.calendarPhase(for: nextThirdDay), .period)
+        XCTAssertEqual(tracker.calendarMarker(for: nextThirdDay), .period)
+        XCTAssertEqual(tracker.daysUntilNextPeriod(from: today), 28)
+        XCTAssertEqual(tracker.summary(on: today).phaseTransitions!, [8.0 / 28, 12.0 / 28, 15.0 / 28])
     }
 
     func testLongRecordedPeriodKeepsItsDaysAndSkipsEmptyFollicularPhase() {
