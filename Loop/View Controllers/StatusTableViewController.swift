@@ -1789,17 +1789,30 @@ final class StatusTableViewController: LoopChartsTableViewController {
         override func layoutSubviews() {
             super.layoutSubviews()
 
-            let imageFrame = graphicImageView.frame
+            guard let image = graphicImageView.image,
+                  image.size.width > 0, image.size.height > 0 else {
+                sensorButton.isHidden = true
+                return
+            }
+            sensorButton.isHidden = false
+
+            // Aspect fit centers the smaller banner inside the image view. Use
+            // the rendered artwork, rather than the full image-view frame, to
+            // keep the glucose-unit button directly over the sensor.
+            let imageBounds = graphicImageView.bounds
+            let imageScale = min(imageBounds.width / image.size.width, imageBounds.height / image.size.height)
+            let renderedSize = CGSize(width: image.size.width * imageScale, height: image.size.height * imageScale)
+            let renderedBounds = CGRect(x: imageBounds.midX - renderedSize.width / 2,
+                                        y: imageBounds.midY - renderedSize.height / 2,
+                                        width: renderedSize.width, height: renderedSize.height)
+            let imageFrame = graphicImageView.convert(renderedBounds, to: contentView)
             // The Dexcom G7 sensor center is located at 66.0% width and 61.5% height in the banner
             let centerX = imageFrame.minX + imageFrame.width * 0.660
             let centerY = imageFrame.minY + imageFrame.height * 0.615
-            let buttonSize = max(52, imageFrame.height * 0.52)
-            sensorButton.frame = CGRect(
-                x: centerX - buttonSize / 2,
-                y: centerY - buttonSize / 2,
-                width: buttonSize,
-                height: buttonSize
-            )
+            let verticalHitSpace = 2 * max(0, min(centerY - contentView.bounds.minY, contentView.bounds.maxY - centerY))
+            let buttonSize = min(max(52, imageFrame.height * 0.52), verticalHitSpace)
+            sensorButton.bounds.size = CGSize(width: buttonSize, height: buttonSize)
+            sensorButton.center = CGPoint(x: centerX, y: centerY)
             sensorButton.layer.cornerRadius = buttonSize / 2
             contentView.bringSubviewToFront(sensorButton)
         }
@@ -2862,7 +2875,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case .branding:
             let availableWidth = max(0, tableView.bounds.width - 20)
             let graphicAspectRatio: CGFloat = 342.0 / 1024.0
-            return ceil(availableWidth * graphicAspectRatio)
+            let graphicScale: CGFloat = 0.64
+            return ceil(availableWidth * graphicAspectRatio * graphicScale)
         case .charts:
             if isCollapsedChartRow(chartRow(at: indexPath)) {
                 return 74
