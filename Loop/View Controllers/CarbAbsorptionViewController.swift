@@ -316,8 +316,7 @@ final class CarbAbsorptionViewController: LoopChartsTableViewController, Identif
                 })
             }
 
-            let alpha: CGFloat = charts.gestureRecognizer?.state == .possible ? 1 : 0
-            cell.setAlpha(alpha: alpha)
+            cell.setAlpha(alpha: chartHeaderAlpha)
 
             cell.setSubtitleTextColor(color: UIColor.secondaryLabel)
 

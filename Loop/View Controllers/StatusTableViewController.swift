@@ -259,13 +259,13 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 _ = self.deviceManager.setupPumpManager(withIdentifier: "MockPumpManager", initialSettings: settings, prefersToSkipUserInteraction: true)
             }
             #endif
-            DispatchQueue.main.async {
-                self.log.debug("[reloadData] after HealthKit authorization")
-                self.reloadData()
-            }
         }
 
         onscreen = true
+
+        // viewWillAppear can run before the table is attached to a window,
+        // when reloadData deliberately defers pending refreshes.
+        reloadData()
 
         deviceManager.analyticsServicesManager.didDisplayStatusScreen()
 
@@ -1065,7 +1065,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         log.debug("Reloading data with context: %@", String(describing: refreshContext))
 
         let currentContext = refreshContext
-        var retryContext: Set<RefreshContext> = []
+        let retryContext = Locked<Set<RefreshContext>>([])
         refreshContext = []
         reloading = true
 
@@ -1088,7 +1088,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             // Retry this refresh again if predicted glucose isn't available
             if state.predictedGlucose == nil {
-                retryContext.update(with: .status)
+                retryContext.mutate { $0.update(with: .status) }
             }
 
             /// Update the status HUDs immediately
@@ -1117,7 +1117,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                     switch result {
                     case .failure(let error):
                         self.log.error("CarbStore failed to get carbs on board values: %{public}@", String(describing: error))
-                        retryContext.update(with: .carbs)
+                        retryContext.mutate { $0.update(with: .carbs) }
                         cobValues = []
                     case .success(let values):
                         cobValues = values
@@ -1137,6 +1137,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 switch result {
                 case .failure(let error):
                     self.log.error("Failure getting glucose samples: %{public}@", String(describing: error))
+                    retryContext.mutate { $0.update(with: .glucose) }
                     glucoseSamples = nil
                 case .success(let samples):
                     glucoseSamples = samples
@@ -1151,7 +1152,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 switch result {
                 case .failure(let error):
                     self.log.error("DoseStore failed to get insulin on board values: %{public}@", String(describing: error))
-                    retryContext.update(with: .insulin)
+                    retryContext.mutate { $0.update(with: .insulin) }
                     iobValues = []
                 case .success(let values):
                     iobValues = values
@@ -1164,7 +1165,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 switch result {
                 case .failure(let error):
                     self.log.error("DoseStore failed to get normalized dose entries: %{public}@", String(describing: error))
-                    retryContext.update(with: .insulin)
+                    retryContext.mutate { $0.update(with: .insulin) }
                     doseEntries = []
                 case .success(let doses):
                     doseEntries = doses
@@ -1176,7 +1177,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             deviceManager.doseStore.getTotalUnitsDelivered(since: Calendar.current.startOfDay(for: Date())) { (result) in
                 switch result {
                 case .failure:
-                    retryContext.update(with: .insulin)
+                    retryContext.mutate { $0.update(with: .insulin) }
                     totalDelivery = nil
                 case .success(let total):
                     totalDelivery = total.value
@@ -1302,7 +1303,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
             self.reloading = false
             let reloadNow = !self.refreshContext.isEmpty
-            self.refreshContext.formUnion(retryContext)
+            self.refreshContext.formUnion(retryContext.value)
 
             // Trigger a reload if new context exists.
             if reloadNow {
@@ -2534,8 +2535,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 cell.setExpandedAppearance()
             }
 
-            let alpha: CGFloat = charts.gestureRecognizer?.state == .possible ? 1 : 0
-            cell.setAlpha(alpha: alpha)
+            cell.setAlpha(alpha: chartHeaderAlpha)
 
             return cell
         case .status:
@@ -2735,6 +2735,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
             configureCollapsedSummary(cell, for: row)
         } else {
             cell.setExpandedAppearance()
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        super.tableView(tableView, willDisplay: cell, forRowAt: indexPath)
+        if let cell = cell as? ChartTableViewCell {
+            // Prefetched cells may have been configured before the latest data
+            // arrived. Refresh them when they actually become visible.
+            refreshChartCellPresentation(cell, at: indexPath)
+            cell.reloadChart()
         }
     }
 
