@@ -3216,12 +3216,6 @@
     "%lld" : {
 
     },
-    "Preparing photo…" : {
-      "comment" : "Progress while normalizing and compressing a meal photo"
-    },
-    "This meal chat is full. You can still edit the form and continue." : {
-      "comment" : "Meal chat limit notice; the reviewed form remains usable"
-    },
     "⚠️" : {
       "localizations" : {
         "da" : {
@@ -8352,6 +8346,9 @@
       }
     },
     "Ask about this meal…" : {
+
+    },
+    "Ask about your cycle…" : {
 
     },
     "Ask Mochi anything…" : {
@@ -21453,9 +21450,6 @@
     "Higher effort can take longer and cost more. Model default lets the provider choose." : {
 
     },
-    "Hormone shifts may change insulin sensitivity. Some people notice higher glucose." : {
-      "comment" : "Insulin sensitivity insight for the ovulation phase"
-    },
     "How can I silence non-Critical Alerts?" : {
       "localizations" : {
         "da" : {
@@ -23036,15 +23030,6 @@
           }
         }
       }
-    },
-    "INSULIN SENSITIVITY" : {
-      "comment" : "Cycle phase insulin sensitivity insight heading"
-    },
-    "Insulin sensitivity is often higher, so insulin may have a stronger effect." : {
-      "comment" : "Insulin sensitivity insight for the follicular phase"
-    },
-    "Insulin sensitivity may decrease, especially before your period, so glucose may run higher." : {
-      "comment" : "Insulin sensitivity insight for the luteal phase"
     },
     "Insulin Sensitivity Schedule" : {
       "comment" : "Details for configuration error when insulin sensitivity schedule is missing",
@@ -27251,6 +27236,9 @@
     "Mochi" : {
 
     },
+    "Mochi · Cycle" : {
+
+    },
     "Mochi is looking…" : {
 
     },
@@ -31305,6 +31293,9 @@
         }
       }
     },
+    "Preparing photo…" : {
+      "comment" : "Progress while normalizing and compressing a meal photo"
+    },
     "Previous month" : {
       "comment" : "Cycle calendar navigation"
     },
@@ -34806,6 +34797,9 @@
         }
       }
     },
+    "Send cycle question" : {
+
+    },
     "Send meal question" : {
 
     },
@@ -36495,6 +36489,9 @@
       "comment" : "Accessibility hint for glucose unit toggle"
     },
     "Take another photo" : {
+
+    },
+    "Talk with Mochi about your cycle and T1D" : {
 
     },
     "Tap here to set up a CGM" : {
@@ -38476,6 +38473,9 @@
           }
         }
       }
+    },
+    "This meal chat is full. You can still edit the form and continue." : {
+      "comment" : "Meal chat limit notice; the reviewed form remains usable"
     },
     "This option only applies when Loop's Dosing Strategy is set to Automatic Bolus." : {
       "comment" : "String shown when glucose based partial application cannot be enabled because dosing strategy is not set to Automatic Bolus",
@@ -40999,9 +40999,6 @@
     "Use your own OpenRouter key and credits. Your key stays in this device’s Keychain. Choose a model that supports tool calling." : {
 
     },
-    "Usual cycle: %d days" : {
-      "comment" : "Usual cycle length after the estimated next period has passed"
-    },
     "Walsh" : {
       "comment" : "Title of insulin model setting",
       "extractionState" : "manual",
@@ -42288,9 +42285,6 @@
     "You control what Mochi remembers and shares." : {
 
     },
-    "You may be more sensitive to insulin as your period begins." : {
-      "comment" : "Insulin sensitivity insight for the menstrual period phase"
-    },
     "You may not get sound, visual or vibration alerts regarding critical safety information.\n\nTo fix the issue, tap ‘Settings’ and make sure Notifications, Critical Alerts and Time Sensitive Notifications are turned ON." : {
       "comment" : "Format for Notifications permissions disabled alert body. (1: app name)",
       "localizations" : {
@@ -42456,6 +42450,9 @@
           }
         }
       }
+    },
+    "Your cycle, everyday wellbeing and T1D." : {
+
     },
     "Your glucose is below %1$@. Are you sure you want to bolus?" : {
       "comment" : "Format string for simple bolus screen warning when glucose is below glucose warning limit.",

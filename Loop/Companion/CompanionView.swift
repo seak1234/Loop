@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import LoopKitUI
 
@@ -140,6 +141,201 @@ struct MochiAvatar: View {
     }
 }
 
+private struct MochiCompactCardLabel: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            MochiAvatar(size: 44)
+            Text(text)
+                .font(.caption).foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(MochiStyle.blue)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(MochiStyle.blue.opacity(0.18)))
+    }
+}
+
+@MainActor
+struct CompanionCycleCard: View {
+    @ObservedObject private var controller = CompanionController.shared
+    @State private var phaseCards: [CompanionCycleCardPhase: CompanionCycleCardMessage] = [:]
+    @State private var now = Date()
+    @State private var fallbackIndex = Int.random(in: 0..<2)
+    @State private var discussion: CompanionCycleCardMessage?
+    private let dayTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+
+    private var phase: CompanionCycleCardPhase { controller.cycleCardPhase(on: now) }
+
+    private var message: CompanionCycleCardMessage {
+        let fallback = CompanionCycleCardMessage.topics(for: phase)
+        return phaseCards[phase] ?? fallback[fallbackIndex % fallback.count]
+    }
+
+    private var generationIdentity: String {
+        "\(controller.hasKey):\(controller.state.model):\(controller.state.reasoningEffort?.rawValue ?? "default"):\(controller.state.personality)"
+    }
+
+    var body: some View {
+        Button { discussion = message } label: {
+            MochiCompactCardLabel(text: message.text)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(message.text)
+        .accessibilityHint("Talk with Mochi about your cycle and T1D")
+        .task(id: generationIdentity) {
+            phaseCards = [:]
+            guard controller.hasKey else { return }
+            do { phaseCards = try await controller.makeCycleCards() }
+            catch { /* Keep the current phase's invitation when generation is unavailable. */ }
+        }
+        .onReceive(CycleTrackingStore.shared.$periodEntries) { _ in now = Date() }
+        .onReceive(dayTimer) { now = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in now = Date() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in now = Date() }
+        .sheet(item: $discussion) { topic in
+            CompanionCycleChat(openingQuestion: topic.question)
+        }
+    }
+}
+
+@MainActor
+private struct CompanionCycleChat: View {
+    let openingQuestion: String
+    @ObservedObject private var controller = CompanionController.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var turns: [CompanionMessage] = []
+    @State private var input = ""
+    @State private var requestID: UUID?
+    @State private var error: String?
+    @State private var showsSettings = false
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            Text("Your cycle, everyday wellbeing and T1D.")
+                                .font(.footnote).foregroundColor(.secondary)
+                            ForEach(turns) { turn in
+                                HStack {
+                                    if turn.role == "user" { Spacer(minLength: 28) }
+                                    Text(turn.text)
+                                        .textSelection(.enabled)
+                                        .padding(12)
+                                        .foregroundColor(turn.role == "user" ? .white : .primary)
+                                        .background(turn.role == "user" ? MochiStyle.blue : Color(UIColor.secondarySystemGroupedBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    if turn.role != "user" { Spacer(minLength: 28) }
+                                }
+                            }
+                            if requestID != nil {
+                                HStack {
+                                    ProgressView("Mochi is thinking…")
+                                    Spacer()
+                                    Button("Stop") { requestID = nil }
+                                }.font(.footnote)
+                            }
+                            if let error { Text(error).font(.footnote).foregroundColor(.secondary) }
+                            Color.clear.frame(height: 1).id("bottom")
+                        }.padding()
+                    }
+                    .onChange(of: turns.count) { _ in
+                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                }
+                if !controller.hasKey {
+                    Button("Connect OpenRouter to chat") { showsSettings = true }.padding(10)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        cycleShortcut("Cycle phases", question: CompanionCycleCardMessage.topics[0].question)
+                        cycleShortcut("Mood & energy", question: CompanionCycleCardMessage.topics[1].question)
+                        cycleShortcut("Cycle & T1D", question: CompanionCycleCardMessage.topics[5].question)
+                    }.padding(.horizontal)
+                }
+                HStack(spacing: 8) {
+                    TextField("Ask about your cycle…", text: $input)
+                        .textFieldStyle(.roundedBorder)
+                        .submitLabel(.send)
+                        .onSubmit(sendInput)
+                    Button(action: sendInput) { Image(systemName: "paperplane.fill").padding(10) }
+                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || requestID != nil || !controller.hasKey)
+                        .accessibilityLabel("Send cycle question")
+                }.padding()
+            }
+            .background(Color(UIColor.systemGroupedBackground))
+            .navigationTitle("Mochi · Cycle")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 6) { MochiAvatar(size: 30); Text("Mochi · Cycle").font(.headline) }
+                }
+                ToolbarItem(placement: .navigationBarLeading) { Button("Close") { dismiss() } }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showsSettings = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .accessibilityLabel("Mochi settings")
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .tint(MochiStyle.blue)
+        .task(id: controller.hasKey) {
+            if controller.hasKey, turns.isEmpty { _ = send(openingQuestion) }
+        }
+        .task(id: requestID) {
+            guard let pendingID = requestID else { return }
+            defer { if requestID == pendingID { requestID = nil } }
+            do {
+                let reply = try await controller.replyToCycleConversation(turns)
+                try Task.checkCancellation()
+                guard requestID == pendingID else { return }
+                turns.append(reply)
+            } catch is CancellationError { }
+            catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+        }
+        .onDisappear { requestID = nil }
+        .onChange(of: controller.state.allowHealthData) { allowed in
+            requestID = nil
+            if !allowed { turns.removeAll { $0.includesHealthData == true } }
+        }
+        .sheet(isPresented: $showsSettings) { CompanionSettingsView(controller: controller) }
+    }
+
+    private func cycleShortcut(_ title: String, question: String) -> some View {
+        Button(title) { _ = send(question) }
+            .font(.footnote)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(MochiStyle.blue.opacity(0.1), in: Capsule())
+            .disabled(requestID != nil || !controller.hasKey)
+    }
+
+    private func sendInput() {
+        if send(input) { input = "" }
+    }
+
+    private func send(_ text: String) -> Bool {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard requestID == nil, controller.hasKey, !text.isEmpty else { return false }
+        guard text.count <= 3000, turns.count < 40 else {
+            error = "Shorten your message or reopen Mochi to start a new cycle conversation."
+            return false
+        }
+        error = nil
+        turns.append(CompanionMessage(role: "user", text: text, includesHealthData: controller.state.allowHealthData))
+        requestID = UUID()
+        return true
+    }
+}
+
 @MainActor
 struct CompanionDashboardCard: View {
     @ObservedObject private var controller = CompanionController.shared
@@ -155,22 +351,8 @@ struct CompanionDashboardCard: View {
             controller.prepareDashboardDiscussion(now: dashboardNow)
             open()
         } label: {
-            HStack(spacing: 10) {
-                MochiAvatar(size: 44)
-                Text(controller.dashboardText(now: dashboardNow))
-                    .font(.footnote).foregroundColor(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(MochiStyle.blue)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color(UIColor.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(MochiStyle.blue.opacity(0.18)))
-            .padding(.horizontal, 16).padding(.vertical, 4)
+            MochiCompactCardLabel(text: controller.dashboardText(now: dashboardNow))
+                .padding(.horizontal, 16).padding(.vertical, 4)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(controller.dashboardText(now: dashboardNow))

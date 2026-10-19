@@ -31,7 +31,8 @@ private final class CycleProviderProbe: CompanionProvider {
             let allowed = payload["allowed_message_kinds"] as? [String] ?? []
             let kind = allowed.contains("curiosity") ? "curiosity" : (allowed.first ?? "motivation")
             let name = payload["address_by_name_this_time"] as? Bool == true ? (payload["preferred_name"] as? String ?? "") : ""
-            let line = (name.isEmpty ? "" : name + ", ") + "a fresh diabetes question for visit \(requestCount)?"
+            let greeting = payload["morning_greeting_required"] as? Bool == true ? (name.isEmpty ? "Good morning! " : "Good morning, " + name + "! ") : ""
+            let line = greeting + "a fresh diabetes question for visit \(requestCount)?"
             let json: [String: Any] = ["text": line, "kind": kind, "question": "What could we learn about this?", "factID": kind == "fact" ? (fact["id"] ?? NSNull()) : NSNull(), "topicID": NSNull()]
             let response = String(decoding: try JSONSerialization.data(withJSONObject: json), as: UTF8.self)
             return CompanionCompletion(message: [:], text: response, calls: [])
@@ -100,6 +101,147 @@ final class CompanionCycleIntegrationTests: XCTestCase {
 }
 
 @MainActor
+final class CompanionCycleSurfaceTests: XCTestCase {
+    private func fixture(sharing: Bool) throws -> (CompanionController, CycleProviderProbe, CycleTrackingStore, () -> Void) {
+        let suite = "CycleSurfaceTests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        let tracker = CycleTrackingStore(defaults: defaults)
+        tracker.startPeriod(on: Calendar.current.date(byAdding: .day, value: -2, to: Date())!)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = CompanionStateStore(url: directory.appendingPathComponent("state.json"))
+        var state = CompanionState()
+        state.allowHealthData = sharing
+        state.messages = [CompanionMessage(role: "user", text: "PRIVATE_GENERAL_CHAT_MARKER")]
+        try store.save(state)
+        let provider = CycleProviderProbe()
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker,
+                                             keyReader: { "test-key-never-transmitted" })
+        return (controller, provider, tracker, {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        })
+    }
+
+    func testCycleCardIsScopedAndDoesNotSendPersonalHistoryOrPeriodDates() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let templates = Dictionary(uniqueKeysWithValues: CompanionCycleCardPhase.allCases.map { ($0.rawValue, CompanionCycleCardMessage.topics(for: $0)[0]) })
+        let response = String(decoding: try JSONEncoder().encode(templates), as: UTF8.self)
+        provider.handler = { _, _ in
+            CompanionCompletion(message: [:], text: response, calls: [])
+        }
+        let cards = try await controller.makeCycleCards()
+        XCTAssertEqual(cards.count, 5)
+        XCTAssertEqual(cards[.period]?.text, templates["period"]?.text)
+        XCTAssertEqual(cards[.luteal]?.text, templates["luteal"]?.text)
+        XCTAssertTrue(provider.tools.isEmpty)
+        XCTAssertEqual(provider.messages.count, 2)
+        let prompt = try XCTUnwrap(provider.messages.first?["content"] as? String)
+        XCTAssertTrue(prompt.contains("ONLY about menstrual cycles"))
+        let request = String(describing: provider.messages)
+        XCTAssertFalse(request.contains("PRIVATE_GENERAL_CHAT_MARKER"))
+        XCTAssertFalse(request.contains("recentPeriods"))
+        XCTAssertEqual(controller.state.messages.count, 1)
+    }
+
+    func testDashboardMorningFallbackIsWelcomingBeforeAnyNetworkReply() throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let morning = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date())!
+        let text = controller.dashboardText(now: morning)
+        XCTAssertTrue(text.hasPrefix("Good morning!"))
+        XCTAssertFalse(text.hasPrefix("Michelle"))
+        XCTAssertTrue(CompanionDashboardRefresh.isConcise(text))
+        XCTAssertEqual(provider.requestCount, 0)
+    }
+
+    func testCardPhaseMatchesCurrentAndProjectedCycleAndUpdatedPeriodDates() throws {
+        let (controller, _, tracker, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        for (offset, phase) in [(0, CompanionCycleCardPhase.period), (3, .follicular), (10, .ovulation), (13, .luteal),
+                                (28, .period), (31, .follicular), (38, .ovulation), (41, .luteal)] {
+            let date = calendar.date(byAdding: .day, value: offset, to: today)!
+            XCTAssertEqual(controller.cycleCardPhase(on: date), phase)
+        }
+        let oldStart = calendar.date(byAdding: .day, value: -20, to: today)!
+        let oldEnd = calendar.date(byAdding: .day, value: -16, to: today)!
+        tracker.replacePeriodEntries(with: [.init(startDate: oldStart, endDate: oldEnd)])
+        XCTAssertEqual(controller.cycleCardPhase(on: today), .luteal)
+        tracker.startPeriod(on: today)
+        XCTAssertEqual(controller.cycleCardPhase(on: today), .period)
+        tracker.replacePeriodEntries(with: [])
+        XCTAssertEqual(controller.cycleCardPhase(on: today), .unknown)
+    }
+
+    func testPhaseCardValidationRejectsMissingOrUnrelatedPhaseContent() throws {
+        var templates = Dictionary(uniqueKeysWithValues: CompanionCycleCardPhase.allCases.map { ($0.rawValue, CompanionCycleCardMessage.topics(for: $0)[0]) })
+        let valid = String(decoding: try JSONEncoder().encode(templates), as: UTF8.self)
+        XCTAssertEqual(try CompanionCycleCardMessage.decodePhaseCards(valid).count, 5)
+        templates["luteal"] = nil
+        let missing = String(decoding: try JSONEncoder().encode(templates), as: UTF8.self)
+        XCTAssertThrowsError(try CompanionCycleCardMessage.decodePhaseCards(missing))
+        templates["luteal"] = CompanionCycleCardMessage.topics[0]
+        let generic = String(decoding: try JSONEncoder().encode(templates), as: UTF8.self)
+        XCTAssertThrowsError(try CompanionCycleCardMessage.decodePhaseCards(generic))
+    }
+
+    func testCycleChatWithoutSharingKeepsOnlyItsOwnConversation() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let reply = try await controller.replyToCycleConversation([
+            CompanionMessage(role: "assistant", text: "PRIVATE_OLD_HEALTH_MARKER", includesHealthData: true),
+            CompanionMessage(role: "user", text: "How does my cycle relate to T1D?")
+        ])
+        XCTAssertEqual(reply.includesHealthData, false)
+        XCTAssertEqual(provider.messages.count, 2)
+        XCTAssertTrue(provider.tools.isEmpty)
+        let request = String(describing: provider.messages)
+        XCTAssertFalse(request.contains("PRIVATE_GENERAL_CHAT_MARKER"))
+        XCTAssertFalse(request.contains("PRIVATE_OLD_HEALTH_MARKER"))
+        XCTAssertFalse(request.contains("recordedPeriodCount"))
+        XCTAssertEqual(controller.state.messages.count, 1)
+    }
+
+    func testCycleChatWithSharingIncludesRealTrackerAndDisplayedEstimate() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let reply = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Tell me about this phase.")])
+        XCTAssertEqual(reply.includesHealthData, true)
+        XCTAssertTrue(provider.tools.isEmpty)
+        let snapshot = try XCTUnwrap(provider.messages.dropFirst().first?["content"] as? String)
+        XCTAssertTrue(snapshot.contains("\"recordedPeriodCount\":1"))
+        XCTAssertTrue(snapshot.contains("\"cycleDay\":3"))
+        XCTAssertTrue(snapshot.contains("continuing calendar estimate"))
+        XCTAssertFalse(String(describing: provider.messages).contains("PRIVATE_GENERAL_CHAT_MARKER"))
+    }
+
+    func testCycleChatRejectsUnexpectedActions() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        provider.handler = { _, _ in
+            CompanionCompletion(message: [:], text: "", calls: [CompanionToolCall(id: "unexpected", name: "propose_carb_entry", arguments: Data("{}".utf8))])
+        }
+        var rejected = false
+        do { _ = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "What is PMS?")]) }
+        catch { rejected = true }
+        XCTAssertTrue(rejected)
+        XCTAssertTrue(controller.state.actions.isEmpty)
+    }
+
+    func testCycleCardRejectsOverlongOrEmptyGeneratedMessages() throws {
+        XCTAssertThrowsError(try CompanionCycleCardMessage.decode(#"{"text":"","question":"What is PMS?"}"#))
+        let invalid = String(decoding: try JSONEncoder().encode(CompanionCycleCardMessage(text: String(repeating: "a", count: 141), question: "What is PMS?")), as: UTF8.self)
+        XCTAssertThrowsError(try CompanionCycleCardMessage.decode(invalid))
+        for topic in CompanionCycleCardMessage.topics {
+            let encoded = String(decoding: try JSONEncoder().encode(topic), as: UTF8.self)
+            XCTAssertEqual(try CompanionCycleCardMessage.decode(encoded).question, topic.question)
+        }
+    }
+}
+
+@MainActor
 final class CompanionDashboardIntegrationTests: XCTestCase {
     private func fixture(shareHealth: Bool) throws -> (CompanionStateStore, CycleTrackingStore, () -> Void) {
         let suite = "CompanionDashboardTests." + UUID().uuidString
@@ -149,7 +291,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(context.contains("recordedPeriodCount"))
         XCTAssertTrue(context.contains("local_time"))
         XCTAssertTrue(context.contains("time_zone"))
-        XCTAssertEqual(try store.load().dashboardMessage?.text, "a fresh diabetes question for visit 1?")
+        XCTAssertTrue(try store.load().dashboardMessage?.text.hasSuffix("a fresh diabetes question for visit 1?") == true)
         XCTAssertTrue(controller.state.messages.isEmpty)
         controller.requestDashboardRefresh(now: start.addingTimeInterval(60))
         XCTAssertEqual(provider.requestCount, 1)

@@ -132,13 +132,41 @@ final class CompanionCoreTests: XCTestCase {
     }
 
     func testDashboardNamesAndTapQuestionsAreValidated() throws {
-        let raw = #"{"text":"Michelle, want to explore what makes mornings different?","kind":"curiosity","question":"What can affect glucose in the morning?","factID":null,"topicID":null}"#
+        let raw = #"{"text":"Good morning, Michelle! What makes mornings different?","kind":"curiosity","question":"What can affect glucose in the morning?","factID":null,"topicID":null}"#
         XCTAssertNoThrow(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
         XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: [], name: "Michelle", useName: false))
         XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.fact], factID: "fact", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
-        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: ["Michelle, want to explore what makes mornings different!"], name: "Michelle", useName: true))
-        let banana = raw.replacingOccurrences(of: "Michelle, want to explore what makes mornings different?", with: "Can meals feel more predictable?")
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: ["Good morning, Michelle! What makes mornings different!"], name: "Michelle", useName: true))
+        let banana = raw.replacingOccurrences(of: "Good morning, Michelle! What makes mornings different?", with: "Can meals feel more predictable?")
         XCTAssertNoThrow(try CompanionDashboardSuggestion.decode(banana, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: [], name: "An", useName: false))
+    }
+
+    func testDashboardRejectsBareNameAndRequiresMorningGreetingWhenDue() throws {
+        let raw = #"{"text":"Michelle, let's explore insulin.","kind":"curiosity","question":"How does insulin work?","factID":null,"topicID":null}"#
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
+        let nameOnly = raw.replacingOccurrences(of: "Michelle, let's explore insulin.", with: "Michelle!")
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(nameOnly, allowedKinds: [.curiosity], factID: "", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
+        let ordinary = raw.replacingOccurrences(of: "Michelle, let's explore insulin.", with: "Let's explore how insulin works.")
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(ordinary, allowedKinds: [.curiosity], factID: "", topicIDs: [], recentTexts: [], name: "", useName: false, morningGreetingRequired: true))
+        let welcome = raw.replacingOccurrences(of: "Michelle, let's explore insulin.", with: "Good morning, Michelle! Let's explore how insulin works.")
+        XCTAssertNoThrow(try CompanionDashboardSuggestion.decode(welcome, allowedKinds: [.curiosity], factID: "", topicIDs: [], recentTexts: [], name: "Michelle", useName: true, morningGreetingRequired: true))
+    }
+
+    func testMorningGreetingUsesLocalTimeAndIsDueOncePerDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Detroit")!
+        func date(_ day: Int, _ hour: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))!
+        }
+        XCTAssertFalse(CompanionDashboardGreeting.isDue(lastGreeting: nil, now: date(19, 4), calendar: calendar))
+        XCTAssertTrue(CompanionDashboardGreeting.isDue(lastGreeting: nil, now: date(19, 5), calendar: calendar))
+        XCTAssertTrue(CompanionDashboardGreeting.isDue(lastGreeting: date(18, 9), now: date(19, 11), calendar: calendar))
+        XCTAssertFalse(CompanionDashboardGreeting.isDue(lastGreeting: date(19, 7), now: date(19, 11), calendar: calendar))
+        XCTAssertFalse(CompanionDashboardGreeting.isDue(lastGreeting: nil, now: date(19, 12), calendar: calendar))
+        let morning = date(19, 9)
+        let cached = CompanionDashboardMessage(text: "Let's explore insulin.", generatedAt: morning.addingTimeInterval(-60), includesHealthData: false)
+        XCTAssertTrue(CompanionDashboardRefresh.isDue(message: cached, lastAttempt: nil, dataChanged: false, now: morning, morningGreetingRequired: true))
+        XCTAssertFalse(CompanionDashboardRefresh.isDue(message: cached, lastAttempt: morning.addingTimeInterval(-60), dataChanged: false, now: morning, morningGreetingRequired: true))
     }
 
     func testNameDefaultsAndDashboardMemoryLoadFromLegacyState() throws {

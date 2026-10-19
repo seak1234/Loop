@@ -349,6 +349,88 @@ struct CompanionTopic: Codable, Equatable, Identifiable {
     }
 }
 
+enum CompanionCycleCardPhase: String, CaseIterable {
+    case period, follicular, ovulation, luteal, unknown
+}
+
+struct CompanionCycleCardMessage: Codable, Identifiable {
+    var text: String
+    var question: String
+    var id: String { question }
+
+    static let topics = [
+        Self(text: "Let's get to know your cycle, one phase at a time.", question: "What happens during the different phases of a menstrual cycle?"),
+        Self(text: "Mood, energy and your cycle: there's plenty to explore.", question: "How can my menstrual cycle relate to mood and energy?"),
+        Self(text: "Curious about sleep and cravings around your period?", question: "How can sleep and cravings change around a period?"),
+        Self(text: "Let's talk about period comfort and everyday routines.", question: "What can help me feel more comfortable during my period?"),
+        Self(text: "What can a calendar tell you about ovulation?", question: "What can cycle tracking estimate about ovulation, and what can't it confirm?"),
+        Self(text: "Your cycle and T1D belong in the same conversation.", question: "How can menstrual-cycle changes affect glucose with type 1 diabetes?"),
+        Self(text: "Wondering what to notice in your glucose around your period?", question: "What could I track to understand my cycle and glucose patterns with T1D?"),
+        Self(text: "Some cycles keep their own schedule. Let's explore that.", question: "What does an irregular menstrual cycle mean, and when should I ask for advice?")
+    ]
+
+    static func topics(for phase: CompanionCycleCardPhase) -> [Self] {
+        switch phase {
+        case .period:
+            return [
+                Self(text: "Period phase: let's talk comfort, energy and everyday routines.", question: "What can I pay attention to for comfort and wellbeing during the period phase?"),
+                Self(text: "Period phase and T1D: what might be useful to notice in your glucose?", question: "What could I track about glucose and how I feel during the period phase with T1D?")
+            ]
+        case .follicular:
+            return [
+                Self(text: "Follicular phase: curious about energy, mood and your everyday rhythm?", question: "What can I notice about energy and mood during the follicular phase?"),
+                Self(text: "Follicular phase and T1D: let's explore this part of the cycle.", question: "How can the follicular phase relate to glucose and insulin sensitivity with T1D?")
+            ]
+        case .ovulation:
+            return [
+                Self(text: "Estimated ovulation phase: what can your calendar tell you?", question: "What can a tracker estimate about the ovulation phase, and what can't it confirm?"),
+                Self(text: "Around estimated ovulation: let's talk about your cycle and T1D.", question: "What could I notice about glucose and how I feel around estimated ovulation with T1D?")
+            ]
+        case .luteal:
+            return [
+                Self(text: "Luteal phase: curious about sleep, cravings or mood before your period?", question: "How can sleep, cravings and mood relate to the luteal phase before a period?"),
+                Self(text: "Luteal phase and T1D: what would be useful to notice before your period?", question: "How can the luteal phase relate to glucose and insulin sensitivity with T1D?")
+            ]
+        case .unknown:
+            return [Self(text: "Let's get to know your cycle. Log a period start to follow its phases.", question: "How can logging period dates help me understand my cycle and T1D?")]
+        }
+    }
+
+    static func decode(_ text: String) throws -> Self {
+        guard text.utf8.count <= 2000 else { throw CompanionError.invalid("Cycle message is too long.") }
+        let message = try JSONDecoder().decode(Self.self, from: Data(text.utf8))
+        try message.validate()
+        return message
+    }
+
+    static func decodePhaseCards(_ text: String) throws -> [CompanionCycleCardPhase: Self] {
+        guard text.utf8.count <= 10000 else { throw CompanionError.invalid("Cycle messages are too long.") }
+        let cards = try JSONDecoder().decode([String: Self].self, from: Data(text.utf8))
+        var result: [CompanionCycleCardPhase: Self] = [:]
+        for phase in CompanionCycleCardPhase.allCases {
+            guard let card = cards[phase.rawValue] else { throw CompanionError.invalid("Mochi didn't return every cycle phase.") }
+            try card.validate()
+            if phase != .unknown {
+                guard card.text.localizedCaseInsensitiveContains(phase.rawValue),
+                      card.question.localizedCaseInsensitiveContains(phase.rawValue) else {
+                    throw CompanionError.invalid("Mochi's cycle message didn't match its phase.")
+                }
+            }
+            result[phase] = card
+        }
+        return result
+    }
+
+    private func validate() throws {
+        let message = self
+        guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              message.text.count <= 140, message.text.split(whereSeparator: \.isWhitespace).count <= 24,
+              !message.text.contains("\n"),
+              !message.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              message.question.count <= 180 else { throw CompanionError.invalid("Mochi couldn't create a short cycle message.") }
+    }
+}
+
 struct CompanionDashboardMessage: Codable {
     var text: String
     var generatedAt: Date
@@ -606,7 +688,8 @@ struct CompanionDashboardSuggestion: Decodable {
     let topicID: UUID?
 
     static func decode(_ raw: String, allowedKinds: [CompanionDashboardKind], factID: String,
-                       topicIDs: Set<UUID>, recentTexts: [String], name: String, useName: Bool) throws -> Self {
+                       topicIDs: Set<UUID>, recentTexts: [String], name: String, useName: Bool,
+                       morningGreetingRequired: Bool = false) throws -> Self {
         guard raw.utf8.count <= 8000, let data = raw.data(using: .utf8),
               let value = try? JSONDecoder().decode(Self.self, from: data),
               allowedKinds.contains(value.kind), CompanionDashboardRefresh.isConcise(value.text),
@@ -623,6 +706,13 @@ struct CompanionDashboardSuggestion: Decodable {
             let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: name) + "(?![\\p{L}\\p{N}])"
             let usesName = value.text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
             guard usesName == useName else { throw CompanionError.invalid("Mochi couldn’t personalize this message naturally.") }
+            let bareName = "^\\s*" + NSRegularExpression.escapedPattern(for: name) + "(?![\\p{L}\\p{N}])"
+            guard value.text.range(of: bareName, options: [.regularExpression, .caseInsensitive]) == nil else {
+                throw CompanionError.invalid("Mochi should use a friendly greeting instead of a bare name.")
+            }
+        }
+        guard !morningGreetingRequired || CompanionDashboardGreeting.isMorningGreeting(value.text) else {
+            throw CompanionError.invalid("Mochi's morning message needs a good-morning greeting.")
         }
         return value
     }
@@ -632,8 +722,22 @@ struct CompanionDashboardSuggestion: Decodable {
     }
 }
 
+enum CompanionDashboardGreeting {
+    static func isMorning(_ date: Date, calendar: Calendar = .current) -> Bool {
+        (5..<12).contains(calendar.component(.hour, from: date))
+    }
+
+    static func isMorningGreeting(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("good morning")
+    }
+
+    static func isDue(lastGreeting: Date?, now: Date, calendar: Calendar = .current) -> Bool {
+        isMorning(now, calendar: calendar) && (lastGreeting.map { !calendar.isDate($0, inSameDayAs: now) } ?? true)
+    }
+}
+
 enum CompanionDashboardRefresh {
-    static let styleVersion = 9
+    static let styleVersion = 10
     static let maximumCharacters = 140
     static let maximumWords = 24
 
@@ -645,8 +749,10 @@ enum CompanionDashboardRefresh {
     static let minimumInterval: TimeInterval = 5 * 60
     static let maximumDisplayAge: TimeInterval = 30 * 60
 
-    static func isDue(message: CompanionDashboardMessage?, lastAttempt: Date?, dataChanged: Bool, now: Date, calendar: Calendar = .current) -> Bool {
+    static func isDue(message: CompanionDashboardMessage?, lastAttempt: Date?, dataChanged: Bool, now: Date,
+                      calendar: Calendar = .current, morningGreetingRequired: Bool = false) -> Bool {
         if let lastAttempt, now.timeIntervalSince(lastAttempt) < minimumInterval { return false }
+        if morningGreetingRequired { return true }
         guard let message else { return true }
         if message.styleVersion != styleVersion || !isConcise(message.text) { return true }
         let age = now.timeIntervalSince(message.generatedAt)
@@ -667,6 +773,7 @@ struct CompanionState: Codable {
     var useRecentChatsForDashboard: Bool? = true
     var dashboardRecentMessages: [CompanionDashboardMessage]?
     var dashboardGenerationCount: Int?
+    var dashboardMorningGreetingDate: Date?
     var dashboardSubjectLastShown: [String: Date]?
     var dashboardFactLastShown: [String: Date]?
     var dashboardSubjectPreferences: [String: CompanionDashboardFeedback]?

@@ -455,6 +455,7 @@ struct CycleTrackingView: View {
         ScrollView {
             VStack(spacing: 14) {
                 phaseCard
+                CompanionCycleCard()
                 calendarCard
                 statsRow
                 periodActions
@@ -509,124 +510,48 @@ struct CycleTrackingView: View {
     }
 
     private var phaseCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             if let cycleDay = summary.cycleDay {
-                GeometryReader { proxy in
-                    let availableWidth = max(0, proxy.size.width - 14)
-
-                    HStack(alignment: .center, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(NSLocalizedString("DAY", comment: "Cycle day heading"))
-                                    .font(.system(size: 23, weight: .medium, design: .serif))
-                                    .tracking(3)
-                                Text("\(cycleDay)")
-                                    .font(.system(size: 60, weight: .light, design: .serif))
-                                    .monospacedDigit()
-                            }
-                            .foregroundStyle(ink)
-
-                            Text(summary.phaseName.uppercased())
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .tracking(2.5)
-                                .foregroundStyle(coral)
-
-                            Text(
-                                cycleDay > summary.cycleLength
-                                    ? String(
-                                        format: NSLocalizedString("Usual cycle: %d days", comment: "Usual cycle length after the estimated next period has passed"),
-                                        summary.cycleLength
-                                    )
-                                    : String(
-                                        format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
-                                        cycleDay,
-                                        summary.cycleLength
-                                    )
-                            )
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(mutedInk)
-                        }
-                        .frame(width: availableWidth * 0.55, alignment: .leading)
-
-                        if let phase = store.calendarPhase(for: Date()) {
-                            insulinSensitivityCallout(for: phase)
-                                .frame(width: availableWidth * 0.45, alignment: .leading)
-                        }
+                HStack(alignment: .center, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(NSLocalizedString("DAY", comment: "Cycle day heading"))
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .tracking(1)
+                        Text("\(cycleDay)")
+                            .font(.system(size: 32, weight: .light, design: .serif))
+                            .monospacedDigit()
                     }
-                    .frame(maxHeight: .infinity, alignment: .center)
+                    .foregroundStyle(ink)
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(summary.phaseName.uppercased())
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .tracking(1)
+                            .foregroundStyle(coral)
+                        Text(String(
+                            format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
+                            cycleDay, summary.cycleLength
+                        ))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(mutedInk)
+                    }
                 }
-                .frame(height: 128)
             } else {
-                Label {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("Start cycle tracking", comment: "Cycle tracker empty state title"))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(ink)
-                        Text(NSLocalizedString("Tap My period started when your period begins.", comment: "Cycle tracker empty state instructions"))
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(mutedInk)
-                    }
-                } icon: {
-                    CycleCalendarDropIcon()
-                        .frame(width: 34, height: 34)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(NSLocalizedString("Start cycle tracking", comment: "Cycle tracker empty state title"))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(ink)
+                    Text(NSLocalizedString("Tap My period started when your period begins.", comment: "Cycle tracker empty state instructions"))
+                        .font(.footnote)
+                        .foregroundStyle(mutedInk)
                 }
             }
-
             phaseProgressBar
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(cardBackground)
-    }
-
-    private func insulinSensitivityCallout(for phase: CycleTrackingStore.Phase) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 11, weight: .bold))
-                Text(NSLocalizedString("INSULIN SENSITIVITY", comment: "Cycle phase insulin sensitivity insight heading"))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(0.7)
-            }
-            .foregroundStyle(coral)
-
-            Text(insulinSensitivityInsight(for: phase))
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(ink)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
-        .padding(12)
-        .background(
-            phaseColor(phase).opacity(colorScheme == .dark ? 0.58 : 0.72),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
-    }
-
-    private func insulinSensitivityInsight(for phase: CycleTrackingStore.Phase) -> String {
-        switch phase {
-        case .period:
-            return NSLocalizedString(
-                "You may be more sensitive to insulin as your period begins.",
-                comment: "Insulin sensitivity insight for the menstrual period phase"
-            )
-        case .follicular:
-            return NSLocalizedString(
-                "Insulin sensitivity is often higher, so insulin may have a stronger effect.",
-                comment: "Insulin sensitivity insight for the follicular phase"
-            )
-        case .ovulation:
-            return NSLocalizedString(
-                "Hormone shifts may change insulin sensitivity. Some people notice higher glucose.",
-                comment: "Insulin sensitivity insight for the ovulation phase"
-            )
-        case .luteal:
-            return NSLocalizedString(
-                "Insulin sensitivity may decrease, especially before your period, so glucose may run higher.",
-                comment: "Insulin sensitivity insight for the luteal phase"
-            )
-        }
     }
 
     private var phaseProgressBar: some View {
