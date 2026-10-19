@@ -416,7 +416,7 @@ struct CompanionDashboardCard: View {
     }
 
     private var bubble: some View {
-        HStack(alignment: .top, spacing: 0) {
+        HStack(alignment: .center, spacing: 0) {
             Button {
                 controller.prepareDashboardDiscussion(now: dashboardNow)
                 open()
