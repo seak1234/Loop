@@ -619,50 +619,12 @@ struct CompanionDashboardPlan {
 
     static func next(state: CompanionState, history: [CompanionDashboardMessage], allowed: [CompanionDashboardKind],
                      canCelebrate: Bool, now: Date, calendar: Calendar = .current) -> Self {
-        let preferences = state.dashboardSubjectPreferences ?? [:]
-        let known = Set(state.dashboardKnownFacts ?? [])
-        let exposure = state.dashboardExposure(history: history)
-        let shown = exposure.facts
-        let memory = exposure.subjects
-        let recent = Set(history.suffix(6).compactMap(\.subject))
-        let oldSources = Set(history.compactMap { $0.sourceFact.map { CompanionDashboardFact.sourceKey($0.source) } })
-        let facts = (state.enableT1DUpdates == false ? [] : state.dashboardDiscoveries ?? []).filter {
-            $0.isUsable(now: now) && !known.contains($0.id) && preferences[$0.subject.rawValue] != .less
-                && !recent.contains($0.subject) && !oldSources.contains(CompanionDashboardFact.sourceKey($0.source))
-                && (shown[$0.id].map { now.timeIntervalSince($0) >= 14 * 86400 } ?? true)
+        // Dashboard messages are always personal; legacy discovery preferences never select trivia.
+        if allowed.contains(.insight) {
+            return Self(subject: canCelebrate ? .glucoseWins : .dailyLife,
+                        kinds: [.motivation, .insight], fact: nil)
         }
-        let freshFact = facts.sorted {
-            if ($0.isNews == true) != ($1.isNews == true) { return $0.isNews == true }
-            return ($0.publishedAt ?? "") > ($1.publishedAt ?? "")
-        }.first
-        if allowed.contains(.fact), let fact = freshFact,
-           history.isEmpty || allowed == [.fact] || !history.suffix(3).contains(where: { $0.kind == .fact }) {
-            return Self(subject: fact.subject, kinds: [.fact], fact: fact)
-        }
-        var subjects = CompanionDashboardSubject.allCases.filter {
-            preferences[$0.rawValue] != .less && ($0 != .glucoseWins || canCelebrate)
-                && ($0 != .recentQuestion || allowed.contains(.followUp))
-        }
-        let fresh = subjects.filter { !recent.contains($0) }
-        if !fresh.isEmpty { subjects = fresh }
-        let latestQuestion = state.messages.last(where: { $0.role == "user" && $0.dashboardOrigin != true })
-        let timelyQuestion = subjects.contains(.recentQuestion) && latestQuestion.map {
-            $0.date > (memory[CompanionDashboardSubject.recentQuestion.rawValue] ?? .distantPast)
-        } == true
-        let timelyWin = subjects.contains(.glucoseWins)
-            && now.timeIntervalSince(memory[CompanionDashboardSubject.glucoseWins.rawValue] ?? .distantPast) >= 6 * 3600
-        let subject = timelyQuestion ? CompanionDashboardSubject.recentQuestion : timelyWin ? .glucoseWins : subjects.min {
-            let a = (memory[$0.rawValue] ?? .distantPast).addingTimeInterval(preferences[$0.rawValue] == .more ? -21600 : 0)
-            let b = (memory[$1.rawValue] ?? .distantPast).addingTimeInterval(preferences[$1.rawValue] == .more ? -21600 : 0)
-            return a < b
-        } ?? .dailyLife
-        if subject == .recentQuestion { return Self(subject: subject, kinds: [.followUp], fact: nil) }
-        if subject == .glucoseWins { return Self(subject: subject, kinds: [.motivation], fact: nil) }
-        var kinds = allowed.filter { $0 == .motivation || $0 == .curiosity }
-        if [.mealPatterns, .records, .cycle].contains(subject), allowed.contains(.insight) { kinds.append(.insight) }
-        let fact = facts.first { $0.subject == subject }
-        if fact != nil, allowed.contains(.fact) { kinds.append(.fact) }
-        return Self(subject: subject, kinds: kinds.isEmpty ? [.curiosity] : kinds, fact: fact)
+        return Self(subject: .effort, kinds: [.motivation], fact: nil)
     }
 }
 
@@ -670,13 +632,7 @@ enum CompanionDashboardKind: String, Codable, CaseIterable {
     case motivation, insight, fact, followUp, curiosity
 
     static func eligible(healthEvidence: Bool, recentChat: Bool, history: [CompanionDashboardMessage]) -> [Self] {
-        if history.count >= 4 && !history.suffix(4).contains(where: { $0.kind == .fact }) { return [.fact] }
-        var kinds: [Self] = [.motivation, .curiosity, .fact]
-        if healthEvidence { kinds.append(.insight) }
-        if recentChat { kinds.append(.followUp) }
-        if let last = history.last?.kind, history.suffix(2).count == 2,
-           history.suffix(2).allSatisfy({ $0.kind == last }) { kinds.removeAll { $0 == last } }
-        return kinds
+        healthEvidence ? [.motivation, .insight] : [.motivation]
     }
 }
 
@@ -737,7 +693,7 @@ enum CompanionDashboardGreeting {
 }
 
 enum CompanionDashboardRefresh {
-    static let styleVersion = 10
+    static let styleVersion = 12
     static let maximumCharacters = 140
     static let maximumWords = 24
 
@@ -774,6 +730,15 @@ struct CompanionState: Codable {
     var dashboardRecentMessages: [CompanionDashboardMessage]?
     var dashboardGenerationCount: Int?
     var dashboardMorningGreetingDate: Date?
+    var dashboardDismissedAt: Date?
+    var dashboardSnoozeMinutes: Int?
+    var dashboardSnoozeDuration: Int { dashboardSnoozeMinutes ?? 60 }
+    var dashboardHiddenUntil: Date? {
+        dashboardDismissedAt?.addingTimeInterval(TimeInterval(dashboardSnoozeDuration) * 60)
+    }
+    func isDashboardDismissed(at now: Date) -> Bool {
+        dashboardHiddenUntil.map { now < $0 } ?? false
+    }
     var dashboardSubjectLastShown: [String: Date]?
     var dashboardFactLastShown: [String: Date]?
     var dashboardSubjectPreferences: [String: CompanionDashboardFeedback]?

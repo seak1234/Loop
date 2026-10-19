@@ -336,6 +336,38 @@ private struct CompanionCycleChat: View {
     }
 }
 
+struct CompanionDashboardIcon: View {
+    var open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            MochiAvatar(size: 64)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Mochi")
+        .accessibilityHint("Open Mochi to chat")
+    }
+}
+
+private struct MochiDashboardSpeechBubble: Shape {
+    func path(in rect: CGRect) -> Path {
+        let body = CGRect(x: rect.minX, y: rect.minY + 22, width: rect.width, height: max(0, rect.height - 22))
+        var path = Path(roundedRect: body, cornerRadius: 18)
+        // The tip aligns with Mochi's center in the banner row (64 points from the screen edge).
+        // Sweep the wider base to the right so the tail curves back toward Mochi's face.
+        path.move(to: CGPoint(x: rect.minX + 58, y: body.minY + 1))
+        path.addCurve(to: CGPoint(x: rect.minX + 48, y: rect.minY),
+                      control1: CGPoint(x: rect.minX + 49, y: rect.minY + 17),
+                      control2: CGPoint(x: rect.minX + 47, y: rect.minY + 8))
+        path.addCurve(to: CGPoint(x: rect.minX + 82, y: body.minY + 1),
+                      control1: CGPoint(x: rect.minX + 55, y: rect.minY + 12),
+                      control2: CGPoint(x: rect.minX + 65, y: rect.minY + 18))
+        path.closeSubpath()
+        return path
+    }
+}
+
 @MainActor
 struct CompanionDashboardCard: View {
     @ObservedObject private var controller = CompanionController.shared
@@ -343,38 +375,96 @@ struct CompanionDashboardCard: View {
     var onMessageChanged: () -> Void = {}
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bubbleAppeared = false
     @State private var dashboardNow = Date()
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
+    private var bubbleHidden: Bool { controller.state.isDashboardDismissed(at: dashboardNow) }
+
     var body: some View {
-        Button {
-            controller.prepareDashboardDiscussion(now: dashboardNow)
-            open()
-        } label: {
-            MochiCompactCardLabel(text: controller.dashboardText(now: dashboardNow))
-                .padding(.horizontal, 16).padding(.vertical, 4)
+        VStack(spacing: 0) {
+            if !bubbleHidden { bubble }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(controller.dashboardText(now: dashboardNow))
-        .accessibilityHint("Open Mochi to explore this message")
-        .contextMenu {
-            if let message = controller.state.dashboardMessage, message.subject != nil,
-               CompanionDashboardRefresh.isDisplayable(message, now: dashboardNow) {
-                Button { Task { await controller.rateDashboardMessage(.more, message: message) } } label: { Label("More like this", systemImage: "hand.thumbsup") }
-                Button { Task { await controller.rateDashboardMessage(.less, message: message) } } label: { Label("Less of this", systemImage: "hand.thumbsdown") }
-                Button { Task { await controller.rateDashboardMessage(.alreadyKnow, message: message) } } label: { Label("Already know this", systemImage: "checkmark") }
-            }
-        }
-        .onAppear { controller.setDashboardVisible(true) }
+        .onAppear { dashboardNow = Date(); controller.setDashboardVisible(true) }
         .onDisappear { controller.setDashboardVisible(false) }
         .onChange(of: controller.state.dashboardMessage?.generatedAt) { _ in
             dashboardNow = Date()
             onMessageChanged()
         }
+        .onChange(of: bubbleHidden) { _ in onMessageChanged() }
+        .task(id: controller.state.dashboardHiddenUntil) {
+            guard let until = controller.state.dashboardHiddenUntil else { return }
+            let remaining = until.timeIntervalSinceNow
+            if remaining > 0 {
+                do { try await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+                catch { return }
+            }
+            dashboardNow = Date()
+            controller.requestDashboardRefresh(now: dashboardNow)
+        }
         .onReceive(refreshTimer) { now in dashboardNow = now; controller.requestDashboardRefresh(now: now) }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { controller.requestDashboardRefresh() }
+            if phase == .active {
+                dashboardNow = Date()
+                controller.requestDashboardRefresh(now: dashboardNow)
+            }
         }
+    }
+
+    private var bubble: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Button {
+                controller.prepareDashboardDiscussion(now: dashboardNow)
+                open()
+            } label: {
+                Text(controller.dashboardText(now: dashboardNow))
+                    .font(.caption)
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(controller.dashboardText(now: dashboardNow))
+            .accessibilityHint("Open Mochi to explore this message")
+            Button {
+                Task { await controller.dismissDashboard() }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close Mochi message")
+            .accessibilityHint("Hide dashboard messages for \(controller.state.dashboardSnoozeDuration) minutes")
+        }
+        .padding(.top, 22)
+        .background {
+            MochiDashboardSpeechBubble()
+                .fill(Color(UIColor.secondarySystemGroupedBackground))
+                .shadow(color: MochiStyle.blue.opacity(0.08), radius: 5, y: 2)
+        }
+        .scaleEffect(reduceMotion || bubbleAppeared ? 1 : 0.94, anchor: UnitPoint(x: 0.12, y: 0))
+        .opacity(reduceMotion || bubbleAppeared ? 1 : 0)
+        .task(id: controller.dashboardText(now: dashboardNow)) {
+            // Replay for a new displayed message, not for each timer tick or layout update.
+            var reset = Transaction()
+            reset.disablesAnimations = true
+            withTransaction(reset) { bubbleAppeared = false }
+            guard !reduceMotion else { bubbleAppeared = true; return }
+            do { try await Task.sleep(nanoseconds: 20_000_000) }
+            catch { return }
+            withAnimation(.easeOut(duration: 0.28)) { bubbleAppeared = true }
+        }
+        .padding(.horizontal, 16)
+        // Tuck the tail into the space beneath Mochi without moving the banner.
+        .padding(.top, -20)
+        .padding(.bottom, 10)
     }
 }
 
@@ -651,7 +741,7 @@ struct CompanionSettingsView: View {
     @State private var saving = false
     @State private var preferredName = "Michelle"
     @State private var useRecentChatsForDashboard = true
-    @State private var enableT1DUpdates = true
+    @State private var dashboardSnoozeMinutes = 60
     @State private var personality = ""
     @State private var allowHealthData = false
     @State private var error: String?
@@ -661,13 +751,10 @@ struct CompanionSettingsView: View {
             Form {
                 Section(header: Text("About you")) {
                     TextField("Your name", text: $preferredName).textContentType(.givenName)
-                    Text("Mochi uses your name now and then. Leave it empty to skip names.")
+                    Text("Mochi uses your name to make messages personal. Leave it empty to skip names.")
                         .font(.caption).foregroundColor(.secondary)
-                    Toggle("Worldwide T1D discoveries & updates", isOn: $enableT1DUpdates)
-                    Text("Find fresh public-source stories through OpenRouter web search. Web searches use additional OpenRouter credits. Your name, chats and health data are never included in search requests.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Button("Reset dashboard topic preferences") { Task { await controller.resetDashboardPreferences() } }
-                    Text("Long-press a dashboard message for more like this, less of this, or already know this.")
+                    dashboardPausePicker
+                    Text("Defaults to one hour. The pause also applies after reopening the app. Changing this updates the pause from the last time you closed the bubble.")
                         .font(.caption).foregroundColor(.secondary)
                     Toggle("Revisit recent chat topics", isOn: $useRecentChatsForDashboard)
                     Text("When health-data sharing is on, Mochi can follow up on topics from your recent chats on this device. Clearing the conversation removes those topics.")
@@ -730,7 +817,7 @@ struct CompanionSettingsView: View {
                                 if let selectedModel, !selectedModel.efforts.contains(reasoningEffort) {
                                     throw CompanionError.invalid("Choose a reasoning effort supported by this model.")
                                 }
-                                try await controller.saveSettings(model: model, reasoningEffort: reasoningEffort, personality: personality, allowHealthData: allowHealthData, key: key, preferredName: preferredName, useRecentChatsForDashboard: useRecentChatsForDashboard, enableT1DUpdates: enableT1DUpdates)
+                                try await controller.saveSettings(model: model, reasoningEffort: reasoningEffort, personality: personality, allowHealthData: allowHealthData, key: key, preferredName: preferredName, useRecentChatsForDashboard: useRecentChatsForDashboard, dashboardSnoozeMinutes: dashboardSnoozeMinutes)
                                 key = ""
                                 dismiss()
                             } catch { self.error = error.localizedDescription }
@@ -748,7 +835,7 @@ struct CompanionSettingsView: View {
             loadedSettings = true
             preferredName = controller.state.displayName
             useRecentChatsForDashboard = controller.state.useRecentChatsForDashboard != false
-            enableT1DUpdates = controller.state.enableT1DUpdates != false
+            dashboardSnoozeMinutes = controller.state.dashboardSnoozeDuration
             model = controller.state.model
             reasoningEffort = controller.state.reasoningEffort ?? .providerDefault
             personality = controller.state.personality
@@ -762,6 +849,52 @@ struct CompanionSettingsView: View {
                 else if !selected.efforts.contains(reasoningEffort) { reasoningEffort = .providerDefault }
             }
         }
+    }
+
+    private var dashboardPausePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Pause messages after closing")
+            HStack(spacing: 12) {
+                VStack(spacing: 0) {
+                    Text("Hours").font(.caption).foregroundColor(.secondary)
+                    Picker("Hours", selection: Binding(
+                        get: { dashboardSnoozeMinutes / 60 },
+                        set: { hours in
+                            dashboardSnoozeMinutes = max(1, min(1440, hours * 60 + dashboardSnoozeMinutes % 60))
+                        }
+                    )) {
+                        ForEach(0...24, id: \.self) { Text("\($0)").tag($0) }
+                    }
+                    .pickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 132)
+                    .clipped()
+                }
+                VStack(spacing: 0) {
+                    Text("Minutes").font(.caption).foregroundColor(.secondary)
+                    Picker("Minutes", selection: Binding(
+                        get: { dashboardSnoozeMinutes % 60 },
+                        set: { minutes in
+                            dashboardSnoozeMinutes = max(1, min(1440, (dashboardSnoozeMinutes / 60) * 60 + minutes))
+                        }
+                    )) {
+                        ForEach(dashboardPauseMinuteRange, id: \.self) { Text("\($0)").tag($0) }
+                    }
+                    .pickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 132)
+                    .clipped()
+                    .disabled(dashboardSnoozeMinutes == 1440)
+                }
+            }
+        }
+    }
+
+    private var dashboardPauseMinuteRange: ClosedRange<Int> {
+        if dashboardSnoozeMinutes == 1440 { return 0...0 }
+        return dashboardSnoozeMinutes < 60 ? 1...59 : 0...59
     }
 
     private var selectedModel: CompanionModel? { models.first { $0.id == model } }

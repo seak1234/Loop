@@ -68,6 +68,19 @@ final class StatusTableViewController: LoopChartsTableViewController {
     var supportManager: SupportManager!
 
     lazy private var cancellables = Set<AnyCancellable>()
+    private var mochiBubbleWakeup: DispatchWorkItem?
+
+    private func refreshMochiBubbleVisibility() {
+        mochiBubbleWakeup?.cancel()
+        if let until = CompanionController.shared.state.dashboardHiddenUntil, until > Date() {
+            let wakeup = DispatchWorkItem { [weak self] in self?.refreshMochiBubbleVisibility() }
+            mochiBubbleWakeup = wakeup
+            DispatchQueue.main.asyncAfter(deadline: .now() + until.timeIntervalSinceNow, execute: wakeup)
+        }
+        guard viewIfLoaded?.window != nil, shouldShowHUD else { return }
+        let indexPath = IndexPath(row: 0, section: Section.companion.rawValue)
+        tableView.reloadRows(at: [indexPath], with: .none)
+    }
 
     override func viewDidLoad() {
 
@@ -86,6 +99,13 @@ final class StatusTableViewController: LoopChartsTableViewController {
         notificationObservers.append(NotificationCenter.default.addObserver(forName: .companionOpenRequested, object: nil, queue: .main) { [weak self] _ in
             self?.presentCompanion()
         })
+
+        CompanionController.shared.$state
+            .map(\.dashboardHiddenUntil)
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refreshMochiBubbleVisibility() }
+            .store(in: &cancellables)
 
         if FeatureFlags.predictedGlucoseChartClampEnabled {
             statusCharts.glucose.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBoundClamped
@@ -248,6 +268,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
         super.viewDidAppear(animated)
 
+        refreshMochiBubbleVisibility()
         if CompanionController.shared.notificationRuleID != nil { presentCompanion() }
 
         if !appearedOnce {
@@ -1341,9 +1362,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private enum Section: Int, CaseIterable {
         case alertWarning
         case branding
+        case companion
         case hud
         case status
-        case companion
         case charts
     }
 
@@ -1766,6 +1787,29 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     private final class DashboardGraphicTableViewCell: UITableViewCell {
         var onSensorTap: (() -> Void)?
+        private var mochiController: UIHostingController<CompanionDashboardIcon>?
+        private let mochiContainer = UIView()
+
+        func configureMochi(owner: UIViewController, open: @escaping () -> Void) {
+            let icon = CompanionDashboardIcon(open: open)
+            if let mochiController {
+                mochiController.rootView = icon
+                return
+            }
+            let controller = UIHostingController(rootView: icon)
+            owner.addChild(controller)
+            controller.view.backgroundColor = .clear
+            controller.view.translatesAutoresizingMaskIntoConstraints = false
+            mochiContainer.addSubview(controller.view)
+            NSLayoutConstraint.activate([
+                controller.view.topAnchor.constraint(equalTo: mochiContainer.topAnchor),
+                controller.view.bottomAnchor.constraint(equalTo: mochiContainer.bottomAnchor),
+                controller.view.leadingAnchor.constraint(equalTo: mochiContainer.leadingAnchor),
+                controller.view.trailingAnchor.constraint(equalTo: mochiContainer.trailingAnchor)
+            ])
+            controller.didMove(toParent: owner)
+            mochiController = controller
+        }
 
         private let graphicImageView: UIImageView = {
             let imageView = UIImageView(image: UIImage(named: "DashboardHeaderGraphic"))
@@ -1800,12 +1844,19 @@ final class StatusTableViewController: LoopChartsTableViewController {
             backgroundColor = .clear
             contentView.backgroundColor = .clear
             selectionStyle = .none
+            mochiContainer.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(mochiContainer)
             contentView.addSubview(graphicImageView)
             contentView.addSubview(sensorButton)
 
             NSLayoutConstraint.activate([
+                mochiContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
+                mochiContainer.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+                mochiContainer.widthAnchor.constraint(equalToConstant: 64),
+                mochiContainer.heightAnchor.constraint(equalToConstant: 64),
                 graphicImageView.topAnchor.constraint(equalTo: contentView.topAnchor),
-                graphicImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+                // Keep the banner at its existing position, independently of Mochi.
+                graphicImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 88),
                 graphicImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
                 graphicImageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
             ])
@@ -2491,6 +2542,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             cell.onSensorTap = { [weak self] in
                 self?.toggleGlucoseUnit()
             }
+            cell.configureMochi(owner: self) { [weak self] in self?.presentCompanion() }
             return cell
         case .companion:
             let cell = tableView.dequeueReusableCell(withIdentifier: "CompanionCell", for: indexPath) as! CompanionTableViewCell
@@ -2908,7 +2960,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             let availableWidth = max(0, tableView.bounds.width - 20)
             let graphicAspectRatio: CGFloat = 342.0 / 1024.0
             let graphicScale: CGFloat = 0.64
-            return ceil(availableWidth * graphicAspectRatio * graphicScale)
+            return max(72, ceil(availableWidth * graphicAspectRatio * graphicScale))
         case .charts:
             if isCollapsedChartRow(chartRow(at: indexPath)) {
                 return 74
@@ -2927,7 +2979,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .cycle:
                 return 134
             }
-        case .hud, .status, .alertWarning, .companion:
+        case .companion:
+            return CompanionController.shared.state.isDashboardDismissed(at: Date()) ? 0 : UITableView.automaticDimension
+        case .hud, .status, .alertWarning:
             return UITableView.automaticDimension
         }
     }

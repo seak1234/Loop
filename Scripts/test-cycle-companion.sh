@@ -12,7 +12,7 @@ root, out = map(pathlib.Path, sys.argv[1:])
 controller = (root / 'Loop/Companion/CompanionController.swift').read_text()
 methods = controller[controller.index('    private var cycleConversationInstructions:'):controller.index('    func attach(to manager:')]
 cycle_tool = controller[controller.index('        case "get_cycle_context":'):controller.index('        case "get_glucose_summary", "get_insulin_summary", "get_carb_entries":')]
-display = controller[controller.index('    func dashboardText('):controller.index('    func setDashboardVisible(')]
+display = controller[controller.index('    func dashboardText('):controller.index('    func dismissDashboard(')]
 helpers = controller[controller.index('    private func json('):controller.index('    private func glucose(start:')]
 # Omit the iOS lifecycle and unrelated chat/action code; keep the real request
 # builders and the real cycle-context tool body unchanged.

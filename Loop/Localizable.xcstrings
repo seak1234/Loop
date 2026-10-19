@@ -6620,9 +6620,6 @@
     "Allow health data for Mochi" : {
 
     },
-    "Already know this" : {
-
-    },
     "Amount Consumed" : {
       "comment" : "Label for carb quantity entry row on carb entry screen",
       "localizations" : {
@@ -12475,6 +12472,9 @@
         }
       }
     },
+    "Close Mochi message" : {
+
+    },
     "Closed Loop" : {
       "comment" : "The title text for the looping enabled switch cell",
       "localizations" : {
@@ -15150,6 +15150,9 @@
           }
         }
       }
+    },
+    "Defaults to one hour. The pause also applies after reopening the app. Changing this updates the pause from the last time you closed the bubble." : {
+
     },
     "Delete" : {
       "localizations" : {
@@ -19546,9 +19549,6 @@
         }
       }
     },
-    "Find fresh public-source stories through OpenRouter web search. Web searches use additional OpenRouter credits. Your name, chats and health data are never included in search requests." : {
-
-    },
     "Finding new topics…" : {
 
     },
@@ -21375,6 +21375,9 @@
         }
       }
     },
+    "Hide dashboard messages for %lld minutes" : {
+
+    },
     "High Glucose" : {
       "localizations" : {
         "da" : {
@@ -21434,6 +21437,9 @@
       }
     },
     "Higher effort can take longer and cost more. Model default lets the provider choose." : {
+
+    },
+    "Hours" : {
 
     },
     "How can I silence non-Critical Alerts?" : {
@@ -24597,9 +24603,6 @@
         }
       }
     },
-    "Less of this" : {
-
-    },
     "Less than a minute remaining" : {
       "comment" : "Estimated remaining duration with less than a minute",
       "localizations" : {
@@ -25197,9 +25200,6 @@
           }
         }
       }
-    },
-    "Long-press a dashboard message for more like this, less of this, or already know this." : {
-
     },
     "Loop Crashed" : {
       "comment" : "Title for crash recovery alert",
@@ -26815,6 +26815,9 @@
     "Michizzloop. My pancreas has WiFi." : {
       "comment" : "Accessibility label for the dashboard header graphic"
     },
+    "Minutes" : {
+
+    },
     "Missed Meal Notifications" : {
       "comment" : "Title for missed meal notifications toggle",
       "localizations" : {
@@ -27240,7 +27243,7 @@
     "Mochi settings and rules" : {
 
     },
-    "Mochi uses your name now and then. Leave it empty to skip names." : {
+    "Mochi uses your name to make messages personal. Leave it empty to skip names." : {
 
     },
     "Mode" : {
@@ -27512,9 +27515,6 @@
           }
         }
       }
-    },
-    "More like this" : {
-
     },
     "Mute All Alerts" : {
       "comment" : "Label for button to mute all alerts",
@@ -30081,6 +30081,9 @@
     "Only text models with tool calling are listed. Availability and billing depend on your OpenRouter account." : {
 
     },
+    "Open Mochi to chat" : {
+
+    },
     "Open Mochi to explore this message" : {
 
     },
@@ -30221,6 +30224,9 @@
     },
     "Ovulation day" : {
       "comment" : "Cycle calendar predicted ovulation day legend"
+    },
+    "Pause messages after closing" : {
+
     },
     "Period" : {
       "comment" : "Cycle calendar legend\nCycle phase progress label\nMenstrual cycle period phase\nPredicted next menstrual period"
@@ -34068,9 +34074,6 @@
           }
         }
       }
-    },
-    "Reset dashboard topic preferences" : {
-
     },
     "Retrospective Correction" : {
       "comment" : "Title of the prediction input effect for retrospective correction",
@@ -42169,9 +42172,6 @@
           }
         }
       }
-    },
-    "Worldwide T1D discoveries & updates" : {
-
     },
     "Yes" : {
       "comment" : "The title of the action used when confirming entered amount of carbohydrates.",
