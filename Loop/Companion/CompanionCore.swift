@@ -83,6 +83,7 @@ struct CompanionMessage: Codable, Identifiable {
     var text: String
     var date = Date()
     var includesHealthData: Bool?
+    var dashboardOrigin: Bool?
 }
 
 /// A read-only snapshot: logged bleeding dates and estimated hormonal phases are
@@ -355,6 +356,12 @@ struct CompanionDashboardMessage: Codable {
     // Missing on older cached messages, which should be regenerated in the shorter style.
     var styleVersion: Int? = CompanionDashboardRefresh.styleVersion
     var factID: String?
+    var kind: CompanionDashboardKind?
+    var followUpQuestion: String?
+    var conversationTopic: String?
+    var conversationDate: Date?
+    var subject: CompanionDashboardSubject?
+    var sourceFact: CompanionDashboardFact?
 }
 
 /// Conservative permission to celebrate recent readings, not a clinical assessment or alert.
@@ -390,36 +397,245 @@ struct CompanionGlucoseEncouragement: Codable {
     }
 }
 
-struct CompanionDashboardFact: Encodable, Identifiable {
+/// Public, web-grounded material, separate from the user's health context.
+struct CompanionDashboardFact: Codable, Identifiable {
     let id: String
     let fact: String
     let source: URL
+    var subject: CompanionDashboardSubject
+    var topicKey: String?
+    var publishedAt: String?
+    var checkedAt: Date?
+    var evidenceStage: String?
+    var region: String?
+    var isNews: Bool?
 
-    static let catalog: [Self] = [
-        .init(id: "insulin-nobel-1923", fact: "The discovery of insulin was recognized with the 1923 Nobel Prize in Physiology or Medicine.", source: URL(string: "https://www.nobelprize.org/prizes/medicine/1923/summary/")!),
-        .init(id: "insulin-chemistry-1958", fact: "Frederick Sanger received the 1958 Chemistry Nobel Prize for work on protein structure, especially insulin.", source: URL(string: "https://www.nobelprize.org/prizes/chemistry/1958/summary/")!),
-        .init(id: "cgm-between-cells", fact: "CGMs estimate glucose in fluid between cells rather than measuring blood directly.", source: URL(string: "https://www.niddk.nih.gov/health-information/diabetes/overview/managing-diabetes/continuous-glucose-monitoring")!),
-        .init(id: "pancreatic-islets", fact: "Insulin-producing beta cells live in pancreatic cell clusters called islets.", source: URL(string: "https://www.niddk.nih.gov/health-information/diabetes/overview/what-is-diabetes/type-1-diabetes")!),
-        .init(id: "t1d-any-age", fact: "Type 1 diabetes can develop at any age, including adulthood.", source: URL(string: "https://www.niddk.nih.gov/health-information/diabetes/overview/what-is-diabetes/type-1-diabetes")!),
-        .init(id: "protein-later-glucose", fact: "Protein can be converted to glucose slowly; low-carb meals are not necessarily glucose-neutral.", source: URL(string: "https://www.diabetesincontrol.com/the-diabetes-diet-chapter-3-part-1/")!)
-    ]
+    static let sourceDomains = ["fda.gov", "ema.europa.eu", "gov.uk", "tga.gov.au", "pmda.go.jp", "canada.ca",
+        "who.int", "nih.gov", "niddk.nih.gov", "clinicaltrials.gov", "breakthrought1d.org", "diabetes.org.uk",
+        "diabetes.org", "easd.org", "nature.com", "nejm.org", "thelancet.com", "bmj.com", "diabetologia-journal.org",
+        "vertexpharma.com", "investors.vrtx.com", "dexcom.com", "insulet.com", "medtronic.com", "tandemdiabetes.com"]
 
-    static func next(cursor: Int?) -> Self { catalog[max(0, cursor ?? 0) % catalog.count] }
+    static func safeSource(_ url: URL) -> Bool {
+        guard url.scheme == "https", url.user == nil, url.password == nil, url.path.count > 1, let host = url.host?.lowercased() else { return false }
+        return sourceDomains.contains { host == $0 || host.hasSuffix("." + $0) }
+    }
+
+    static func sourceKey(_ url: URL) -> String {
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let query = parts?.queryItems?.filter {
+            !$0.name.lowercased().hasPrefix("utm_") && !["fbclid", "gclid"].contains($0.name.lowercased())
+        }
+        parts?.queryItems = query?.isEmpty == true ? nil : query
+        parts?.fragment = nil
+        return (parts?.string ?? url.absoluteString).trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+    }
+
+    func isUsable(now: Date) -> Bool {
+        guard Self.safeSource(source), let checkedAt, checkedAt <= now,
+              now.timeIntervalSince(checkedAt) < (isNews == true ? 86400 : 7 * 86400) else { return false }
+        if isNews == true {
+            guard let publishedAt, let date = Self.publicationDate(publishedAt), date <= now,
+                  now.timeIntervalSince(date) <= 60 * 86400 else { return false }
+        }
+        return true
+    }
+
+    static func publicationDate(_ value: String) -> Date? {
+        guard value.count == 10 else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard let result = formatter.date(from: value), formatter.string(from: result) == value else { return nil }
+        return result
+    }
+
+    static func decodeDiscoveries(_ raw: String, citations: [URL], sourceContents: [String: String] = [:], now: Date) throws -> [Self] {
+        struct Batch: Decodable { let items: [CompanionDashboardFact] }
+        guard raw.utf8.count <= 40000, let data = raw.data(using: .utf8),
+              let batch = try? JSONDecoder().decode(Batch.self, from: data), batch.items.count <= 12 else {
+            throw CompanionError.invalid("Mochi couldn't read the public discoveries.")
+        }
+        let cited = Set(citations.filter(safeSource).map(sourceKey))
+        var keys = Set<String>()
+        return batch.items.compactMap { item in
+            guard safeSource(item.source), cited.contains(sourceKey(item.source)),
+                  !item.fact.isEmpty, item.fact.count <= 800,
+                  let topic = item.topicKey, !topic.isEmpty, topic.count <= 100,
+                  topic.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }),
+                  let stage = item.evidenceStage,
+                  ["background", "preclinical", "early-human-trial", "clinical-trial", "approved", "device-update", "access-policy"].contains(stage),
+                  item.isNews != nil,
+                  stage != "approved" || !(item.region ?? "").isEmpty,
+                  (item.region?.count ?? 0) <= 100,
+                  (item.isNews != true || item.publishedAt != nil),
+                  keys.insert(topic).inserted else { return nil }
+            if item.isNews == true {
+                guard let date = item.publishedAt.flatMap(publicationDate),
+                      let content = sourceContents[sourceKey(item.source)]?.lowercased() else { return nil }
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                let dateFound = ["yyyy-MM-dd", "MMMM d, yyyy", "MMM d, yyyy", "d MMMM yyyy", "d MMM yyyy"].contains { format in
+                    formatter.dateFormat = format
+                    return content.contains(formatter.string(from: date).lowercased())
+                }
+                guard dateFound, !(item.region ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, stage != "background" else { return nil }
+            }
+            let result = Self(id: topic, fact: item.fact, source: item.source, subject: item.subject,
+                topicKey: topic, publishedAt: item.publishedAt, checkedAt: now, evidenceStage: stage,
+                region: item.region, isNews: item.isNews)
+            guard result.isUsable(now: now) else { return nil }
+            return result
+        }
+    }
 }
 
-enum CompanionDashboardKind: String {
-    case motivation, insight, fact
+/// Stable subjects group paraphrases of the same idea; no health values are stored here.
+enum CompanionDashboardSubject: String, Codable, CaseIterable {
+    case effort, learning, routines, mealPatterns, smallNumbers, records, sleep, movement, stress, cycle
+    case sensors, insulinBasics, history, biology, protein, glucoseWins, recentQuestion
+    case cellTherapy, immuneResearch, devices, globalAccess, research, dailyLife, foodScience, technology
 
-    static func next(rotation: Int?, allowHealthData: Bool) -> Self {
-        if rotation == 3 { return .fact }
-        return allowHealthData && rotation == 2 ? .insight : .motivation
+    var guidance: String {
+        switch self {
+        case .effort: return "Recognize the often invisible work of diabetes, without a canned pep talk or invented achievement."
+        case .learning: return "Explore how comparing observations can answer a diabetes question; avoid another pep talk or claim the user learned something."
+        case .routines: return "Offer a time-of-day-appropriate reflection on making diabetes routines understandable; no invented routine or homework."
+        case .mealPatterns: return "Invite curiosity about why meals can behave differently; no inferred meal, recommendation to eat, or causal claim."
+        case .smallNumbers: return "Explore Bernstein's Law of Small Numbers and predictability, without prescribing targets, carb limits or doses."
+        case .records: return "Make an interesting connection about notes helping explain a graph; missing notes do not establish missing care."
+        case .sleep: return "Invite a general question about sleep and diabetes; never assume poor sleep or personal effects."
+        case .movement: return "Invite a general learning question about activity and glucose; never prescribe exercise or infer activity."
+        case .stress: return "Invite curiosity about stress and diabetes; never assume the user feels stressed or explain a reading with it."
+        case .cycle: return "Invite a thoughtful question about cycle notes and diabetes; phases are estimates, not proof of hormones or symptoms."
+        case .sensors: return "Explore a small discovery about glucose sensors, using the supplied fact if making factual claims."
+        case .insulinBasics: return "Explore how insulin or delivery technology works, using the supplied fact; no treatment advice."
+        case .history: return "A little diabetes-science history, grounded in the supplied fact."
+        case .biology: return "A little discovery about the body's biology, grounded in the supplied fact."
+        case .protein: return "Explore protein and meal effects, grounded in the supplied fact and the Bernstein framework."
+        case .glucoseWins: return "Recognize the supported recent in-target window without turning it into a whole-day achievement."
+        case .cellTherapy: return "A sourced discovery about cell replacement or encapsulation; distinguish preclinical work, human trials and availability."
+        case .immuneResearch: return "A sourced discovery about immune research; avoid cure claims and personal treatment advice."
+        case .devices: return "A sourced development in pumps, CGMs or automated insulin delivery, with region and availability clearly qualified."
+        case .globalAccess: return "A sourced international development in access, affordability or policy, with the country specified."
+        case .research: return "A surprising sourced research question, technique or finding; explain its stage without hype."
+        case .dailyLife: return "A fresh, warm observation about the practical work of diabetes; no invented personal experience or generic pep talk."
+        case .foodScience: return "A fresh question about meal composition and predictability, consistent with the Bernstein framework; no unsupported claims."
+        case .technology: return "A sourced discovery about the engineering or open research behind diabetes technology."
+        case .recentQuestion: return "Pick up an actual earlier user question; don't repeat a generic offer to review glucose."
+        }
+    }
+}
+
+enum CompanionDashboardFeedback: String, Codable {
+    case more, less, alreadyKnow
+}
+
+struct CompanionDashboardPlan {
+    let subject: CompanionDashboardSubject
+    let kinds: [CompanionDashboardKind]
+    let fact: CompanionDashboardFact?
+
+    static func next(state: CompanionState, history: [CompanionDashboardMessage], allowed: [CompanionDashboardKind],
+                     canCelebrate: Bool, now: Date, calendar: Calendar = .current) -> Self {
+        let preferences = state.dashboardSubjectPreferences ?? [:]
+        let known = Set(state.dashboardKnownFacts ?? [])
+        let exposure = state.dashboardExposure(history: history)
+        let shown = exposure.facts
+        let memory = exposure.subjects
+        let recent = Set(history.suffix(6).compactMap(\.subject))
+        let oldSources = Set(history.compactMap { $0.sourceFact.map { CompanionDashboardFact.sourceKey($0.source) } })
+        let facts = (state.enableT1DUpdates == false ? [] : state.dashboardDiscoveries ?? []).filter {
+            $0.isUsable(now: now) && !known.contains($0.id) && preferences[$0.subject.rawValue] != .less
+                && !recent.contains($0.subject) && !oldSources.contains(CompanionDashboardFact.sourceKey($0.source))
+                && (shown[$0.id].map { now.timeIntervalSince($0) >= 14 * 86400 } ?? true)
+        }
+        let freshFact = facts.sorted {
+            if ($0.isNews == true) != ($1.isNews == true) { return $0.isNews == true }
+            return ($0.publishedAt ?? "") > ($1.publishedAt ?? "")
+        }.first
+        if allowed.contains(.fact), let fact = freshFact,
+           history.isEmpty || allowed == [.fact] || !history.suffix(3).contains(where: { $0.kind == .fact }) {
+            return Self(subject: fact.subject, kinds: [.fact], fact: fact)
+        }
+        var subjects = CompanionDashboardSubject.allCases.filter {
+            preferences[$0.rawValue] != .less && ($0 != .glucoseWins || canCelebrate)
+                && ($0 != .recentQuestion || allowed.contains(.followUp))
+        }
+        let fresh = subjects.filter { !recent.contains($0) }
+        if !fresh.isEmpty { subjects = fresh }
+        let latestQuestion = state.messages.last(where: { $0.role == "user" && $0.dashboardOrigin != true })
+        let timelyQuestion = subjects.contains(.recentQuestion) && latestQuestion.map {
+            $0.date > (memory[CompanionDashboardSubject.recentQuestion.rawValue] ?? .distantPast)
+        } == true
+        let timelyWin = subjects.contains(.glucoseWins)
+            && now.timeIntervalSince(memory[CompanionDashboardSubject.glucoseWins.rawValue] ?? .distantPast) >= 6 * 3600
+        let subject = timelyQuestion ? CompanionDashboardSubject.recentQuestion : timelyWin ? .glucoseWins : subjects.min {
+            let a = (memory[$0.rawValue] ?? .distantPast).addingTimeInterval(preferences[$0.rawValue] == .more ? -21600 : 0)
+            let b = (memory[$1.rawValue] ?? .distantPast).addingTimeInterval(preferences[$1.rawValue] == .more ? -21600 : 0)
+            return a < b
+        } ?? .dailyLife
+        if subject == .recentQuestion { return Self(subject: subject, kinds: [.followUp], fact: nil) }
+        if subject == .glucoseWins { return Self(subject: subject, kinds: [.motivation], fact: nil) }
+        var kinds = allowed.filter { $0 == .motivation || $0 == .curiosity }
+        if [.mealPatterns, .records, .cycle].contains(subject), allowed.contains(.insight) { kinds.append(.insight) }
+        let fact = facts.first { $0.subject == subject }
+        if fact != nil, allowed.contains(.fact) { kinds.append(.fact) }
+        return Self(subject: subject, kinds: kinds.isEmpty ? [.curiosity] : kinds, fact: fact)
+    }
+}
+
+enum CompanionDashboardKind: String, Codable, CaseIterable {
+    case motivation, insight, fact, followUp, curiosity
+
+    static func eligible(healthEvidence: Bool, recentChat: Bool, history: [CompanionDashboardMessage]) -> [Self] {
+        if history.count >= 4 && !history.suffix(4).contains(where: { $0.kind == .fact }) { return [.fact] }
+        var kinds: [Self] = [.motivation, .curiosity, .fact]
+        if healthEvidence { kinds.append(.insight) }
+        if recentChat { kinds.append(.followUp) }
+        if let last = history.last?.kind, history.suffix(2).count == 2,
+           history.suffix(2).allSatisfy({ $0.kind == last }) { kinds.removeAll { $0 == last } }
+        return kinds
+    }
+}
+
+struct CompanionDashboardSuggestion: Decodable {
+    let text: String
+    let kind: CompanionDashboardKind
+    let question: String
+    let factID: String?
+    let topicID: UUID?
+
+    static func decode(_ raw: String, allowedKinds: [CompanionDashboardKind], factID: String,
+                       topicIDs: Set<UUID>, recentTexts: [String], name: String, useName: Bool) throws -> Self {
+        guard raw.utf8.count <= 8000, let data = raw.data(using: .utf8),
+              let value = try? JSONDecoder().decode(Self.self, from: data),
+              allowedKinds.contains(value.kind), CompanionDashboardRefresh.isConcise(value.text),
+              !value.text.contains("\n"), !value.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              value.question.count <= 180, value.question.split(whereSeparator: \.isWhitespace).count <= 30,
+              !value.question.contains("\n"),
+              (value.kind != .fact || value.factID == factID),
+              (value.kind != .followUp || value.topicID.map { topicIDs.contains($0) } == true),
+              value.topicID.map({ topicIDs.contains($0) }) ?? true,
+              !recentTexts.contains(where: { normalized($0) == normalized(value.text) }) else {
+            throw CompanionError.invalid("Mochi couldn’t create a fresh, useful dashboard message.")
+        }
+        if !name.isEmpty {
+            let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: name) + "(?![\\p{L}\\p{N}])"
+            let usesName = value.text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+            guard usesName == useName else { throw CompanionError.invalid("Mochi couldn’t personalize this message naturally.") }
+        }
+        return value
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
     }
 }
 
 enum CompanionDashboardRefresh {
-    static let styleVersion = 6
-    static let maximumCharacters = 90
-    static let maximumWords = 12
+    static let styleVersion = 9
+    static let maximumCharacters = 140
+    static let maximumWords = 24
 
     static func isConcise(_ text: String) -> Bool {
         !text.isEmpty && text.count <= maximumCharacters && text.split(whereSeparator: \.isWhitespace).count <= maximumWords
@@ -447,6 +663,34 @@ struct CompanionState: Codable {
     var version = 1
     var personality = "Talk like a kind, down-to-earth friend. Use simple words, contractions and a little gentle humor when it fits. Help me make sense of diabetes without lecturing, canned pep talks or guilt."
     var model = "openai/gpt-6.1-sol"
+    var preferredName: String? = "Michelle"
+    var useRecentChatsForDashboard: Bool? = true
+    var dashboardRecentMessages: [CompanionDashboardMessage]?
+    var dashboardGenerationCount: Int?
+    var dashboardSubjectLastShown: [String: Date]?
+    var dashboardFactLastShown: [String: Date]?
+    var dashboardSubjectPreferences: [String: CompanionDashboardFeedback]?
+    var dashboardKnownFacts: [String]?
+    var enableT1DUpdates: Bool? = true
+    var dashboardDiscoveries: [CompanionDashboardFact]?
+    var dashboardDiscoveryLastAttempt: Date?
+    var dashboardDiscoveryLastRefresh: Date?
+    var displayName: String { preferredName ?? "Michelle" }
+
+    func dashboardExposure(history: [CompanionDashboardMessage]) -> (subjects: [String: Date], facts: [String: Date]) {
+        var subjects = dashboardSubjectLastShown ?? [:]
+        var facts = dashboardFactLastShown ?? [:]
+        for message in history {
+            let fact = message.sourceFact
+            if let subject = message.subject ?? fact?.subject {
+                subjects[subject.rawValue] = max(subjects[subject.rawValue] ?? .distantPast, message.generatedAt)
+            }
+            if let fact {
+                facts[fact.id] = max(facts[fact.id] ?? .distantPast, message.generatedAt)
+            }
+        }
+        return (subjects, facts)
+    }
     // Optional so state saved by the first version continues to decode unchanged.
     var reasoningEffort: CompanionReasoningEffort? = .medium
     var allowHealthData = false

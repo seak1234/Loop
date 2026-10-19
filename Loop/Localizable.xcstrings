@@ -4309,6 +4309,9 @@
         }
       }
     },
+    "About you" : {
+
+    },
     "Absorption Time" : {
       "comment" : "Label for food absorption entry on add favorite food screen",
       "localizations" : {
@@ -6615,6 +6618,9 @@
       }
     },
     "Allow health data for Mochi" : {
+
+    },
+    "Already know this" : {
 
     },
     "Amount Consumed" : {
@@ -19551,6 +19557,9 @@
         }
       }
     },
+    "Find fresh public-source stories through OpenRouter web search. Web searches use additional OpenRouter credits. Your name, chats and health data are never included in search requests." : {
+
+    },
     "Finding new topics…" : {
 
     },
@@ -24611,6 +24620,9 @@
         }
       }
     },
+    "Less of this" : {
+
+    },
     "Less than a minute remaining" : {
       "comment" : "Estimated remaining duration with less than a minute",
       "localizations" : {
@@ -25208,6 +25220,9 @@
           }
         }
       }
+    },
+    "Long-press a dashboard message for more like this, less of this, or already know this." : {
+
     },
     "Loop Crashed" : {
       "comment" : "Title for crash recovery alert",
@@ -27245,6 +27260,9 @@
     "Mochi settings and rules" : {
 
     },
+    "Mochi uses your name now and then. Leave it empty to skip names." : {
+
+    },
     "Mode" : {
       "comment" : "Title for mode live activity toggle",
       "localizations" : {
@@ -27514,6 +27532,9 @@
           }
         }
       }
+    },
+    "More like this" : {
+
     },
     "Mute All Alerts" : {
       "comment" : "Label for button to mute all alerts",
@@ -30080,7 +30101,7 @@
     "Only text models with tool calling are listed. Availability and billing depend on your OpenRouter account." : {
 
     },
-    "Open Mochi to learn about your diabetes" : {
+    "Open Mochi to explore this message" : {
 
     },
     "OpenRouter API key" : {
@@ -34065,6 +34086,9 @@
         }
       }
     },
+    "Reset dashboard topic preferences" : {
+
+    },
     "Retrospective Correction" : {
       "comment" : "Title of the prediction input effect for retrospective correction",
       "localizations" : {
@@ -34326,6 +34350,9 @@
     },
     "Review period dates" : {
       "comment" : "Cycle summary when phase timing cannot be estimated"
+    },
+    "Revisit recent chat topics" : {
+
     },
     "Rules & activity" : {
 
@@ -35818,9 +35845,6 @@
           }
         }
       }
-    },
-    "Source for this fact" : {
-
     },
     "Start cycle tracking" : {
       "comment" : "Cycle tracker empty state title"
@@ -41581,6 +41605,9 @@
         }
       }
     },
+    "When health-data sharing is on, Mochi can follow up on topics from your recent chats on this device. Clearing the conversation removes those topics." : {
+
+    },
     "When out of Closed Loop mode, the app uses a simplified bolus calculator like a typical pump." : {
       "localizations" : {
         "da" : {
@@ -42159,6 +42186,9 @@
           }
         }
       }
+    },
+    "Worldwide T1D discoveries & updates" : {
+
     },
     "Yes" : {
       "comment" : "The title of the action used when confirming entered amount of carbohydrates.",
@@ -42942,6 +42972,9 @@
           }
         }
       }
+    },
+    "Your name" : {
+
     },
     "Your pump data is stale. %1$@ cannot recommend a bolus amount." : {
       "comment" : "Caption for bolus screen notice when pump data is missing or stale",

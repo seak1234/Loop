@@ -3,6 +3,18 @@ import XCTest
 
 private final class CycleProviderProbe: CompanionProvider {
     var requestCount = 0
+    var discoveryCount = 0
+    var discoveryFailure = false
+
+    func discover(model: String, reasoningEffort: CompanionReasoningEffort, now: Date, excluding: [String]) async throws -> [CompanionDashboardFact] {
+        discoveryCount += 1
+        if discoveryFailure { throw CompanionError.invalid("Synthetic search failure") }
+        return [CompanionDashboardFact(id: "synthetic-trial", fact: "A synthetic early human trial report, not real clinical news.",
+            source: URL(string: "https://www.nih.gov/news-events/synthetic-trial")!, subject: .cellTherapy, topicKey: "synthetic-trial",
+            publishedAt: String(ISO8601DateFormatter().string(from: now).prefix(10)), checkedAt: now,
+            evidenceStage: "early-human-trial", region: "International research", isNews: true)]
+    }
+
     var handler: (([[String: Any]], [[String: Any]]) async throws -> CompanionCompletion)?
     var messages: [[String: Any]] = []
     var tools: [[String: Any]] = []
@@ -12,6 +24,18 @@ private final class CycleProviderProbe: CompanionProvider {
         self.messages = messages
         self.tools = tools
         if let handler { return try await handler(messages, tools) }
+        if tools.isEmpty, let text = messages.last?["content"] as? String,
+           let data = text.data(using: .utf8), let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           payload["allowed_message_kinds"] != nil {
+            let fact = payload["curated_fact"] as? [String: Any] ?? [:]
+            let allowed = payload["allowed_message_kinds"] as? [String] ?? []
+            let kind = allowed.contains("curiosity") ? "curiosity" : (allowed.first ?? "motivation")
+            let name = payload["address_by_name_this_time"] as? Bool == true ? (payload["preferred_name"] as? String ?? "") : ""
+            let line = (name.isEmpty ? "" : name + ", ") + "a fresh diabetes question for visit \(requestCount)?"
+            let json: [String: Any] = ["text": line, "kind": kind, "question": "What could we learn about this?", "factID": kind == "fact" ? (fact["id"] ?? NSNull()) : NSNull(), "topicID": NSNull()]
+            let response = String(decoding: try JSONSerialization.data(withJSONObject: json), as: UTF8.self)
+            return CompanionCompletion(message: [:], text: response, calls: [])
+        }
         return CompanionCompletion(message: ["role": "assistant", "content": "Cycle context received."],
                                    text: "Cycle context received.", calls: [])
     }
@@ -87,6 +111,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         var state = CompanionState()
         state.allowHealthData = shareHealth
         state.personality = "Be gently funny and call me sunshine."
+        state.preferredName = ""
         try store.save(state)
         return (store, tracker, {
             defaults.removePersistentDomain(forName: suite)
@@ -124,7 +149,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(context.contains("recordedPeriodCount"))
         XCTAssertTrue(context.contains("local_time"))
         XCTAssertTrue(context.contains("time_zone"))
-        XCTAssertEqual(try store.load().dashboardMessage?.text, "Cycle context received.")
+        XCTAssertEqual(try store.load().dashboardMessage?.text, "a fresh diabetes question for visit 1?")
         XCTAssertTrue(controller.state.messages.isEmpty)
         controller.requestDashboardRefresh(now: start.addingTimeInterval(60))
         XCTAssertEqual(provider.requestCount, 1)
@@ -188,12 +213,12 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue((futureProvider.messages.first?["content"] as? String)?.contains("call me Michelle") == true)
     }
 
-    func testMotivationMixSurvivesRelaunchWithGlucoseGroundedEncouragement() async throws {
+    func testRelevantMixAndNoveltyPersistAcrossRelaunch() async throws {
         let (store, tracker, cleanup) = try fixture(shareHealth: true)
         defer { cleanup() }
         let provider = CycleProviderProbe()
         var queries = 0
-        for expectedRotation in [1, 2, 3, 0] {
+        for count in 1...5 {
             var saved = try store.load()
             saved.dashboardMessage?.generatedAt = Date().addingTimeInterval(-901)
             try store.save(saved)
@@ -202,23 +227,165 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
             controller.setDashboardVisible(true)
             try await waitForDashboard(controller)
             XCTAssertNil(controller.dashboardRefreshError)
-            XCTAssertEqual(try store.load().dashboardRotation, expectedRotation)
-            let isInsight = expectedRotation == 3
-            let isFact = expectedRotation == 0
-            let context = try XCTUnwrap(provider.messages.last?["content"] as? String)
-            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(context.utf8)) as? [String: Any])
-            XCTAssertEqual(payload["cycle"] != nil, isInsight)
-            XCTAssertEqual(controller.state.dashboardMessage?.includesHealthData, !isFact)
-            XCTAssertTrue((provider.messages.first?["content"] as? String)?.contains("Message type: " + (isFact ? "fact" : isInsight ? "insight" : "motivation")) == true)
-            XCTAssertEqual(queries, isInsight || isFact ? 5 : expectedRotation)
-            XCTAssertEqual(payload["curated_fact"] != nil, isFact)
-            if isFact {
-                XCTAssertEqual(try store.load().dashboardFactCursor, 1)
-                XCTAssertEqual(controller.dashboardFact?.id, CompanionDashboardFact.catalog.first?.id)
+            XCTAssertEqual(try store.load().dashboardGenerationCount, count)
+            XCTAssertEqual(try store.load().dashboardRecentMessages?.count, count)
+            XCTAssertEqual(queries, count * 3)
+            let subjects = try store.load().dashboardRecentMessages?.compactMap(\.subject) ?? []
+            XCTAssertEqual(Set(subjects).count, count)
+            if count == 1 {
+                XCTAssertEqual(controller.state.dashboardMessage?.kind, .fact)
+                XCTAssertEqual(controller.dashboardFact?.id, "synthetic-trial")
+                XCTAssertEqual(controller.dashboardFact?.evidenceStage, "early-human-trial")
             }
             controller.setDashboardVisible(false)
         }
-        XCTAssertEqual(provider.requestCount, 4)
+    }
+
+    func testDashboardFeedbackPersistsAndImmediatelyChangesTheNextMessage() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: false)
+        defer { cleanup() }
+        let provider = CycleProviderProbe()
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
+        controller.setDashboardVisible(true)
+        try await waitForDashboard(controller)
+        let first = try XCTUnwrap(controller.state.dashboardMessage)
+        XCTAssertEqual(first.sourceFact?.id, "synthetic-trial")
+        controller.rateDashboardMessage(.alreadyKnow, message: first)
+        try await waitForDashboard(controller)
+        XCTAssertTrue(try store.load().dashboardKnownFacts?.contains("synthetic-trial") == true)
+        let second = try XCTUnwrap(controller.state.dashboardMessage)
+        XCTAssertNotEqual(second.factID, first.factID)
+        controller.rateDashboardMessage(.less, message: second)
+        try await waitForDashboard(controller)
+        XCTAssertEqual(try store.load().dashboardSubjectPreferences?[second.subject!.rawValue], .less)
+        XCTAssertNotEqual(controller.state.dashboardMessage?.subject, second.subject)
+        // Feedback is attached to the card that was displayed, even if another card has since arrived.
+        controller.rateDashboardMessage(.more, message: first)
+        try await waitForDashboard(controller)
+        XCTAssertEqual(try store.load().dashboardSubjectPreferences?["cellTherapy"], .more)
+        controller.resetDashboardPreferences()
+        try await waitForDashboard(controller)
+        XCTAssertNil(try store.load().dashboardKnownFacts)
+        XCTAssertNil(try store.load().dashboardSubjectPreferences)
+        controller.setDashboardVisible(false)
+    }
+
+    func testPublicDiscoveriesCacheAcrossRelaunchAndCanBeDisabledWithoutHealthSharing() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: false)
+        defer { cleanup() }
+        let provider = CycleProviderProbe()
+        var controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
+        controller.setDashboardVisible(true)
+        try await waitForDashboard(controller)
+        XCTAssertEqual(provider.discoveryCount, 1)
+        XCTAssertEqual(controller.dashboardFact?.id, "synthetic-trial")
+        XCTAssertFalse(controller.state.allowHealthData)
+        XCTAssertTrue(provider.tools.isEmpty)
+        controller.setDashboardVisible(false)
+        var saved = try store.load()
+        saved.dashboardMessage?.generatedAt = Date().addingTimeInterval(-901)
+        try store.save(saved)
+        controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
+        controller.setDashboardVisible(true)
+        try await waitForDashboard(controller)
+        XCTAssertEqual(provider.discoveryCount, 1)
+        try controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", enableT1DUpdates: false)
+        try await waitForDashboard(controller)
+        XCTAssertNil(try store.load().dashboardDiscoveries)
+        XCTAssertNil(controller.state.dashboardMessage?.sourceFact)
+        XCTAssertEqual(provider.discoveryCount, 1)
+        controller.setDashboardVisible(false)
+    }
+
+    func testFailedPublicSearchDoesNotInventNewsAndIsThrottled() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: false)
+        defer { cleanup() }
+        let provider = CycleProviderProbe()
+        provider.discoveryFailure = true
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
+        controller.setDashboardVisible(true)
+        try await waitForDashboard(controller)
+        XCTAssertEqual(provider.discoveryCount, 1)
+        XCTAssertNil(controller.state.dashboardMessage?.sourceFact)
+        XCTAssertNotEqual(controller.state.dashboardMessage?.kind, .fact)
+        XCTAssertNil(controller.dashboardRefreshError)
+        controller.requestDashboardRefresh(now: Date().addingTimeInterval(901))
+        try await waitForDashboard(controller)
+        XCTAssertEqual(provider.discoveryCount, 1)
+        XCTAssertNil(controller.state.dashboardMessage?.sourceFact)
+        controller.setDashboardVisible(false)
+    }
+
+    func testEditableNamePersistsAndIsUsedOccasionally() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: false)
+        defer { cleanup() }
+        var state = try store.load()
+        state.preferredName = "Michelle"
+        try store.save(state)
+        let provider = CycleProviderProbe()
+        for count in 0..<4 {
+            state = try store.load()
+            state.dashboardMessage?.generatedAt = Date().addingTimeInterval(-901)
+            try store.save(state)
+            let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
+            controller.setDashboardVisible(true)
+            try await waitForDashboard(controller)
+            XCTAssertNil(controller.dashboardRefreshError)
+            XCTAssertEqual(controller.state.dashboardMessage?.text.contains("Michelle"), count % 3 == 0)
+            controller.setDashboardVisible(false)
+        }
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
+        try controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", preferredName: "  River  ")
+        XCTAssertEqual(try store.load().displayName, "River")
+        XCTAssertNil(try store.load().dashboardMessage)
+    }
+
+    func testRecentUserTopicsRequireSharingAndRespectOptOutAndClearing() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: true)
+        defer { cleanup() }
+        var state = try store.load()
+        state.messages = [CompanionMessage(role: "user", text: "Could sleep affect my mornings?")]
+        try store.save(state)
+        let provider = CycleProviderProbe()
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" },
+            dashboardHealthReader: { _, _, _ in [:] }, applicationIsActive: { true })
+        controller.setDashboardVisible(true)
+        try await waitForDashboard(controller)
+        var payload = try XCTUnwrap(provider.messages.last?["content"] as? String)
+        XCTAssertTrue(payload.contains("Could sleep affect my mornings?"))
+        try controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: true, key: "", useRecentChatsForDashboard: false)
+        try await waitForDashboard(controller)
+        payload = try XCTUnwrap(provider.messages.last?["content"] as? String)
+        XCTAssertFalse(payload.contains("Could sleep affect my mornings?"))
+        controller.clearConversation()
+        try await waitForDashboard(controller)
+        XCTAssertTrue(try store.load().messages.isEmpty)
+        controller.setDashboardVisible(false)
+    }
+
+    func testDashboardTapKeepsExactDisplayedTopicAndOpeningTurnIsReadOnly() async throws {
+        let (store, tracker, cleanup) = try fixture(shareHealth: false)
+        defer { cleanup() }
+        let provider = CycleProviderProbe()
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
+        controller.setDashboardVisible(true)
+        try await waitForDashboard(controller)
+        let displayed = try XCTUnwrap(controller.state.dashboardMessage)
+        controller.prepareDashboardDiscussion()
+        controller.requestDashboardRefresh(now: Date().addingTimeInterval(901))
+        try await waitForDashboard(controller)
+        XCTAssertNotEqual(controller.state.dashboardMessage?.text, displayed.text)
+        controller.setDashboardVisible(false)
+        controller.beginChatSession()
+        for _ in 0..<200 where controller.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        let detail = provider.messages.compactMap { $0["content"] as? String }.first { $0.contains("The user tapped this exact dashboard") }
+        XCTAssertTrue(detail?.contains(displayed.text) == true)
+        XCTAssertEqual(controller.state.messages.first?.text, displayed.followUpQuestion)
+        XCTAssertEqual(controller.state.messages.first?.dashboardOrigin, true)
+        let names = provider.tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
+        XCTAssertEqual(Set(names), Set(["get_glucose_summary", "get_insulin_summary", "get_carb_entries", "get_cycle_context"]))
+        XCTAssertTrue(controller.state.actions.isEmpty)
+        controller.endChatSession()
     }
 
     func testSuggestedTopicsRegenerateOnEntryWithoutReadingHealthStores() async throws {

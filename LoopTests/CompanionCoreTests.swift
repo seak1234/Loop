@@ -77,8 +77,8 @@ final class CompanionCoreTests: XCTestCase {
 
     func testDashboardRefreshCadenceAndRetryThrottle() {
         XCTAssertTrue(CompanionDashboardRefresh.isConcise("Small observations build diabetes know-how."))
-        XCTAssertFalse(CompanionDashboardRefresh.isConcise(String(repeating: "x", count: 91)))
-        XCTAssertFalse(CompanionDashboardRefresh.isConcise(Array(repeating: "one", count: 13).joined(separator: " ")))
+        XCTAssertFalse(CompanionDashboardRefresh.isConcise(String(repeating: "x", count: 141)))
+        XCTAssertFalse(CompanionDashboardRefresh.isConcise(Array(repeating: "one", count: 25).joined(separator: " ")))
         let oldStyle = CompanionDashboardMessage(text: "A longer company greeting", generatedAt: now, includesHealthData: false, styleVersion: nil)
         XCTAssertFalse(CompanionDashboardRefresh.isDisplayable(oldStyle, now: now))
         XCTAssertTrue(CompanionDashboardRefresh.isDue(message: oldStyle, lastAttempt: nil, dataChanged: false, now: now))
@@ -120,30 +120,116 @@ final class CompanionCoreTests: XCTestCase {
         XCTAssertThrowsError(try CompanionTopic.decodeSuggestions(#"{"topics":[{"title":"Food labels","prompt":""},{"title":"Sleep and glucose","prompt":"Learn."}]}"#))
     }
 
-    func testDashboardRotationPrefersMotivationAndPersists() throws {
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: nil, allowHealthData: true), .motivation)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: 0, allowHealthData: true), .motivation)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: 1, allowHealthData: true), .motivation)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: 2, allowHealthData: true), .insight)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: 2, allowHealthData: false), .motivation)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: 3, allowHealthData: true), .fact)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: 3, allowHealthData: false), .fact)
-        var state = CompanionState()
-        state.dashboardRotation = 2
-        let restored = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
-        XCTAssertEqual(restored.dashboardRotation, 2)
-        XCTAssertEqual(CompanionDashboardKind.next(rotation: restored.dashboardRotation, allowHealthData: true), .insight)
+    func testDashboardChoosesRelevantKindsAndKeepsFactsInTheMix() {
+        let basic = CompanionDashboardKind.eligible(healthEvidence: false, recentChat: false, history: [])
+        XCTAssertFalse(basic.contains(.insight))
+        XCTAssertFalse(basic.contains(.followUp))
+        XCTAssertTrue(basic.contains(.fact))
+        XCTAssertTrue(CompanionDashboardKind.eligible(healthEvidence: true, recentChat: true, history: []).contains(.followUp))
+        let repeated = (0..<4).map { _ in CompanionDashboardMessage(text: "Hello", generatedAt: now, includesHealthData: false, kind: .curiosity) }
+        XCTAssertFalse(CompanionDashboardKind.eligible(healthEvidence: true, recentChat: false, history: Array(repeated.prefix(2))).contains(.curiosity))
+        XCTAssertEqual(CompanionDashboardKind.eligible(healthEvidence: true, recentChat: false, history: repeated), [.fact])
     }
 
-    func testFactRotationPersistsAndDoesNotImmediatelyRepeat() throws {
+    func testDashboardNamesAndTapQuestionsAreValidated() throws {
+        let raw = #"{"text":"Michelle, want to explore what makes mornings different?","kind":"curiosity","question":"What can affect glucose in the morning?","factID":null,"topicID":null}"#
+        XCTAssertNoThrow(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: [], name: "Michelle", useName: false))
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.fact], factID: "fact", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: ["Michelle, want to explore what makes mornings different!"], name: "Michelle", useName: true))
+        let banana = raw.replacingOccurrences(of: "Michelle, want to explore what makes mornings different?", with: "Can meals feel more predictable?")
+        XCTAssertNoThrow(try CompanionDashboardSuggestion.decode(banana, allowedKinds: [.curiosity], factID: "fact", topicIDs: [], recentTexts: [], name: "An", useName: false))
+    }
+
+    func testNameDefaultsAndDashboardMemoryLoadFromLegacyState() throws {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(CompanionState())) as! [String: Any]
+        object.removeValue(forKey: "preferredName")
+        object.removeValue(forKey: "useRecentChatsForDashboard")
+        let restored = try JSONDecoder().decode(CompanionState.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(restored.displayName, "Michelle")
+        var state = restored
+        state.preferredName = ""
+        XCTAssertEqual(state.displayName, "")
+    }
+
+    private func discovery(_ id: String, subject: CompanionDashboardSubject = .cellTherapy, news: Bool = false) -> CompanionDashboardFact {
+        CompanionDashboardFact(id: id, fact: "A synthetic public research discovery, not a real medical finding.",
+            source: URL(string: "https://www.nih.gov/news-events/" + id)!, subject: subject, topicKey: id,
+            publishedAt: String(ISO8601DateFormatter().string(from: now).prefix(10)), checkedAt: now,
+            evidenceStage: news ? "early-human-trial" : "background", region: "International research", isNews: news)
+    }
+
+    func testDashboardSubjectMemorySurvivesRelaunchAndAvoidsSixRecentSubjects() throws {
         var state = CompanionState()
-        let first = CompanionDashboardFact.next(cursor: state.dashboardFactCursor)
-        state.dashboardFactCursor = 1
+        var history: [CompanionDashboardMessage] = []
+        for index in 0..<60 {
+            state = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
+            let instant = now.addingTimeInterval(Double(index) * 900)
+            let plan = CompanionDashboardPlan.next(state: state, history: history,
+                allowed: [.motivation, .curiosity, .fact], canCelebrate: false, now: instant)
+            XCTAssertFalse(history.suffix(6).contains { $0.subject == plan.subject })
+            XCTAssertFalse(plan.subject == .glucoseWins)
+            state.dashboardSubjectLastShown = (state.dashboardSubjectLastShown ?? [:]).merging([plan.subject.rawValue: instant]) { _, value in value }
+            history.append(CompanionDashboardMessage(text: "Test", generatedAt: instant, includesHealthData: false, subject: plan.subject))
+        }
+        XCTAssertTrue(Set(history.compactMap(\.subject)).count >= 20)
+    }
+
+    func testDiscoveryFeedChangesAndKnownOrSeenStoriesDoNotRepeat() throws {
+        var state = CompanionState()
+        let first = discovery("study-one", subject: .cellTherapy)
+        let second = discovery("device-two", subject: .devices)
+        state.dashboardDiscoveries = [first, second]
+        state.dashboardKnownFacts = [first.id]
+        let plan = CompanionDashboardPlan.next(state: state, history: [], allowed: [.fact], canCelebrate: false, now: now)
+        XCTAssertEqual(plan.fact?.id, second.id)
+        state.dashboardFactLastShown = [second.id: now]
+        let exhausted = CompanionDashboardPlan.next(state: state, history: [], allowed: [.fact], canCelebrate: false, now: now)
+        XCTAssertNil(exhausted.fact)
+        XCTAssertFalse(exhausted.kinds.contains(.fact))
+        state.dashboardDiscoveries?.append(discovery("fresh-research", subject: .immuneResearch))
         let restored = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
-        let second = CompanionDashboardFact.next(cursor: restored.dashboardFactCursor)
-        XCTAssertFalse(first.id == second.id)
-        XCTAssertEqual(CompanionDashboardFact.next(cursor: CompanionDashboardFact.catalog.count).id, first.id)
-        XCTAssertTrue(CompanionDashboardFact.catalog.allSatisfy { $0.source.scheme == "https" })
+        let refreshed = CompanionDashboardPlan.next(state: restored, history: [], allowed: [.fact], canCelebrate: false, now: now)
+        XCTAssertEqual(refreshed.fact?.id, "fresh-research")
+    }
+
+    func testNewsNeedsRetrievedCitationDateRegionAndFreshness() throws {
+        let item = discovery("trial-result", news: true)
+        let raw = String(decoding: try JSONEncoder().encode(["items": [item]]), as: UTF8.self)
+        let contents = [CompanionDashboardFact.sourceKey(item.source): "Published " + item.publishedAt!]
+        XCTAssertEqual(try CompanionDashboardFact.decodeDiscoveries(raw, citations: [], sourceContents: contents, now: now).count, 0)
+        XCTAssertEqual(try CompanionDashboardFact.decodeDiscoveries(raw, citations: [item.source], now: now).count, 0)
+        let accepted = try CompanionDashboardFact.decodeDiscoveries(raw, citations: [item.source], sourceContents: contents, now: now)
+        XCTAssertEqual(accepted.count, 1)
+        XCTAssertEqual(accepted.first?.evidenceStage, "early-human-trial")
+        var unavailable = item
+        unavailable.evidenceStage = "approved"
+        unavailable.region = nil
+        let unqualified = String(decoding: try JSONEncoder().encode(["items": [unavailable]]), as: UTF8.self)
+        XCTAssertEqual(try CompanionDashboardFact.decodeDiscoveries(unqualified, citations: [item.source], sourceContents: contents, now: now).count, 0)
+        XCTAssertFalse(item.isUsable(now: now.addingTimeInterval(86401)))
+        var old = item
+        old.publishedAt = "2020-01-01"
+        XCTAssertFalse(old.isUsable(now: now))
+        old.publishedAt = "2099-01-01"
+        XCTAssertFalse(old.isUsable(now: now))
+        XCTAssertFalse(CompanionDashboardFact.safeSource(URL(string: "https://nih.gov.attacker.example/story")!))
+        XCTAssertFalse(CompanionDashboardFact.safeSource(URL(string: "http://www.nih.gov/story")!))
+        XCTAssertFalse(CompanionDashboardFact.safeSource(URL(string: "https://www.nih.gov/")!))
+        XCTAssertFalse(CompanionDashboardFact.sourceKey(URL(string: "https://www.nih.gov/story?id=1")!) == CompanionDashboardFact.sourceKey(URL(string: "https://www.nih.gov/story?id=2")!))
+        XCTAssertEqual(CompanionDashboardFact.sourceKey(URL(string: "https://www.nih.gov/story?utm_source=test#part")!), "https://www.nih.gov/story")
+    }
+
+    func testPublicSearchIsSeparateBoundedAndHasNoAppTools() {
+        let body = OpenRouterCompanionProvider.requestBody(model: "example/model", reasoningEffort: .medium,
+            messages: [["role": "user", "content": "Public T1D research only"]], tools: [OpenRouterCompanionProvider.discoverySearchTool])
+        XCTAssertEqual(body["max_tool_calls"] as? Int, 2)
+        let tools = body["tools"] as! [[String: Any]]
+        XCTAssertEqual(tools.count, 1)
+        XCTAssertEqual(tools.first?["type"] as? String, "openrouter:web_search")
+        XCTAssertNil(tools.first?["function"])
+        let ordinary = OpenRouterCompanionProvider.requestBody(model: "example/model", reasoningEffort: .medium, messages: [], tools: CompanionTools.definitions)
+        XCTAssertNil(ordinary["max_tool_calls"])
     }
 
     private func recentEncouragementPoints(_ value: Double = 105) -> [CompanionGlucosePoint] {

@@ -109,7 +109,10 @@ struct CompanionDashboardCard: View {
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        Button(action: open) {
+        Button {
+            controller.prepareDashboardDiscussion(now: dashboardNow)
+            open()
+        } label: {
             HStack(spacing: 14) {
                 MochiAvatar(size: 64)
                 Text(controller.dashboardText(now: dashboardNow))
@@ -125,7 +128,16 @@ struct CompanionDashboardCard: View {
             .padding(.horizontal, 10).padding(.vertical, 6)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open Mochi to learn about your diabetes")
+        .accessibilityLabel(controller.dashboardText(now: dashboardNow))
+        .accessibilityHint("Open Mochi to explore this message")
+        .contextMenu {
+            if let message = controller.state.dashboardMessage, message.subject != nil,
+               CompanionDashboardRefresh.isDisplayable(message, now: dashboardNow) {
+                Button { controller.rateDashboardMessage(.more, message: message) } label: { Label("More like this", systemImage: "hand.thumbsup") }
+                Button { controller.rateDashboardMessage(.less, message: message) } label: { Label("Less of this", systemImage: "hand.thumbsdown") }
+                Button { controller.rateDashboardMessage(.alreadyKnow, message: message) } label: { Label("Already know this", systemImage: "checkmark") }
+            }
+        }
         .onAppear { controller.setDashboardVisible(true) }
         .onDisappear { controller.setDashboardVisible(false) }
         .onChange(of: controller.state.dashboardMessage?.generatedAt) { _ in
@@ -156,6 +168,17 @@ struct CompanionView: View {
     private struct CarbReview: Identifiable {
         let id: UUID
         let model: CarbEntryViewModel
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        // Wait for the message list and viewport to lay out before locating the bottom.
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+            } else {
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+        }
     }
 
     var body: some View {
@@ -193,12 +216,27 @@ struct CompanionView: View {
                                     Button("Stop") { controller.cancelChat() }
                                 }
                             }
+                            if let fact = controller.activeDashboardDiscussion?.sourceFact {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text([fact.evidenceStage?.replacingOccurrences(of: "-", with: " "), fact.region].compactMap { $0 }.joined(separator: " · "))
+                                        .foregroundColor(.secondary)
+                                    Link(fact.publishedAt.map { "Read source · " + $0 } ?? "Read source", destination: fact.source)
+                                }
+                                .font(.caption)
+                            }
                             Color.clear.frame(height: 1).id("bottom")
                         }
                         .padding()
                     }
-                    .onChange(of: controller.state.messages.count) { _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
-                    .onChange(of: controller.state.actions.count) { _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                    .background(GeometryReader { geometry in
+                        Color.clear.onChange(of: geometry.size.height) { _ in
+                            scrollToLatest(proxy, animated: false)
+                        }
+                    })
+                    .onAppear { scrollToLatest(proxy, animated: false) }
+                    .onChange(of: controller.state.messages.count) { _ in scrollToLatest(proxy) }
+                    .onChange(of: controller.state.actions.filter { $0.status == .pending }.map(\.id)) { _ in scrollToLatest(proxy) }
+                    .onChange(of: controller.isThinking) { _ in scrollToLatest(proxy) }
                 }
                 if !controller.hasKey {
                     Button("Connect OpenRouter to chat") { showSettings = true }
@@ -234,7 +272,7 @@ struct CompanionView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         if let fact = controller.dashboardFact {
-                            Link(destination: fact.source) { Label("Source for this fact", systemImage: "book") }
+                            Link(destination: fact.source) { Label(fact.isNews == true ? "Read source · " + (fact.publishedAt ?? "") : "Read discovery source", systemImage: "book") }
                         }
                         Button { showRules = true } label: { Label("Rules & activity", systemImage: "bell.badge") }
                         Button { showSettings = true } label: { Label("Connection & personality", systemImage: "slider.horizontal.3") }
@@ -382,6 +420,9 @@ struct CompanionSettingsView: View {
     @State private var loadingModels = false
     @State private var catalogError: String?
     @State private var loadedSettings = false
+    @State private var preferredName = "Michelle"
+    @State private var useRecentChatsForDashboard = true
+    @State private var enableT1DUpdates = true
     @State private var personality = ""
     @State private var allowHealthData = false
     @State private var error: String?
@@ -389,6 +430,20 @@ struct CompanionSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("About you")) {
+                    TextField("Your name", text: $preferredName).textContentType(.givenName)
+                    Text("Mochi uses your name now and then. Leave it empty to skip names.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Toggle("Worldwide T1D discoveries & updates", isOn: $enableT1DUpdates)
+                    Text("Find fresh public-source stories through OpenRouter web search. Web searches use additional OpenRouter credits. Your name, chats and health data are never included in search requests.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Button("Reset dashboard topic preferences") { controller.resetDashboardPreferences() }
+                    Text("Long-press a dashboard message for more like this, less of this, or already know this.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Toggle("Revisit recent chat topics", isOn: $useRecentChatsForDashboard)
+                    Text("When health-data sharing is on, Mochi can follow up on topics from your recent chats on this device. Clearing the conversation removes those topics.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
                 Section(header: Text("OpenRouter connection"), footer: Text("Use your own OpenRouter key and credits. Your key stays in this device’s Keychain. Choose a model that supports tool calling.")) {
                     Label(controller.hasKey ? "Key connected" : "Not connected", systemImage: controller.hasKey ? "checkmark.shield" : "key")
                     SecureField(controller.hasKey ? "Replace key (optional)" : "OpenRouter API key", text: $key)
@@ -442,7 +497,7 @@ struct CompanionSettingsView: View {
                             if let selectedModel, !selectedModel.efforts.contains(reasoningEffort) {
                                 throw CompanionError.invalid("Choose a reasoning effort supported by this model.")
                             }
-                            try controller.saveSettings(model: model, reasoningEffort: reasoningEffort, personality: personality, allowHealthData: allowHealthData, key: key)
+                            try controller.saveSettings(model: model, reasoningEffort: reasoningEffort, personality: personality, allowHealthData: allowHealthData, key: key, preferredName: preferredName, useRecentChatsForDashboard: useRecentChatsForDashboard, enableT1DUpdates: enableT1DUpdates)
                             key = ""
                             dismiss()
                         } catch { self.error = error.localizedDescription }
@@ -454,6 +509,9 @@ struct CompanionSettingsView: View {
         .onAppear {
             guard !loadedSettings else { return }
             loadedSettings = true
+            preferredName = controller.state.displayName
+            useRecentChatsForDashboard = controller.state.useRecentChatsForDashboard != false
+            enableT1DUpdates = controller.state.enableT1DUpdates != false
             model = controller.state.model
             reasoningEffort = controller.state.reasoningEffort ?? .providerDefault
             personality = controller.state.personality
