@@ -3166,11 +3166,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 return
             }
             backgroundColor = .clear
+            clipsToBounds = false
+            contentView.clipsToBounds = false
             selectionStyle = .none
             let controller = UIHostingController(rootView: card)
             if #available(iOS 16.0, *) { controller.sizingOptions = .intrinsicContentSize }
             owner.addChild(controller)
             controller.view.backgroundColor = .clear
+            controller.view.clipsToBounds = false
             controller.view.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(controller.view)
             NSLayoutConstraint.activate([

@@ -447,6 +447,7 @@ struct CompanionDashboardCard: View {
                 .shadow(color: MochiStyle.blue.opacity(0.08), radius: 5, y: 2)
         }
         .padding(.horizontal, 16)
+        .padding(.top, -12)
         .padding(.bottom, 10)
     }
 }
