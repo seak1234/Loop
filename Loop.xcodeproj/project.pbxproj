@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0C060000000000000000002 /* UIRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C060000000000000000001 /* UIRegressionTests.swift */; };
 		D0C050000000000000000002 /* CompanionCycleIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */; };
 		D0C040000000000000000002 /* CompanionCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C040000000000000000001 /* CompanionCoreTests.swift */; };
 		D0C020000000000000000001 /* CompanionCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C010000000000000000001 /* CompanionCore.swift */; };
@@ -771,6 +772,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0C060000000000000000001 /* UIRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIRegressionTests.swift; sourceTree = "<group>"; };
 		D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCycleIntegrationTests.swift; sourceTree = "<group>"; };
 		D0C040000000000000000001 /* CompanionCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCoreTests.swift; sourceTree = "<group>"; };
 		D0C010000000000000000001 /* CompanionCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCore.swift; sourceTree = "<group>"; };
@@ -2099,6 +2101,7 @@
 				43E2D90F1D20C581004DA55F /* Info.plist */,
 				A9DF02CA24F72B9E00B7C988 /* CriticalEventLogTests.swift */,
 				A96DAC292838EF8A00D94E38 /* DiagnosticLogTests.swift */,
+				D0C060000000000000000001 /* UIRegressionTests.swift */,
 				D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */,
 				D0C040000000000000000001 /* CompanionCoreTests.swift */,
 				D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */,
@@ -3808,6 +3811,7 @@
 				E98A55F324EDD9530008715D /* MockSettingsStore.swift in Sources */,
 				C165756F2534C468004AE16E /* SimpleBolusViewModelTests.swift in Sources */,
 				A96DAC2A2838EF8A00D94E38 /* DiagnosticLogTests.swift in Sources */,
+				D0C060000000000000000002 /* UIRegressionTests.swift in Sources */,
 				D0C050000000000000000002 /* CompanionCycleIntegrationTests.swift in Sources */,
 				D0C040000000000000000002 /* CompanionCoreTests.swift in Sources */,
 				D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */,

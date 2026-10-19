@@ -45,6 +45,9 @@ final class CompanionController: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     private var evaluationTask: Task<Void, Never>?
     private var chatTask: Task<Void, Never>?
+    private var chatRevision = UUID()
+    private var commitInProgress = false
+    private var commitWaiters: [CheckedContinuation<Void, Never>] = []
     private var needsEvaluation = false
     private var busyActions = Set<UUID>()
 
@@ -201,14 +204,15 @@ final class CompanionController: ObservableObject {
               state.dashboardDiscoveryLastRefresh.map({ now.timeIntervalSince($0) >= 12 * 3600 || $0 > now }) ?? true,
               state.dashboardDiscoveryLastAttempt.map({ now.timeIntervalSince($0) >= 3600 || $0 > now }) ?? true else { return }
         do {
-            try commit { $0.dashboardDiscoveryLastAttempt = now }
+            try await commit { $0.dashboardDiscoveryLastAttempt = now }
+            try Task.checkCancellation()
             let existing = state.dashboardDiscoveries ?? []
             let exclusions = Array(Set(existing.map(\.id) + (state.dashboardKnownFacts ?? [])
                 + (state.dashboardRecentMessages ?? []).compactMap { $0.sourceFact?.topicKey })).sorted()
             let items = try await provider.discover(model: model, reasoningEffort: effort, now: now, excluding: exclusions)
             try Task.checkCancellation()
             guard hasKey, state.enableT1DUpdates != false, !items.isEmpty else { return }
-            try commit {
+            try await commit {
                 var ids = Set<String>()
                 $0.dashboardDiscoveries = Array((items + existing).filter { $0.isUsable(now: now) && ids.insert($0.id).inserted }.prefix(40))
                 $0.dashboardDiscoveryLastRefresh = now
@@ -229,7 +233,7 @@ final class CompanionController: ObservableObject {
         pendingDashboardDiscussion = nil
         guard hasKey, !message.includesHealthData || state.allowHealthData, let question = message.followUpQuestion else { return }
         activeDashboardDiscussion = message
-        send(question, dashboardContext: message)
+        Task { await send(question, dashboardContext: message) }
     }
 
     func dashboardText(now: Date = Date()) -> String {
@@ -259,12 +263,12 @@ final class CompanionController: ObservableObject {
         isRefreshingDashboard = false
     }
 
-    private func invalidateDashboard() {
+    private func invalidateDashboard() async {
         cancelDashboardRefresh()
         dashboardLastAttempt = nil
         dashboardDataChanged = true
         dashboardRefreshError = nil
-        do { try commit { $0.dashboardMessage = nil } }
+        do { try await commit { $0.dashboardMessage = nil } }
         catch { dashboardRefreshError = error.localizedDescription }
         requestDashboardRefresh()
     }
@@ -359,7 +363,8 @@ final class CompanionController: ObservableObject {
                     factID: suggestion.kind == .fact ? plan.fact?.id : nil, kind: suggestion.kind, followUpQuestion: suggestion.question,
                     conversationTopic: topic.map { String($0.text.prefix(240)) }, conversationDate: topic?.date,
                     subject: plan.subject, sourceFact: suggestion.kind == .fact ? plan.fact : nil)
-                try commit {
+                try await commit {
+                    guard dashboardRevision == revision, state.allowHealthData == shareHealth, hasKey else { throw CancellationError() }
                     $0.dashboardMessage = message
                     $0.dashboardRecentMessages = Array((history + [message]).suffix(48))
                     $0.dashboardGenerationCount = max(0, $0.dashboardGenerationCount ?? 0) + 1
@@ -378,11 +383,11 @@ final class CompanionController: ObservableObject {
         }
     }
 
-    func rateDashboardMessage(_ feedback: CompanionDashboardFeedback, message: CompanionDashboardMessage) {
+    func rateDashboardMessage(_ feedback: CompanionDashboardFeedback, message: CompanionDashboardMessage) async {
         guard let subject = message.subject,
               CompanionDashboardRefresh.isDisplayable(message, now: Date()) else { return }
         do {
-            try commit {
+            try await commit {
                 if feedback == .alreadyKnow, let fact = message.factID {
                     $0.dashboardKnownFacts = Array(Set(($0.dashboardKnownFacts ?? []) + [fact])).sorted()
                 } else {
@@ -390,29 +395,41 @@ final class CompanionController: ObservableObject {
                     $0.dashboardSubjectPreferences?[subject.rawValue] = feedback == .more ? .more : .less
                 }
             }
-            invalidateDashboard()
+            await invalidateDashboard()
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func resetDashboardPreferences() {
+    func resetDashboardPreferences() async {
         do {
-            try commit { $0.dashboardSubjectPreferences = nil; $0.dashboardKnownFacts = nil }
-            invalidateDashboard()
+            try await commit { $0.dashboardSubjectPreferences = nil; $0.dashboardKnownFacts = nil }
+            await invalidateDashboard()
         } catch { errorMessage = error.localizedDescription }
     }
 
-    private func commit(_ change: (inout CompanionState) -> Void) throws {
+    private func commit(_ change: (inout CompanionState) throws -> Void) async throws {
+        // Serialize the whole read/change/write/publish transaction across suspension.
+        // Each waiter derives its snapshot from the last successfully persisted state.
+        if commitInProgress {
+            await withCheckedContinuation { commitWaiters.append($0) }
+        } else {
+            commitInProgress = true
+        }
+        defer {
+            if commitWaiters.isEmpty { commitInProgress = false }
+            else { commitWaiters.removeFirst().resume() }
+        }
+        try Task.checkCancellation()
         if let storageFailure { throw CompanionError.invalid(storageFailure) }
         var updated = state
-        change(&updated)
+        try change(&updated)
         updated.messages = Array(updated.messages.suffix(200))
         updated.actions = Array(updated.actions.suffix(100))
         updated.events = Array(updated.events.suffix(100))
-        try store.save(updated)
+        try await store.saveInBackground(updated)
         state = updated
     }
 
-    func saveSettings(model: String, reasoningEffort: CompanionReasoningEffort, personality: String, allowHealthData: Bool, key: String, preferredName: String? = nil, useRecentChatsForDashboard: Bool? = nil, enableT1DUpdates: Bool? = nil) throws {
+    func saveSettings(model: String, reasoningEffort: CompanionReasoningEffort, personality: String, allowHealthData: Bool, key: String, preferredName: String? = nil, useRecentChatsForDashboard: Bool? = nil, enableT1DUpdates: Bool? = nil) async throws {
         let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !model.isEmpty, model.count <= 160, model.contains("/"), !model.contains(where: \.isWhitespace) else {
             throw CompanionError.invalid("Enter an OpenRouter model ID, including its provider prefix.")
@@ -423,10 +440,12 @@ final class CompanionController: ObservableObject {
             throw CompanionError.invalid("Keep your name under 50 characters on one line.")
         }
         if state.allowHealthData && !allowHealthData { cancelChat() }
+        cancelDashboardRefresh()
+        cancelTopicGeneration()
         pendingDashboardDiscussion = nil
         activeDashboardDiscussion = nil
         if !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { try CompanionKeychain.write(key) }
-        try commit {
+        try await commit {
             $0.model = model; $0.reasoningEffort = reasoningEffort; $0.personality = personality; $0.allowHealthData = allowHealthData
             if let name {
                 if name != state.displayName { $0.dashboardRecentMessages = [] }
@@ -440,40 +459,44 @@ final class CompanionController: ObservableObject {
             if !allowHealthData || useRecentChatsForDashboard == false { $0.dashboardRecentMessages = [] }
         }
         hasKey = (try? keyReader()) != nil
-        invalidateDashboard()
+        await invalidateDashboard()
         if chatVisible { refreshSuggestedTopics() }
     }
 
-    func disconnect() {
+    func disconnect() async {
         cancelChat()
         cancelDashboardRefresh()
         cancelTopicGeneration()
         suggestedTopics = []
-        do { try CompanionKeychain.delete(); hasKey = false; invalidateDashboard() }
+        do { try CompanionKeychain.delete(); hasKey = false; await invalidateDashboard() }
         catch { errorMessage = error.localizedDescription }
     }
 
-    func clearConversation() {
+    func clearConversation() async {
         cancelChat()
         pendingDashboardDiscussion = nil
         activeDashboardDiscussion = nil
-        do { try commit { $0.messages = []; $0.actions = []; $0.dashboardRecentMessages = []; $0.dashboardSubjectLastShown = nil; $0.dashboardFactLastShown = nil;
+        do { try await commit { $0.messages = []; $0.actions = []; $0.dashboardRecentMessages = []; $0.dashboardSubjectLastShown = nil; $0.dashboardFactLastShown = nil;
             $0.dashboardDiscoveries = nil; $0.dashboardDiscoveryLastAttempt = nil; $0.dashboardDiscoveryLastRefresh = nil } }
         catch { errorMessage = error.localizedDescription }
-        invalidateDashboard()
+        await invalidateDashboard()
     }
 
-    func cancelChat() { chatTask?.cancel() }
+    func cancelChat() { chatRevision = UUID(); chatTask?.cancel() }
 
-    func send(_ text: String, includeCycleContext: Bool = false, dashboardContext: CompanionDashboardMessage? = nil) {
+    @discardableResult
+    func send(_ text: String, includeCycleContext: Bool = false, dashboardContext: CompanionDashboardMessage? = nil) async -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isThinking else { return }
-        guard text.count <= 6000 else { errorMessage = "Keep each message under 6,000 characters."; return }
-        guard hasKey else { errorMessage = "Connect your OpenRouter key in settings to chat with Mochi."; return }
-        do { try commit { $0.messages.append(CompanionMessage(role: "user", text: text, includesHealthData: dashboardContext?.includesHealthData, dashboardOrigin: dashboardContext != nil)) } }
-        catch { errorMessage = error.localizedDescription; return }
-        errorMessage = nil
+        guard !text.isEmpty, !isThinking else { return false }
+        guard text.count <= 6000 else { errorMessage = "Keep each message under 6,000 characters."; return false }
+        guard hasKey else { errorMessage = "Connect your OpenRouter key in settings to chat with Mochi."; return false }
         isThinking = true
+        let revision = chatRevision
+        do { try await commit { $0.messages.append(CompanionMessage(role: "user", text: text, includesHealthData: dashboardContext?.includesHealthData, dashboardOrigin: dashboardContext != nil)) } }
+        catch { isThinking = false; errorMessage = error.localizedDescription; return false }
+        // Stop/clear/disconnect can arrive while the durable write is in progress.
+        guard revision == chatRevision else { isThinking = false; return true }
+        errorMessage = nil
         // Freeze model settings for this turn, including all of its tool round trips.
         let model = state.model
         let reasoningEffort = state.reasoningEffort ?? .providerDefault
@@ -521,7 +544,7 @@ final class CompanionController: ObservableObject {
                     try Task.checkCancellation()
                     messages.append(reply.message)
                     if reply.calls.isEmpty {
-                        try commit { $0.messages.append(CompanionMessage(role: "assistant", text: reply.text, includesHealthData: readHealthData)) }
+                        try await commit { $0.messages.append(CompanionMessage(role: "assistant", text: reply.text, includesHealthData: readHealthData)) }
                         return
                     }
                     for call in reply.calls {
@@ -546,6 +569,7 @@ final class CompanionController: ObservableObject {
                 if !Task.isCancelled { errorMessage = error.localizedDescription }
             }
         }
+        return true
     }
 
     private var diabetesMindset: String {
@@ -649,7 +673,7 @@ final class CompanionController: ObservableObject {
             }
             let action = CompanionAction(title: rule.title, rule: rule, replacingID: replacingID,
                                          originalRule: state.rules.first { $0.id == replacingID })
-            try commit { $0.actions.append(action) }
+            try await commit { $0.actions.append(action) }
             return try json(["status": "requires_confirmation", "action_id": action.id.uuidString])
         case "prepare_carb_entry":
             guard let grams = number(args["grams"]), let hours = number(args["absorptionHours"]),
@@ -663,7 +687,7 @@ final class CompanionController: ObservableObject {
             }
             guard state.actions.filter({ $0.status == .pending }).count < 12 else { throw CompanionError.invalid("Review pending actions first.") }
             let action = CompanionAction(title: "Review \(Int(grams)) g carb entry", carb: draft)
-            try commit { $0.actions.append(action) }
+            try await commit { $0.actions.append(action) }
             return try json(["status": "draft_only", "action_id": action.id.uuidString, "message": "The user must review and save in the normal carb form."])
         case "update_personality":
             guard let prompt = args["prompt"] as? String, !prompt.isEmpty, prompt.count <= 4000,
@@ -671,7 +695,7 @@ final class CompanionController: ObservableObject {
                 throw CompanionError.invalid("Supply a personality prompt of 1–4,000 characters and review pending actions first.")
             }
             let action = CompanionAction(title: "Update Mochi’s personality", personality: prompt)
-            try commit { $0.actions.append(action) }
+            try await commit { $0.actions.append(action) }
             return try json(["status": "requires_confirmation", "action_id": action.id.uuidString])
         default:
             throw CompanionError.invalid("This tool is not available in Mochi.")
@@ -685,8 +709,10 @@ final class CompanionController: ObservableObject {
         return a == b
     }
 
-    func decline(_ id: UUID) {
-        do { try commit { state in
+    func decline(_ id: UUID) async {
+        guard busyActions.insert(id).inserted else { return }
+        defer { busyActions.remove(id) }
+        do { try await commit { state in
             if let index = state.actions.firstIndex(where: { $0.id == id && $0.status == .pending }) { state.actions[index].status = .declined }
         } } catch { errorMessage = error.localizedDescription }
     }
@@ -719,7 +745,10 @@ final class CompanionController: ObservableObject {
                 let old = state.rules.first { $0.id == rule.id }
                 try await scheduleDaily(rule)
                 do {
-                    try commit { state in
+                    try await commit { state in
+                        guard state.actions.contains(where: { $0.id == id && $0.status == .pending }) else {
+                            throw CompanionError.invalid("This proposal is no longer available.")
+                        }
                         state.rules.removeAll { $0.id == rule.id }
                         state.rules.append(rule)
                         state.runtime.removeValue(forKey: rule.id.uuidString)
@@ -733,13 +762,16 @@ final class CompanionController: ObservableObject {
                     throw error
                 }
             } else if let personality = action.personality {
-                try commit { state in
+                try await commit { state in
+                    guard state.actions.contains(where: { $0.id == id && $0.status == .pending }) else {
+                        throw CompanionError.invalid("This proposal is no longer available.")
+                    }
                     state.personality = personality
                     state.dashboardMessage = nil
                     if let index = state.actions.firstIndex(where: { $0.id == id }) { state.actions[index].status = .applied }
                 }
             }
-            if action.personality != nil { invalidateDashboard(); if chatVisible { refreshSuggestedTopics() } }
+            if action.personality != nil { await invalidateDashboard(); if chatVisible { refreshSuggestedTopics() } }
             requestEvaluation()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -754,7 +786,7 @@ final class CompanionController: ObservableObject {
             if enabled { try await ensureNotificationPermission() }
             try await scheduleDaily(updated)
             do {
-                try commit { state in
+                try await commit { state in
                     if let index = state.rules.firstIndex(where: { $0.id == rule.id }) { state.rules[index] = updated }
                     state.runtime.removeValue(forKey: rule.id.uuidString)
                 }
@@ -764,10 +796,11 @@ final class CompanionController: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func deleteRule(_ id: UUID) {
-        guard !busyActions.contains(id) else { return }
+    func deleteRule(_ id: UUID) async {
+        guard busyActions.insert(id).inserted else { return }
+        defer { busyActions.remove(id) }
         do {
-            try commit { $0.rules.removeAll { $0.id == id }; $0.runtime.removeValue(forKey: id.uuidString) }
+            try await commit { $0.rules.removeAll { $0.id == id }; $0.runtime.removeValue(forKey: id.uuidString) }
             removeNotifications(for: id)
         } catch { errorMessage = error.localizedDescription }
     }
@@ -785,7 +818,7 @@ final class CompanionController: ObservableObject {
         viewModel.time = draft.date
         viewModel.absorptionTime = draft.absorptionHours * 3600
         viewModel.absorptionTimeWasEdited = true
-        try commit { state in
+        try await commit { state in
             if let index = state.actions.firstIndex(where: { $0.id == action.id }) { state.actions[index].status = .openedForReview }
         }
         return viewModel
@@ -795,7 +828,7 @@ final class CompanionController: ObservableObject {
         guard let action = state.actions.first(where: { $0.id == id }), let draft = action.carb else { return }
         do {
             let saved = try await matchingCarbs(draft)
-            try commit { state in
+            try await commit { state in
                 if let index = state.actions.firstIndex(where: { $0.id == id }), saved { state.actions[index].status = .applied }
             }
         } catch { errorMessage = "Could not verify the carb entry. Check the carb history before retrying." }
@@ -995,17 +1028,17 @@ final class CompanionController: ObservableObject {
                     let request = UNNotificationRequest(identifier: Self.notificationPrefix + rule.id.uuidString, content: content, trigger: nil)
                     // Persist deduplication state before dispatch. A failed dispatch restores it for a future reading.
                     let previous = state.runtime[rule.id.uuidString]
-                    try commit { $0.runtime[rule.id.uuidString] = runtime }
+                    try await commit { $0.runtime[rule.id.uuidString] = runtime }
                     do {
                         try await UNUserNotificationCenter.current().add(request)
                         guard state.rules.contains(where: { $0 == rule }) else { removeNotifications(for: rule.id); continue }
-                        try commit { $0.events.append(CompanionEventRecord(title: rule.title, detail: "Notification scheduled at \(Int(latest.mgdl)) mg/dL. " + rule.detail)) }
+                        try await commit { $0.events.append(CompanionEventRecord(title: rule.title, detail: "Notification scheduled at \(Int(latest.mgdl)) mg/dL. " + rule.detail)) }
                     } catch {
-                        try commit { $0.runtime[rule.id.uuidString] = previous }
+                        try await commit { $0.runtime[rule.id.uuidString] = previous }
                         throw error
                     }
                 } else {
-                    try commit { $0.runtime[rule.id.uuidString] = runtime }
+                    try await commit { $0.runtime[rule.id.uuidString] = runtime }
                 }
             }
         } catch {
@@ -1034,6 +1067,7 @@ final class CompanionMealConversation: ObservableObject {
     @Published private(set) var estimate: CompanionMealEstimate?
     @Published private(set) var isThinking = false
     @Published private(set) var needsReply = false
+    @Published private(set) var submissionError: String?
     @Published private(set) var error: String?
     private let controller: CompanionController
     private let maximumGrams: Double
@@ -1058,19 +1092,23 @@ final class CompanionMealConversation: ObservableObject {
 
     var canUseForm: Bool { !isThinking && !needsReply && error == nil && turns.contains { $0.reply != nil } }
     var canContinue: Bool { !isThinking && !needsReply && error == nil && (estimate?.grams ?? 0) > 0 }
-    var canAddPhoto: Bool { !isThinking && !needsReply && turns.filter { $0.jpeg != nil }.count < 6 }
+    var canSend: Bool { !isThinking && !needsReply && turns.count < 40 }
+    var canAddPhoto: Bool { canSend && turns.filter { $0.jpeg != nil }.count < 6 }
 
-    func send(_ text: String, jpeg: Data? = nil) {
+    @discardableResult
+    func send(_ text: String, jpeg: Data? = nil) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isThinking, !needsReply, !text.isEmpty else { return }
+        guard !isThinking, !needsReply, !text.isEmpty else { return false }
         guard text.count <= 3000, turns.count < 40,
               jpeg.map({ !$0.isEmpty && $0.count <= 2_000_000 && canAddPhoto }) ?? true else {
-            error = "Keep messages under 3,000 characters and use up to six photos per meal."
-            return
+            submissionError = turns.count >= 40 ? "This meal chat is full. You can still edit the form and continue." : "Keep messages under 3,000 characters and use up to six photos per meal."
+            return false
         }
+        submissionError = nil
         turns.append(.init(text: text, jpeg: jpeg))
         needsReply = true
         retry()
+        return true
     }
 
     func retry() {

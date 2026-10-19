@@ -60,7 +60,7 @@ final class CompanionCycleIntegrationTests: XCTestCase {
         let provider = CycleProviderProbe()
         let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker,
                                              keyReader: { "test-key-never-transmitted" })
-        controller.send("Read my cycle tracker")
+        await controller.send("Read my cycle tracker")
         for _ in 0..<200 where controller.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertFalse(controller.isThinking)
         XCTAssertNil(controller.errorMessage)
@@ -87,7 +87,7 @@ final class CompanionCycleIntegrationTests: XCTestCase {
         let provider = CycleProviderProbe()
         let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker,
                                              keyReader: { "test-key-never-transmitted" })
-        controller.send("Read my cycle tracker")
+        await controller.send("Read my cycle tracker")
         for _ in 0..<200 where controller.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertFalse(controller.isThinking)
         let output = try XCTUnwrap(provider.messages.first { $0["role"] as? String == "tool" }?["content"] as? String)
@@ -195,7 +195,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
             return CompanionCompletion(message: ["role": "assistant", "content": "Tap Apply to save."], text: "Tap Apply to save.", calls: [])
         }
         let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
-        controller.send("Be more direct, no emojis, and call me Michelle from now on.")
+        await controller.send("Be more direct, no emojis, and call me Michelle from now on.")
         for _ in 0..<200 where controller.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
         let action = try XCTUnwrap(controller.state.actions.first)
         XCTAssertEqual(action.status, .pending)
@@ -204,8 +204,8 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(try store.load().personality, "Be direct, use no emojis, and call me Michelle.")
         let futureProvider = CycleProviderProbe()
         let reloaded = CompanionController(provider: futureProvider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" }, applicationIsActive: { true })
-        reloaded.clearConversation()
-        reloaded.send("Hello")
+        await reloaded.clearConversation()
+        await reloaded.send("Hello")
         for _ in 0..<200 where reloaded.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertTrue((futureProvider.messages.first?["content"] as? String)?.contains("call me Michelle") == true)
         reloaded.setDashboardVisible(true)
@@ -250,20 +250,20 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         try await waitForDashboard(controller)
         let first = try XCTUnwrap(controller.state.dashboardMessage)
         XCTAssertEqual(first.sourceFact?.id, "synthetic-trial")
-        controller.rateDashboardMessage(.alreadyKnow, message: first)
+        await controller.rateDashboardMessage(.alreadyKnow, message: first)
         try await waitForDashboard(controller)
         XCTAssertTrue(try store.load().dashboardKnownFacts?.contains("synthetic-trial") == true)
         let second = try XCTUnwrap(controller.state.dashboardMessage)
         XCTAssertNotEqual(second.factID, first.factID)
-        controller.rateDashboardMessage(.less, message: second)
+        await controller.rateDashboardMessage(.less, message: second)
         try await waitForDashboard(controller)
         XCTAssertEqual(try store.load().dashboardSubjectPreferences?[second.subject!.rawValue], .less)
         XCTAssertNotEqual(controller.state.dashboardMessage?.subject, second.subject)
         // Feedback is attached to the card that was displayed, even if another card has since arrived.
-        controller.rateDashboardMessage(.more, message: first)
+        await controller.rateDashboardMessage(.more, message: first)
         try await waitForDashboard(controller)
         XCTAssertEqual(try store.load().dashboardSubjectPreferences?["cellTherapy"], .more)
-        controller.resetDashboardPreferences()
+        await controller.resetDashboardPreferences()
         try await waitForDashboard(controller)
         XCTAssertNil(try store.load().dashboardKnownFacts)
         XCTAssertNil(try store.load().dashboardSubjectPreferences)
@@ -289,7 +289,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         controller.setDashboardVisible(true)
         try await waitForDashboard(controller)
         XCTAssertEqual(provider.discoveryCount, 1)
-        try controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", enableT1DUpdates: false)
+        try await controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", enableT1DUpdates: false)
         try await waitForDashboard(controller)
         XCTAssertNil(try store.load().dashboardDiscoveries)
         XCTAssertNil(controller.state.dashboardMessage?.sourceFact)
@@ -335,7 +335,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
             controller.setDashboardVisible(false)
         }
         let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
-        try controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", preferredName: "  River  ")
+        try await controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", preferredName: "  River  ")
         XCTAssertEqual(try store.load().displayName, "River")
         XCTAssertNil(try store.load().dashboardMessage)
     }
@@ -353,11 +353,11 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         try await waitForDashboard(controller)
         var payload = try XCTUnwrap(provider.messages.last?["content"] as? String)
         XCTAssertTrue(payload.contains("Could sleep affect my mornings?"))
-        try controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: true, key: "", useRecentChatsForDashboard: false)
+        try await controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: true, key: "", useRecentChatsForDashboard: false)
         try await waitForDashboard(controller)
         payload = try XCTUnwrap(provider.messages.last?["content"] as? String)
         XCTAssertFalse(payload.contains("Could sleep affect my mornings?"))
-        controller.clearConversation()
+        await controller.clearConversation()
         try await waitForDashboard(controller)
         XCTAssertTrue(try store.load().messages.isEmpty)
         controller.setDashboardVisible(false)
@@ -433,7 +433,7 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         controller.setDashboardVisible(true)
         for _ in 0..<100 where provider.requestCount == 0 { try await Task.sleep(nanoseconds: 1_000_000) }
         controller.setDashboardVisible(false)
-        try controller.saveSettings(model: "example/model", reasoningEffort: .medium, personality: "Be kind", allowHealthData: false, key: "")
+        try await controller.saveSettings(model: "example/model", reasoningEffort: .medium, personality: "Be kind", allowHealthData: false, key: "")
         try await Task.sleep(nanoseconds: 150_000_000)
         XCTAssertNil(controller.state.dashboardMessage)
         XCTAssertNil(try store.load().dashboardMessage)

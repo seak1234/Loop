@@ -133,9 +133,9 @@ struct CompanionDashboardCard: View {
         .contextMenu {
             if let message = controller.state.dashboardMessage, message.subject != nil,
                CompanionDashboardRefresh.isDisplayable(message, now: dashboardNow) {
-                Button { controller.rateDashboardMessage(.more, message: message) } label: { Label("More like this", systemImage: "hand.thumbsup") }
-                Button { controller.rateDashboardMessage(.less, message: message) } label: { Label("Less of this", systemImage: "hand.thumbsdown") }
-                Button { controller.rateDashboardMessage(.alreadyKnow, message: message) } label: { Label("Already know this", systemImage: "checkmark") }
+                Button { Task { await controller.rateDashboardMessage(.more, message: message) } } label: { Label("More like this", systemImage: "hand.thumbsup") }
+                Button { Task { await controller.rateDashboardMessage(.less, message: message) } } label: { Label("Less of this", systemImage: "hand.thumbsdown") }
+                Button { Task { await controller.rateDashboardMessage(.alreadyKnow, message: message) } } label: { Label("Already know this", systemImage: "checkmark") }
             }
         }
         .onAppear { controller.setDashboardVisible(true) }
@@ -304,7 +304,7 @@ struct CompanionView: View {
                 .environment(\.dismissAction, { carbReview = nil })
         }
         .confirmationDialog("Clear the conversation and its action cards? Saved rules and personality will stay.", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Clear conversation", role: .destructive) { controller.clearConversation() }
+            Button("Clear conversation", role: .destructive) { Task { await controller.clearConversation() } }
         }
         .alert("Mochi", isPresented: Binding(get: { controller.errorMessage != nil }, set: { if !$0 { controller.errorMessage = nil } })) {
             Button("OK") { controller.errorMessage = nil }
@@ -355,7 +355,7 @@ struct CompanionView: View {
 
     private func suggestion(_ title: String, icon: String, prompt: @escaping () -> String) -> some View {
         Button {
-            if controller.hasKey { controller.send(prompt()) } else { showSettings = true }
+            if controller.hasKey { Task { await controller.send(prompt()) } } else { showSettings = true }
         } label: {
             HStack(spacing: 5) { Image(systemName: icon); Text(title).font(.caption).multilineTextAlignment(.center) }
                 .frame(maxWidth: .infinity, minHeight: 32).padding(6).mochiCard()
@@ -393,7 +393,7 @@ struct CompanionView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                Button("Dismiss") { controller.decline(action.id) }.buttonStyle(.bordered)
+                Button("Dismiss") { Task { await controller.decline(action.id) } }.buttonStyle(.bordered)
             }
             .disabled(busyActionIDs.contains(action.id))
         }
@@ -403,8 +403,9 @@ struct CompanionView: View {
     private func send() {
         guard !controller.isThinking, controller.hasKey else { return }
         let text = input
-        input = ""
-        controller.send(text)
+        Task {
+            if await controller.send(text), input == text { input = "" }
+        }
     }
 }
 
@@ -420,6 +421,7 @@ struct CompanionSettingsView: View {
     @State private var loadingModels = false
     @State private var catalogError: String?
     @State private var loadedSettings = false
+    @State private var saving = false
     @State private var preferredName = "Michelle"
     @State private var useRecentChatsForDashboard = true
     @State private var enableT1DUpdates = true
@@ -437,7 +439,7 @@ struct CompanionSettingsView: View {
                     Toggle("Worldwide T1D discoveries & updates", isOn: $enableT1DUpdates)
                     Text("Find fresh public-source stories through OpenRouter web search. Web searches use additional OpenRouter credits. Your name, chats and health data are never included in search requests.")
                         .font(.caption).foregroundColor(.secondary)
-                    Button("Reset dashboard topic preferences") { controller.resetDashboardPreferences() }
+                    Button("Reset dashboard topic preferences") { Task { await controller.resetDashboardPreferences() } }
                     Text("Long-press a dashboard message for more like this, less of this, or already know this.")
                         .font(.caption).foregroundColor(.secondary)
                     Toggle("Revisit recent chat topics", isOn: $useRecentChatsForDashboard)
@@ -469,7 +471,7 @@ struct CompanionSettingsView: View {
                     if let catalogError { Text(catalogError).font(.caption).foregroundColor(.secondary) }
                     Button("Refresh model list") { Task { await refreshModels() } }.disabled(loadingModels)
                     Link("Manage OpenRouter keys", destination: URL(string: "https://openrouter.ai/settings/keys")!)
-                    if controller.hasKey { Button("Remove API key", role: .destructive) { controller.disconnect() } }
+                    if controller.hasKey { Button("Remove API key", role: .destructive) { Task { await controller.disconnect() } } }
                 }
                 Section(header: Text("Make Mochi feel like you"), footer: Text("Describe tone, length, humor, and how you like encouragement. This does not grant additional app permissions.")) {
                     HStack {
@@ -493,18 +495,26 @@ struct CompanionSettingsView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        do {
-                            if let selectedModel, !selectedModel.efforts.contains(reasoningEffort) {
-                                throw CompanionError.invalid("Choose a reasoning effort supported by this model.")
-                            }
-                            try controller.saveSettings(model: model, reasoningEffort: reasoningEffort, personality: personality, allowHealthData: allowHealthData, key: key, preferredName: preferredName, useRecentChatsForDashboard: useRecentChatsForDashboard, enableT1DUpdates: enableT1DUpdates)
-                            key = ""
-                            dismiss()
-                        } catch { self.error = error.localizedDescription }
+                        guard !saving else { return }
+                        saving = true
+                        Task { @MainActor in
+                            defer { saving = false }
+                            do {
+                                if let selectedModel, !selectedModel.efforts.contains(reasoningEffort) {
+                                    throw CompanionError.invalid("Choose a reasoning effort supported by this model.")
+                                }
+                                try await controller.saveSettings(model: model, reasoningEffort: reasoningEffort, personality: personality, allowHealthData: allowHealthData, key: key, preferredName: preferredName, useRecentChatsForDashboard: useRecentChatsForDashboard, enableT1DUpdates: enableT1DUpdates)
+                                key = ""
+                                dismiss()
+                            } catch { self.error = error.localizedDescription }
+                        }
                     }
+                    .disabled(saving)
                 }
             }
+            .disabled(saving)
         }
+        .interactiveDismissDisabled(saving)
         .navigationViewStyle(.stack)
         .onAppear {
             guard !loadedSettings else { return }
@@ -652,7 +662,7 @@ private struct CompanionRulesView: View {
         .navigationViewStyle(.stack)
         .confirmationDialog("Delete this rule?", isPresented: Binding(get: { deletingRule != nil }, set: { if !$0 { deletingRule = nil } })) {
             Button("Delete rule", role: .destructive) {
-                if let id = deletingRule { controller.deleteRule(id) }
+                if let id = deletingRule { Task { await controller.deleteRule(id) } }
                 deletingRule = nil
             }
         }

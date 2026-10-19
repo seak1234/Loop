@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 import LoopCore
 
 class LiveActivityManagementViewModel : ObservableObject {
@@ -20,8 +21,24 @@ class LiveActivityManagementViewModel : ObservableObject {
     @Published var upperLimitChartMg: Double
     @Published var lowerLimitChartMg: Double
     
-    init() {
-        let liveActivitySettings = UserDefaults.standard.liveActivity ?? LiveActivitySettings()
+    private var savedSettings: LiveActivitySettings
+
+    var isDirty: Bool {
+        enabled != savedSettings.enabled || mode != savedSettings.mode ||
+        addPredictiveLine != savedSettings.addPredictiveLine || useLimits != savedSettings.useLimits ||
+        upperLimitChartMmol != savedSettings.upperLimitChartMmol || lowerLimitChartMmol != savedSettings.lowerLimitChartMmol ||
+        upperLimitChartMg != savedSettings.upperLimitChartMg || lowerLimitChartMg != savedSettings.lowerLimitChartMg
+    }
+
+    func markSaved(_ settings: LiveActivitySettings) {
+        // Notify even when the editable fields have not changed: the baseline has.
+        objectWillChange.send()
+        savedSettings = settings
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        let liveActivitySettings = defaults.liveActivity ?? LiveActivitySettings()
+        self.savedSettings = liveActivitySettings
         
         self.enabled = liveActivitySettings.enabled
         self.mode = liveActivitySettings.mode

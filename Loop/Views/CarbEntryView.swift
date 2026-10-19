@@ -473,6 +473,8 @@ private struct MochiMealPhotoView: View {
     @State private var picker: MealPhotoSource?
     @State private var pendingImage: UIImage?
     @State private var photoError: String?
+    @State private var processingPhoto = false
+    @State private var photoTask: Task<Void, Never>?
     @State private var showSettings = false
     @FocusState private var composing: Bool
 
@@ -497,7 +499,7 @@ private struct MochiMealPhotoView: View {
         NavigationView {
             VStack(spacing: 0) {
                 chat
-                if let error = photoError ?? conversation.error {
+                if let error = photoError ?? conversation.error ?? conversation.submissionError {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(error).font(.footnote).foregroundColor(.red)
                         HStack {
@@ -519,7 +521,7 @@ private struct MochiMealPhotoView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                        .accessibilityLabel("Mochi model and connection settings").disabled(conversation.isThinking)
+                        .accessibilityLabel("Mochi model and connection settings").disabled(conversation.isThinking || processingPhoto)
                 }
             }
             .fullScreenCover(item: $picker, onDismiss: {
@@ -538,7 +540,7 @@ private struct MochiMealPhotoView: View {
             .onAppear {
                 if conversation.turns.isEmpty { submitPhoto(initialImage, initial: true) }
             }
-            .onDisappear { conversation.cancel() }
+            .onDisappear { photoTask?.cancel(); conversation.cancel() }
         }
     }
 
@@ -546,7 +548,7 @@ private struct MochiMealPhotoView: View {
         VStack(spacing: 10) {
             CarbEntryFormFields(viewModel: draft, expandedRow: $expandedFormRow,
                                 showHowAbsorptionTimeWorks: $showAbsorptionInfo, iconsOnly: true)
-                .disabled(conversation.isThinking || conversation.needsReply)
+                .disabled(conversation.isThinking || conversation.needsReply || processingPhoto)
             Text("Photo estimates are approximate. You can edit the form or ask Mochi to adjust it.")
                 .font(.caption).foregroundColor(.secondary)
             Button {
@@ -557,7 +559,7 @@ private struct MochiMealPhotoView: View {
                 dismiss()
             } label: { Text("Continue").frame(maxWidth: .infinity) }
                 .buttonStyle(ActionButtonStyle())
-                .disabled(!conversation.canUseForm || draft.validMealFormValues == nil || photoError != nil)
+                .disabled(!conversation.canUseForm || draft.validMealFormValues == nil || photoError != nil || processingPhoto)
                 .accessibilityHint("Use these form values and open the normal bolus review")
         }.id("meal-form")
     }
@@ -571,10 +573,7 @@ private struct MochiMealPhotoView: View {
                         HStack {
                             if turn.reply == nil { Spacer(minLength: 32) }
                             VStack(alignment: .leading, spacing: 8) {
-                                if let jpeg = turn.jpeg, let image = UIImage(data: jpeg) {
-                                    Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 90)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
+                                if let jpeg = turn.jpeg { MealPhotoThumbnail(jpeg: jpeg) }
                                 Text(turn.text).font(.subheadline).textSelection(.enabled)
                             }
                             .padding(12)
@@ -582,6 +581,13 @@ private struct MochiMealPhotoView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             if turn.reply != nil { Spacer(minLength: 24) }
                         }.id(turn.id)
+                    }
+                    if processingPhoto {
+                        ProgressView("Preparing photo…")
+                    }
+                    if !conversation.canSend && !conversation.isThinking && !conversation.needsReply {
+                        Text("This meal chat is full. You can still edit the form and continue.")
+                            .font(.footnote).foregroundColor(.secondary)
                     }
                     if conversation.isThinking {
                         HStack { ProgressView(); Text("Mochi is looking…").font(.footnote).foregroundColor(.secondary) }
@@ -602,13 +608,13 @@ private struct MochiMealPhotoView: View {
                 Button { composing = false; picker = MealPhotoSource.preferredCapture } label: { Label("Take another photo", systemImage: "camera") }
                 Button { composing = false; picker = .library } label: { Label("Choose from photos", systemImage: "photo") }
             } label: { Image(systemName: "plus.circle.fill").font(.title2) }
-                .disabled(!conversation.canAddPhoto)
+                .disabled(!conversation.canAddPhoto || processingPhoto)
                 .accessibilityLabel("Add a meal photo")
             TextField("Ask about this meal…", text: $message)
                 .focused($composing).submitLabel(.send).onSubmit(sendMessage)
-                .disabled(conversation.isThinking || conversation.needsReply)
+                .disabled(conversation.isThinking || conversation.needsReply || processingPhoto)
             Button(action: sendMessage) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
-                .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || conversation.isThinking || conversation.needsReply)
+                .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !conversation.canSend || processingPhoto)
                 .accessibilityLabel("Send meal question")
         }
         .padding()
@@ -617,13 +623,45 @@ private struct MochiMealPhotoView: View {
 
     private func sendMessage() {
         composing = false
-        conversation.send(message)
-        message = ""
+        guard !processingPhoto else { return }
+        if conversation.send(message) { message = "" }
     }
 
     private func submitPhoto(_ image: UIImage, initial: Bool) {
+        guard !processingPhoto else { return }
         photoError = nil
-        guard image.size.width > 0, image.size.height > 0 else { photoError = "This photo couldn’t be opened. Choose another image."; return }
+        processingPhoto = true
+        let draftMessage = message
+        photoTask = Task { @MainActor in
+            defer { processingPhoto = false; photoTask = nil }
+            do {
+                let jpeg = try await MealPhotoProcessing.jpeg(from: image)
+                try Task.checkCancellation()
+                let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+                let accepted = conversation.send(initial ? "What do you think is in this meal?" : (text.isEmpty ? "Here’s another photo of the same meal." : text), jpeg: jpeg)
+                if accepted && message == draftMessage { message = "" }
+            } catch is CancellationError { }
+            catch { photoError = error.localizedDescription }
+        }
+    }
+}
+
+enum MealPhotoProcessing {
+    private static let queue = DispatchQueue(label: "Mochi.MealPhotoProcessing", qos: .userInitiated)
+
+    static func jpeg(from image: UIImage) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                do { continuation.resume(returning: try autoreleasepool { try normalizedJPEG(from: image) }) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
+    private static func normalizedJPEG(from image: UIImage) throws -> Data {
+        guard image.size.width > 0, image.size.height > 0 else {
+            throw CompanionError.invalid("This photo couldn’t be opened. Choose another image.")
+        }
         // Normalize orientation and remove source EXIF/location metadata before sending.
         let scale = min(1, 1280 / max(image.size.width, image.size.height))
         let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -636,12 +674,31 @@ private struct MochiMealPhotoView: View {
             image.draw(in: CGRect(origin: .zero, size: size))
         }
         guard let jpeg = resized.jpegData(compressionQuality: 0.8), jpeg.count <= 2_000_000 else {
-            photoError = "This photo is too large. Choose another image."
-            return
+            throw CompanionError.invalid("This photo is too large. Choose another image.")
         }
-        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        conversation.send(initial ? "What do you think is in this meal?" : (text.isEmpty ? "Here’s another photo of the same meal." : text), jpeg: jpeg)
-        message = ""
+        return jpeg
+    }
+}
+
+private struct MealPhotoThumbnail: View {
+    let jpeg: Data
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                ProgressView().frame(height: 90)
+            }
+        }
+        .task {
+            guard image == nil else { return }
+            let decoded = await Task.detached(priority: .userInitiated) { UIImage(data: jpeg) }.value
+            guard !Task.isCancelled else { return }
+            image = decoded
+        }
     }
 }
 

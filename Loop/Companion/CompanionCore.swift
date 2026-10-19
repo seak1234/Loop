@@ -705,8 +705,9 @@ struct CompanionState: Codable {
 }
 
 /// Store the whole transaction atomically. Never silently replace unreadable history with empty state.
-final class CompanionStateStore {
+final class CompanionStateStore: Sendable {
     let url: URL
+    private let writeQueue = DispatchQueue(label: "Mochi.StatePersistence", qos: .utility)
     init(url: URL) { self.url = url }
 
     func load() throws -> CompanionState {
@@ -714,6 +715,16 @@ final class CompanionStateStore {
         let state = try JSONDecoder().decode(CompanionState.self, from: Data(contentsOf: url))
         guard state.version == 1 else { throw CompanionError.invalid("This companion data needs a newer app version.") }
         return state
+    }
+
+    /// Encode and atomically persist a value snapshot without occupying the UI thread.
+    func saveInBackground(_ state: CompanionState) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            writeQueue.async {
+                do { try self.save(state); continuation.resume() }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
     }
 
     func save(_ state: CompanionState) throws {

@@ -105,6 +105,21 @@ final class StatusTableViewController: LoopChartsTableViewController {
             }
             .store(in: &cancellables)
 
+        onboardingManager.$isComplete
+            .merge(with: onboardingManager.$isSuspended)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshContext.update(with: .status)
+                self?.reloadData(animated: true)
+                self?.updateToolbarItems()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshCycleSummary() }
+            .store(in: &cancellables)
+
         registerPumpManager()
         registerCGMManager()
 
@@ -227,16 +242,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
         alertPermissionsChecker.checkNow()
 
         updateBolusProgress()
-
-        onboardingManager.$isComplete
-            .merge(with: onboardingManager.$isSuspended)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.refreshContext.update(with: .status)
-                self?.reloadData(animated: true)
-                self?.updateToolbarItems()
-            }
-            .store(in: &cancellables)
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -1678,7 +1683,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
         tableView.endUpdates()
     }
 
+    private func refreshCycleSummary() {
+        for case let cell as CycleSummaryTableViewCell in tableView.visibleCells {
+            cell.configure(with: CycleTrackingStore.shared.summary(), isCollapsed: isCollapsedChartRow(.cycle))
+        }
+    }
+
     private func redrawCharts() {
+        refreshCycleSummary()
         tableView.beginUpdates()
         charts.prerender()
         for case let cell as ChartTableViewCell in tableView.visibleCells {
@@ -2781,6 +2793,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         super.tableView(tableView, willDisplay: cell, forRowAt: indexPath)
+        if let cell = cell as? CycleSummaryTableViewCell {
+            cell.configure(with: CycleTrackingStore.shared.summary(), isCollapsed: isCollapsedChartRow(.cycle))
+        }
         if let cell = cell as? ChartTableViewCell {
             // Prefetched cells may have been configured before the latest data
             // arrived. Refresh them when they actually become visible.

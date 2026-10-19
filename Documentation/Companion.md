@@ -74,7 +74,15 @@ Review cards show the exact rule before enabling. Rules can be paused/deleted in
 
 Carb drafts require user-supplied grams, time, and absorption. The native form can edit them and controls saving. If the saved entry matches the draft, the action is marked applied. Otherwise its status remains "opened for review" so Mochi does not falsely claim it was saved or retry it automatically; verify edited entries in carb history.
 
+## UI responsiveness and draft handling
+
+State changes are encoded and written on a serial worker queue. The main actor serializes complete transactions and publishes each change only after the atomic write succeeds. Concurrent actions preserve one another, and a failed save leaves the published state unchanged. Chat drafts clear only after submission is accepted; validation and persistence failures retain the input.
+
+Meal photos are normalized, stripped of source metadata and compressed off the UI thread. Thumbnail images are cached in their views. Closing review cancels its pending work and ignores late results. The meal chat accepts at most 40 turns; reaching that limit stops additional messages while keeping the editable reviewed form and Continue available.
+
 ## Validation
+
+`LoopTests/UIRegressionTests.swift` covers Live Activity dirty state, rejected drafts, the meal-chat limit, canceled responses, concurrent persistence and save failures/retries. Its portable state checks run with `Scripts/test-ui-regressions.sh`, using production methods and stubs for iOS-only services. The iOS target also tests photo sizing, metadata removal and empty-image rejection. Camera rendering, navigation and day-change lifecycle behavior require Xcode or a device.
 
 `LoopTests/CompanionCoreTests.swift` is included in the LoopTests target. It covers threshold/rate behavior, stale/invalid/gapped data, duplicate timestamps, latching, cooldown, carb lookbacks, disabled rules, draft bounds, persistence, and corrupt-state preservation. Model tests cover the GPT‑6.1 Medium request payload, model/effort metadata filtering, and backward compatibility with previously saved settings.
 
@@ -82,6 +90,7 @@ Without Xcode, run the same core test bodies using:
 
 ```sh
 bash Scripts/test-companion-core.sh
+bash Scripts/test-ui-regressions.sh
 ```
 
 If the selected command-line SDK does not match the installed compiler, set `MOCHI_TEST_SDK` to a compatible SDK path. The harness uses Swift assertions and does not require XCTest or Swift Package Manager.

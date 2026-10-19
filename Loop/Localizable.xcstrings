@@ -3216,6 +3216,12 @@
     "%lld" : {
 
     },
+    "Preparing photo…" : {
+      "comment" : "Progress while normalizing and compressing a meal photo"
+    },
+    "This meal chat is full. You can still edit the form and continue." : {
+      "comment" : "Meal chat limit notice; the reviewed form remains usable"
+    },
     "⚠️" : {
       "localizations" : {
         "da" : {
