@@ -510,8 +510,8 @@ struct CycleTrackingView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if store.periodEntries.isEmpty { historyWelcome }
-                CompanionCycleCard()
                 calendarCard
+                CompanionCycleCard()
                 quickPickTagsCard
                 statsRow
                 periodActions

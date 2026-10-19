@@ -141,25 +141,60 @@ struct MochiAvatar: View {
     }
 }
 
-private struct MochiCompactCardLabel: View {
+private struct MochiCycleSpeechBubble: Shape {
+    func path(in rect: CGRect) -> Path {
+        let left = rect.minX + 8
+        let right = rect.maxX
+        let radius = min(18, max(0, (rect.width - 8) / 2), rect.height / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: left + radius, y: rect.minY))
+        path.addLine(to: CGPoint(x: right - radius, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: right, y: rect.minY + radius), control: CGPoint(x: right, y: rect.minY))
+        path.addLine(to: CGPoint(x: right, y: rect.maxY - radius))
+        path.addQuadCurve(to: CGPoint(x: right - radius, y: rect.maxY), control: CGPoint(x: right, y: rect.maxY))
+        path.addLine(to: CGPoint(x: left + radius, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: left, y: rect.maxY - radius), control: CGPoint(x: left, y: rect.maxY))
+        path.addLine(to: CGPoint(x: left, y: rect.midY + 9))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.midY + 3), control: CGPoint(x: left - 4, y: rect.midY + 8))
+        path.addQuadCurve(to: CGPoint(x: left, y: rect.midY - 7), control: CGPoint(x: left - 1, y: rect.midY + 1))
+        path.addLine(to: CGPoint(x: left, y: rect.minY + radius))
+        path.addQuadCurve(to: CGPoint(x: left + radius, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct MochiCycleSpeechBubbleLabel: View {
     let text: String
+    @Environment(\.layoutDirection) private var layoutDirection
 
     var body: some View {
-        HStack(spacing: 10) {
-            MochiAvatar(size: 44)
-            Text(text)
-                .font(.caption).foregroundColor(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(MochiStyle.blue)
+        HStack(spacing: 2) {
+            MochiAvatar(size: 64)
+            HStack(spacing: 10) {
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(Color(uiColor: .dashboardInk))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(uiColor: .dashboardCoral))
+                    .accessibilityHidden(true)
+            }
+            .padding(.leading, 22)
+            .padding(.trailing, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .background {
+                MochiCycleSpeechBubble()
+                    .fill(Color(uiColor: .dashboardSurface))
+                    .overlay(MochiCycleSpeechBubble().stroke(Color(uiColor: .dashboardBorder), lineWidth: 1))
+                    .shadow(color: Color(uiColor: .dashboardInk).opacity(0.05), radius: 5, y: 2)
+                    .scaleEffect(x: layoutDirection == .rightToLeft ? -1 : 1, y: 1)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(MochiStyle.blue.opacity(0.18)))
+        .contentShape(Rectangle())
     }
 }
 
@@ -185,7 +220,7 @@ struct CompanionCycleCard: View {
 
     var body: some View {
         Button { discussion = message } label: {
-            MochiCompactCardLabel(text: message.text)
+            MochiCycleSpeechBubbleLabel(text: message.text)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(message.text)

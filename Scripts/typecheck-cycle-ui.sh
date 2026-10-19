@@ -14,7 +14,7 @@ root=Path(sys.argv[1])
 out=Path(sys.argv[2])
 s=(root/'Loop/Views/CycleTrackingView.swift').read_text().replace('import LoopUI\n','')
 (out/'CycleTrackingView.swift').write_text(s)
-s=(root/'Loop/Companion/CompanionView.swift').read_text();a=s.index('private struct MochiCompactCardLabel');b=s.index('struct CompanionDashboardIcon',a)
+s=(root/'Loop/Companion/CompanionView.swift').read_text();a=s.index('private struct MochiCycleSpeechBubble: Shape');b=s.index('struct CompanionDashboardIcon',a)
 (out/'CycleChat.swift').write_text('import SwiftUI\n'+s[a:b])
 (out/'Interfaces.swift').write_text('''
 import SwiftUI
