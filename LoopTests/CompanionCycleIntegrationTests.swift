@@ -272,3 +272,86 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         XCTAssertNil(try store.load().dashboardMessage)
     }
 }
+
+
+@MainActor
+final class CompanionMealPhotoIntegrationTests: XCTestCase {
+    func testMealChatRevisesEstimateWithCorrectionsAndAdditionalPhotosWithoutSaving() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CompanionStateStore(url: directory.appendingPathComponent("state.json"))
+        try store.save(CompanionState())
+        let provider = CycleProviderProbe()
+        var grams = 40
+        provider.handler = { _, _ in
+            CompanionCompletion(message: [:], text: "{\"updateForm\":true,\"message\":\"Here’s my estimate.\",\"estimate\":{\"food\":\"🌮\",\"grams\":\(grams),\"absorptionMinutes\":120,\"explanation\":\"Bread portion.\",\"assumptions\":\"Topping uncertain.\"}}", calls: [])
+        }
+        let controller = CompanionController(provider: provider, stateStore: store, keyReader: { "test-key" })
+        let chat = CompanionMealConversation(controller: controller, maximumGrams: 250, absorptionRange: 900...28800, defaults: [7200, 10800, 14400])
+        chat.send("Estimate this meal", jpeg: Data([1, 2, 3]))
+        XCTAssertFalse(chat.canContinue)
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(chat.estimate?.grams, 40)
+        XCTAssertTrue(chat.canContinue)
+        XCTAssertTrue(provider.tools.isEmpty)
+        XCTAssertEqual(provider.messages.count, 2)
+        grams = 20
+        chat.send("I’m eating half")
+        XCTAssertFalse(chat.canContinue)
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(chat.estimate?.grams, 20)
+        XCTAssertTrue(chat.canContinue)
+        XCTAssertEqual(provider.messages.count, 4)
+        let previousReply = try XCTUnwrap(provider.messages[2]["content"] as? String)
+        XCTAssertTrue(previousReply.contains("40"))
+        grams = 25
+        chat.send("This photo shows the topping", jpeg: Data([4, 5, 6]))
+        XCTAssertFalse(chat.canContinue)
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(chat.estimate?.grams, 25)
+        XCTAssertEqual(chat.turns.filter { $0.jpeg != nil }.count, 2)
+        XCTAssertEqual(provider.messages.count, 6)
+        let parts = try XCTUnwrap(provider.messages.last?["content"] as? [[String: Any]])
+        XCTAssertEqual((parts.last?["image_url"] as? [String: String])?["url"], "data:image/jpeg;base64,BAUG")
+        XCTAssertTrue(controller.state.messages.isEmpty)
+        XCTAssertTrue(controller.state.actions.isEmpty)
+        XCTAssertTrue(try store.load().messages.isEmpty)
+        provider.handler = { _, _ in CompanionCompletion(message: [:], text: #"{"updateForm":true,"message":"How much of this will you eat?","estimate":null}"#, calls: []) }
+        chat.send("Actually, the portion is different")
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertNil(chat.estimate)
+        XCTAssertFalse(chat.canContinue)
+    }
+
+    func testFailedOrCanceledRevisionBlocksContinueUntilRetriedOrDiscarded() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CompanionStateStore(url: directory.appendingPathComponent("state.json"))
+        try store.save(CompanionState())
+        let provider = CycleProviderProbe()
+        let good = #"{"updateForm":true,"message":"Looks like toast.","estimate":{"food":"🌮","grams":20,"absorptionMinutes":120,"explanation":"Bread portion.","assumptions":"One slice."}}"#
+        provider.handler = { _, _ in CompanionCompletion(message: [:], text: good, calls: []) }
+        let controller = CompanionController(provider: provider, stateStore: store, keyReader: { "test-key" })
+        let chat = CompanionMealConversation(controller: controller, maximumGrams: 250, absorptionRange: 900...28800, defaults: [7200, 10800, 14400])
+        chat.send("Estimate", jpeg: Data([1]))
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        provider.handler = { _, _ in throw CompanionError.invalid("Offline") }
+        chat.send("I am having twice as much")
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(chat.canContinue)
+        XCTAssertTrue(chat.needsReply)
+        XCTAssertNotNil(chat.error)
+        chat.discardPending()
+        XCTAssertTrue(chat.canContinue)
+        provider.handler = { _, _ in
+            try await Task.sleep(nanoseconds: 60_000_000_000)
+            return CompanionCompletion(message: [:], text: good, calls: [])
+        }
+        chat.send("Another revision")
+        chat.cancel()
+        XCTAssertFalse(chat.canContinue)
+        XCTAssertTrue(chat.needsReply)
+        chat.discardPending()
+        XCTAssertTrue(chat.canContinue)
+    }
+}

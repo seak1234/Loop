@@ -487,3 +487,106 @@ final class CompanionStateStore {
         #endif
     }
 }
+
+
+enum CompanionMealFoodIcon: String, CaseIterable {
+    case fast = "🍭", mixed = "🌮", slow = "🍗", other = "🍽️"
+
+    init?(food: String) {
+        self.init(rawValue: food == "🍽" ? "🍽️" : food)
+    }
+}
+
+/// Editable meal form state, separate from an AI proposal and from saved carb entries.
+struct CompanionMealFormValues: Codable, Equatable {
+    var grams: Double?
+    var food: String
+    var absorptionMinutes: Int
+    var time: Date
+}
+
+/// A photo proposal only. Applying it never saves carbs or advances to bolus.
+struct CompanionMealEstimate: Codable, Equatable {
+    let food: String
+    let grams: Double
+    let absorptionMinutes: Int
+    let explanation: String
+    let assumptions: String
+    var mealTime: Date? = nil
+
+    static func parse(_ text: String, maximumGrams: Double, absorptionRange: ClosedRange<TimeInterval>, preservingGrams: Double? = nil, dateRange: ClosedRange<Date>? = nil) throws -> Self {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard text.utf8.count <= 12_000, let data = text.data(using: .utf8),
+              let value = try? decoder.decode(Self.self, from: data), let icon = CompanionMealFoodIcon(food: value.food),
+              value.grams.isFinite, value.grams >= 0, value.grams <= maximumGrams,
+              (value.grams.rounded() == value.grams || value.grams == preservingGrams),
+              (15...480).contains(value.absorptionMinutes), value.absorptionMinutes % 15 == 0,
+              absorptionRange.contains(Double(value.absorptionMinutes) * 60),
+              !value.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, value.explanation.count <= 600,
+              !value.assumptions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, value.assumptions.count <= 600 else {
+            throw CompanionError.invalid("Mochi couldn’t make a usable estimate. Try a clearer photo with portion details, or enter the meal manually.")
+        }
+        if let time = value.mealTime, !(dateRange?.contains(time) ?? false) {
+            throw CompanionError.invalid("The suggested meal time is outside the form’s allowed range.")
+        }
+        return Self(food: icon.rawValue, grams: value.grams, absorptionMinutes: value.absorptionMinutes,
+                    explanation: value.explanation, assumptions: value.assumptions, mealTime: value.mealTime)
+    }
+}
+
+
+/// Ephemeral structured reply for the meal review chat. Never an instruction to save or dose.
+struct CompanionMealReply: Codable, Equatable {
+    let message: String
+    let estimate: CompanionMealEstimate?
+    let updateForm: Bool
+
+    private enum CodingKeys: String, CodingKey { case message, estimate, updateForm }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(message, forKey: .message)
+        try values.encode(updateForm, forKey: .updateForm)
+        if let estimate { try values.encode(estimate, forKey: .estimate) }
+        else { try values.encodeNil(forKey: .estimate) }
+    }
+
+    static func parse(_ text: String, maximumGrams: Double, absorptionRange: ClosedRange<TimeInterval>, preservingGrams: Double? = nil, dateRange: ClosedRange<Date>? = nil) throws -> Self {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard text.utf8.count <= 16_000, let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object.keys.contains("estimate"), let value = try? decoder.decode(Self.self, from: data),
+              !value.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, value.message.count <= 1800 else {
+            throw CompanionError.invalid("Mochi couldn’t read that response. Please try again.")
+        }
+        if let estimate = value.estimate {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let encoded = try encoder.encode(estimate)
+            let normalized = try CompanionMealEstimate.parse(String(decoding: encoded, as: UTF8.self), maximumGrams: maximumGrams,
+                absorptionRange: absorptionRange, preservingGrams: preservingGrams, dateRange: dateRange)
+            return Self(message: value.message, estimate: normalized, updateForm: value.updateForm)
+        }
+        return value
+    }
+}
+
+struct CompanionMealTurn: Identifiable {
+    let id = UUID()
+    let text: String
+    var jpeg: Data? = nil
+    var reply: CompanionMealReply? = nil
+
+    var apiMessage: [String: Any] {
+        if let reply {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            return ["role": "assistant", "content": String(decoding: (try? encoder.encode(reply)) ?? Data(), as: UTF8.self)]
+        }
+        var content: [[String: Any]] = [["type": "text", "text": text]]
+        if let jpeg { content.append(["type": "image_url", "image_url": ["url": "data:image/jpeg;base64," + jpeg.base64EncodedString()]]) }
+        return ["role": "user", "content": content]
+    }
+}

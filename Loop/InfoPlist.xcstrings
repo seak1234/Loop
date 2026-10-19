@@ -608,7 +608,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Camera is used to scan barcodes of devices."
+            "value" : "Camera is used to scan device barcodes and take meal photos for carb estimates."
           }
         },
         "es" : {

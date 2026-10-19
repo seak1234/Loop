@@ -101,6 +101,25 @@ final class CarbEntryViewModel: ObservableObject {
         observeLoopUpdates()
     }
     
+    /// Isolated editable draft for photo review. Closing review leaves the original form untouched.
+    init(mealReviewDraftFrom source: CarbEntryViewModel) {
+        delegate = source.delegate
+        defaultAbsorptionTimes = source.defaultAbsorptionTimes
+        shouldBeginEditingQuantity = false
+        absorptionTime = source.absorptionTime
+        carbsQuantity = source.carbsQuantity
+        preferredCarbUnit = source.preferredCarbUnit
+        maxCarbEntryQuantity = source.maxCarbEntryQuantity
+        warningCarbEntryQuantity = source.warningCarbEntryQuantity
+        time = source.time
+        date = source.date
+        selectedDefaultAbsorptionTimeEmoji = source.selectedDefaultAbsorptionTimeEmoji
+        usesCustomFoodType = false
+        absorptionTimeWasEdited = source.absorptionTimeWasEdited
+        observeAbsorptionTimeChange()
+        observeLoopUpdates()
+    }
+
     /// Initalizer for when`CarbEntryView` has an entry to edit
     init(delegate: CarbEntryViewModelDelegate, originalCarbEntry: StoredCarbEntry) {
         self.delegate = delegate
@@ -153,6 +172,61 @@ final class CarbEntryViewModel: ObservableObject {
         get { updatedCarbEntry == nil }
     }
     
+    var mealFormValues: CompanionMealFormValues {
+        .init(grams: carbsQuantity, food: selectedDefaultAbsorptionTimeEmoji,
+              absorptionMinutes: Int(absorptionTime / 60), time: time)
+    }
+
+    var validMealFormValues: CompanionMealFormValues? {
+        let values = mealFormValues
+        return mealFormValuesAreValid(values) ? values : nil
+    }
+
+    private func mealFormValuesAreValid(_ values: CompanionMealFormValues) -> Bool {
+        guard let grams = values.grams, grams.isFinite, grams > 0,
+              grams <= maxCarbEntryQuantity.doubleValue(for: preferredCarbUnit),
+              CompanionMealFoodIcon(food: values.food) != nil,
+              absorptionRimesRange.contains(Double(values.absorptionMinutes) * 60),
+              (minimumDate...maximumDate).contains(values.time) else { return false }
+        return true
+    }
+
+    /// Transfer the reviewed fields only; the caller explicitly invokes the normal Continue flow.
+    @discardableResult
+    func applyMealFormValues(_ values: CompanionMealFormValues) -> Bool {
+        guard mealFormValuesAreValid(values), let icon = CompanionMealFoodIcon(food: values.food) else { return false }
+        isUpdatingFavoriteSelection = true
+        selectedFavoriteFoodIndex = -1
+        isUpdatingFavoriteSelection = false
+        carbsQuantity = values.grams
+        foodType = ""
+        selectedDefaultAbsorptionTimeEmoji = icon.rawValue
+        usesCustomFoodType = false
+        absorptionTime = Double(values.absorptionMinutes) * 60
+        absorptionTimeWasEdited = true
+        time = values.time
+        return true
+    }
+
+    /// Populate an unsaved draft. AI food types are limited to the existing shortcut icons.
+    func applyMealEstimate(_ estimate: CompanionMealEstimate) {
+        guard let icon = CompanionMealFoodIcon(food: estimate.food),
+              estimate.grams.isFinite, estimate.grams >= 0,
+              estimate.grams <= maxCarbEntryQuantity.doubleValue(for: preferredCarbUnit),
+              absorptionRimesRange.contains(Double(estimate.absorptionMinutes) * 60),
+              estimate.mealTime.map({ (minimumDate...maximumDate).contains($0) }) ?? true else { return }
+        isUpdatingFavoriteSelection = true
+        selectedFavoriteFoodIndex = -1
+        isUpdatingFavoriteSelection = false
+        carbsQuantity = estimate.grams
+        foodType = ""
+        selectedDefaultAbsorptionTimeEmoji = icon.rawValue
+        usesCustomFoodType = false
+        absorptionTime = Double(estimate.absorptionMinutes) * 60
+        absorptionTimeWasEdited = true
+        if let mealTime = estimate.mealTime { time = mealTime }
+    }
+
     // MARK: - Continue to Bolus and Carb Quantity Warnings
     func continueToBolus() {
         guard updatedCarbEntry != nil else {

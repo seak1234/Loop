@@ -1012,3 +1012,96 @@ extension ManualBolusRecommendationWithDate: Equatable {
         return lhs.recommendation == rhs.recommendation && lhs.date == rhs.date
     }
 }
+
+extension MockBolusEntryViewModelDelegate: CarbEntryViewModelDelegate {
+    var analyticsServicesManager: AnalyticsServicesManager { AnalyticsServicesManager() }
+    var defaultAbsorptionTimes: CarbStore.DefaultAbsorptionTimes { (fast: 7200, medium: 10800, slow: 14400) }
+}
+
+@MainActor
+final class CompanionMealFormTests: XCTestCase {
+    func testAcceptingPhotoOnlyPopulatesFormAndPreservesTime() {
+        let delegate = MockBolusEntryViewModelDelegate()
+        let model = CarbEntryViewModel(delegate: delegate)
+        let mealTime = model.time
+        model.applyMealEstimate(.init(food: "🌮", grams: 20, absorptionMinutes: 120,
+                                      explanation: "Bread portion.", assumptions: "One slice."))
+        XCTAssertEqual(model.carbsQuantity, 20)
+        XCTAssertEqual(model.foodType, "")
+        XCTAssertEqual(model.selectedDefaultAbsorptionTimeEmoji, "🌮")
+        XCTAssertFalse(model.usesCustomFoodType)
+        XCTAssertTrue(model.absorptionTimeWasEdited)
+        XCTAssertEqual(model.absorptionTime, 7200)
+        XCTAssertEqual(model.time, mealTime)
+        XCTAssertNil(model.bolusViewModel)
+        XCTAssertTrue(delegate.carbEntriesAdded.isEmpty)
+        XCTAssertNil(delegate.enactedBolusUnits)
+        XCTAssertFalse(model.continueButtonDisabled)
+    }
+}
+
+
+private final class MealFormProviderProbe: CompanionProvider {
+    var reply = ""
+    var messages: [[String: Any]] = []
+    func complete(model: String, reasoningEffort: CompanionReasoningEffort, messages: [[String: Any]], tools: [[String: Any]]) async throws -> CompanionCompletion {
+        self.messages = messages
+        return CompanionCompletion(message: [:], text: reply, calls: [])
+    }
+}
+
+extension CompanionMealFormTests {
+    func testReviewDraftSupportsManualEditsAndAIRevisionsWithoutChangingOriginalForm() async throws {
+        let delegate = MockBolusEntryViewModelDelegate()
+        let original = CarbEntryViewModel(delegate: delegate)
+        let draft = CarbEntryViewModel(mealReviewDraftFrom: original)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CompanionStateStore(url: directory.appendingPathComponent("state.json"))
+        try store.save(CompanionState())
+        let provider = MealFormProviderProbe()
+        provider.reply = #"{"message":"Here’s my estimate.","updateForm":true,"estimate":{"food":"🍗","grams":30,"absorptionMinutes":180,"explanation":"Mixed portion.","assumptions":"Sauce uncertain."}}"#
+        let controller = CompanionController(provider: provider, stateStore: store, keyReader: { "test-key" })
+        let chat = CompanionMealConversation(controller: controller, maximumGrams: 250, absorptionRange: draft.absorptionRimesRange,
+            defaults: [7200, 10800, 14400], dateRange: draft.minimumDate...draft.maximumDate,
+            currentFormReader: { draft.mealFormValues }, onFormUpdate: {
+                if let estimate = $0 { draft.applyMealEstimate(estimate) } else { draft.carbsQuantity = nil }
+            })
+        chat.send("Estimate this meal", jpeg: Data([1]))
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(draft.carbsQuantity, 30)
+        XCTAssertEqual(draft.selectedDefaultAbsorptionTimeEmoji, "🍗")
+        XCTAssertNil(original.carbsQuantity)
+        draft.carbsQuantity = 12.5
+        draft.absorptionTime = 8100
+        draft.selectedDefaultAbsorptionTimeEmoji = "🌮"
+        draft.time = Date().addingTimeInterval(-1200)
+        let manualValues = draft.mealFormValues
+        provider.reply = #"{"message":"The sauce is the main uncertainty.","updateForm":false,"estimate":null}"#
+        chat.send("Why is the sauce uncertain?")
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(draft.mealFormValues, manualValues)
+        XCTAssertTrue(chat.canUseForm)
+        let prompt = try XCTUnwrap(provider.messages.first?["content"] as? String)
+        XCTAssertTrue(prompt.contains("12.5"))
+        let mealTime = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-600))
+        provider.reply = "{\"message\":\"Updated.\",\"updateForm\":true,\"estimate\":{\"food\":\"🌮\",\"grams\":12.5,\"absorptionMinutes\":210,\"mealTime\":\"\(mealTime)\",\"explanation\":\"Updated absorption.\",\"assumptions\":\"Portion unchanged.\"}}"
+        chat.send("Change absorption to three and a half hours, and meal time to ten minutes ago")
+        for _ in 0..<200 where chat.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(draft.carbsQuantity, 12.5)
+        XCTAssertEqual(draft.absorptionTime, 12600)
+        XCTAssertEqual(draft.time, ISO8601DateFormatter().date(from: mealTime))
+        XCTAssertNil(original.carbsQuantity)
+        let values = try XCTUnwrap(draft.validMealFormValues)
+        XCTAssertTrue(original.applyMealFormValues(values))
+        XCTAssertEqual(original.carbsQuantity, 12.5)
+        XCTAssertEqual(original.absorptionTime, 12600)
+        XCTAssertEqual(original.selectedDefaultAbsorptionTimeEmoji, "🌮")
+        XCTAssertEqual(original.foodType, "")
+        XCTAssertFalse(original.usesCustomFoodType)
+        XCTAssertEqual(original.time, draft.time)
+        XCTAssertNil(original.bolusViewModel)
+        XCTAssertTrue(delegate.carbEntriesAdded.isEmpty)
+        XCTAssertNil(delegate.enactedBolusUnits)
+    }
+}

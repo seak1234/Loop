@@ -27,7 +27,6 @@ struct MochiAvatar: View {
     var size: CGFloat = 80
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appActive = UIApplication.shared.applicationState == .active
-    @State private var floating = false
     @State private var eyeOpenness: CGFloat = 1
     @State private var gaze = CGSize.zero
 
@@ -43,7 +42,6 @@ struct MochiAvatar: View {
         }
         .frame(width: size, height: artworkHeight)
         .frame(width: size, height: size)
-        .offset(y: animated && floating ? -2 : 0)
         .accessibilityHidden(true)
         .onAppear { appActive = UIApplication.shared.applicationState == .active }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in appActive = true }
@@ -51,9 +49,8 @@ struct MochiAvatar: View {
         .task(id: animated) {
             var reset = Transaction()
             reset.disablesAnimations = true
-            withTransaction(reset) { floating = false; eyeOpenness = 1; gaze = .zero }
+            withTransaction(reset) { eyeOpenness = 1; gaze = .zero }
             guard animated else { return }
-            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { floating = true }
             do {
                 try await pause(0.65)
                 try await blink()
@@ -374,7 +371,7 @@ struct CompanionView: View {
 }
 
 @MainActor
-private struct CompanionSettingsView: View {
+struct CompanionSettingsView: View {
     @ObservedObject var controller: CompanionController
     @Environment(\.dismiss) private var dismiss
     @State private var key = ""

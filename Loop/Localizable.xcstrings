@@ -5124,6 +5124,9 @@
         }
       }
     },
+    "Add a meal photo" : {
+
+    },
     "Add a new favorite food" : {
       "comment" : "Button label to open new favorite food view",
       "localizations" : {
@@ -8335,6 +8338,9 @@
           }
         }
       }
+    },
+    "Ask about this meal…" : {
+
     },
     "Ask Mochi anything…" : {
 
@@ -12350,6 +12356,9 @@
         }
       }
     },
+    "Choose from photos" : {
+
+    },
     "Choose model" : {
 
     },
@@ -13612,6 +13621,9 @@
     },
     "Confirm period end" : {
       "comment" : "Prompt when a period is still open"
+    },
+    "Connect Mochi" : {
+
     },
     "Connect OpenRouter to chat" : {
 
@@ -16677,6 +16689,9 @@
         }
       }
     },
+    "Discard message" : {
+
+    },
     "Dismiss" : {
       "comment" : "Default alert dismissal\nThe button label of the action used to dismiss an error alert",
       "localizations" : {
@@ -18510,6 +18525,9 @@
           }
         }
       }
+    },
+    "Estimate a meal from a photo" : {
+
     },
     "Estimate passed" : {
       "comment" : "Next period timing after the estimate has passed"
@@ -26674,6 +26692,9 @@
         }
       }
     },
+    "Meal photos are sent automatically to OpenRouter and your selected AI provider for an estimate." : {
+
+    },
     "mg/dL" : {
       "comment" : "The short unit display string for milligrams of glucose per decilter",
       "localizations" : {
@@ -27209,7 +27230,13 @@
     "Mochi" : {
 
     },
+    "Mochi is looking…" : {
+
+    },
     "Mochi is thinking…" : {
+
+    },
+    "Mochi model and connection settings" : {
 
     },
     "Mochi settings" : {
@@ -30202,6 +30229,9 @@
     },
     "Period started" : {
       "comment" : "Confirmation after recording the start of a period"
+    },
+    "Photo estimates are approximate. You can edit the form or ask Mochi to adjust it." : {
+
     },
     "Playful" : {
 
@@ -34291,6 +34321,9 @@
     "Review carb entry" : {
 
     },
+    "Review meal" : {
+
+    },
     "Review period dates" : {
       "comment" : "Cycle summary when phase timing cannot be estimated"
     },
@@ -34554,6 +34587,9 @@
         }
       }
     },
+    "Scan with Mochi" : {
+
+    },
     "Scheduled" : {
       "comment" : "Scheduled Delivery status text",
       "localizations" : {
@@ -34736,6 +34772,9 @@
           }
         }
       }
+    },
+    "Send meal question" : {
+
     },
     "Send message" : {
 
@@ -36424,6 +36463,9 @@
     },
     "Switches glucose unit between US (mg/dL) and European (mmol/L) units" : {
       "comment" : "Accessibility hint for glucose unit toggle"
+    },
+    "Take another photo" : {
+
     },
     "Tap here to set up a CGM" : {
       "comment" : "Descriptive text for button to add CGM device",
@@ -38675,6 +38717,9 @@
         }
       }
     },
+    "Try again" : {
+
+    },
     "Try Again" : {
       "comment" : "Critical event log export error alert try again button",
       "localizations" : {
@@ -40696,6 +40741,9 @@
           }
         }
       }
+    },
+    "Use these form values and open the normal bolus review" : {
+
     },
     "Use Workout Glucose Targets" : {
       "comment" : "The title of the alert controller used to select a duration for workout targets",

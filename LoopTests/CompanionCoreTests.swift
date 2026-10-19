@@ -6,6 +6,66 @@ import XCTest
 #endif
 
 final class CompanionCoreTests: XCTestCase {
+    func testMealEstimateRequiresCompleteBoundedProposal() throws {
+        let valid = #"{"food":"🌮","grams":42,"absorptionMinutes":180,"explanation":"Mixed meal estimate.","assumptions":"Assumes one cup of rice; sauce is uncertain."}"#
+        let estimate = try CompanionMealEstimate.parse(valid, maximumGrams: 250, absorptionRange: 900...28800)
+        XCTAssertEqual(estimate.grams, 42)
+        XCTAssertEqual(estimate.absorptionMinutes, 180)
+        for invalid in [valid.replacingOccurrences(of: "42", with: "251"),
+                        valid.replacingOccurrences(of: "42", with: "42.5"),
+                        valid.replacingOccurrences(of: "42", with: "-1"),
+                        valid.replacingOccurrences(of: "180", with: "181"),
+                        valid.replacingOccurrences(of: "180", with: "0"),
+                        valid.replacingOccurrences(of: "180", with: "495"),
+                        valid.replacingOccurrences(of: "🌮", with: ""),
+                        "{\"unavailable\":true}", "not JSON"] {
+            XCTAssertThrowsError(try CompanionMealEstimate.parse(invalid, maximumGrams: 250, absorptionRange: 900...28800))
+        }
+        XCTAssertThrowsError(try CompanionMealEstimate.parse(valid, maximumGrams: 250, absorptionRange: 900...7200))
+        XCTAssertNoThrow(try CompanionMealEstimate.parse(valid.replacingOccurrences(of: "42", with: "0"), maximumGrams: 250, absorptionRange: 900...28800))
+    }
+
+    func testMealChatReplyValidatesUpdatedEstimatesAndAllowsClarification() throws {
+        let estimate = #"{"food":"🌮","grams":20,"absorptionMinutes":120,"explanation":"Bread portion.","assumptions":"Assumes one slice."}"#
+        let reply = try CompanionMealReply.parse("{\"updateForm\":true,\"message\":\"Looks like toast.\",\"estimate\":" + estimate + "}", maximumGrams: 250, absorptionRange: 900...28800)
+        XCTAssertEqual(reply.estimate?.grams, 20)
+        let clarification = try CompanionMealReply.parse(#"{"updateForm":true,"message":"How much will you eat?","estimate":null}"#, maximumGrams: 250, absorptionRange: 900...28800)
+        XCTAssertNil(clarification.estimate)
+        XCTAssertThrowsError(try CompanionMealReply.parse(#"{"updateForm":true,"message":"No estimate field"}"#, maximumGrams: 250, absorptionRange: 900...28800))
+        XCTAssertThrowsError(try CompanionMealReply.parse("{\"updateForm\":true,\"message\":\"Here you go.\",\"estimate\":" + estimate.replacingOccurrences(of: "20,", with: "999,") + "}", maximumGrams: 250, absorptionRange: 900...28800))
+        let user = CompanionMealTurn(text: "Half this portion", jpeg: Data([1, 2, 3]))
+        let parts = user.apiMessage["content"] as? [[String: Any]]
+        XCTAssertEqual((parts?.last?["image_url"] as? [String: String])?["url"], "data:image/jpeg;base64,AQID")
+        let assistant = CompanionMealTurn(text: "Human-readable explanation", reply: reply)
+        let canonical = assistant.apiMessage["content"] as? String ?? ""
+        XCTAssertNoThrow(try CompanionMealReply.parse(canonical, maximumGrams: 250, absorptionRange: 900...28800))
+    }
+
+    func testMealExplanationReplyExplicitlyPreservesFormAndSurvivesHistoryEncoding() throws {
+        let text = #"{"message":"The sauce is uncertain.","updateForm":false,"estimate":null}"#
+        let reply = try CompanionMealReply.parse(text, maximumGrams: 250, absorptionRange: 900...28800)
+        XCTAssertFalse(reply.updateForm)
+        let turn = CompanionMealTurn(text: reply.message, reply: reply)
+        let history = turn.apiMessage["content"] as? String ?? ""
+        XCTAssertTrue(history.contains("\"estimate\":null"))
+        XCTAssertNoThrow(try CompanionMealReply.parse(history, maximumGrams: 250, absorptionRange: 900...28800))
+        XCTAssertThrowsError(try CompanionMealReply.parse(#"{"message":"Missing update flag","estimate":null}"#, maximumGrams: 250, absorptionRange: 900...28800))
+    }
+
+    func testMealFoodTypesAreLimitedToExistingIconsAndDateChangesAreBounded() throws {
+        let valid = #"{"food":"🍽","grams":12,"absorptionMinutes":120,"explanation":"Portion estimate.","assumptions":"Sauce uncertain."}"#
+        XCTAssertEqual(try CompanionMealEstimate.parse(valid, maximumGrams: 250, absorptionRange: 900...28800).food, "🍽️")
+        XCTAssertThrowsError(try CompanionMealEstimate.parse(valid.replacingOccurrences(of: "🍽", with: "Toast"), maximumGrams: 250, absorptionRange: 900...28800))
+        XCTAssertThrowsError(try CompanionMealEstimate.parse(valid.replacingOccurrences(of: "🍽", with: "🍞"), maximumGrams: 250, absorptionRange: 900...28800))
+        let manual = valid.replacingOccurrences(of: "\"grams\":12", with: "\"grams\":12.5")
+        XCTAssertNoThrow(try CompanionMealEstimate.parse(manual, maximumGrams: 250, absorptionRange: 900...28800, preservingGrams: 12.5))
+        XCTAssertThrowsError(try CompanionMealEstimate.parse(manual, maximumGrams: 250, absorptionRange: 900...28800))
+        let dated = valid.replacingOccurrences(of: "\"food\":", with: "\"mealTime\":\"2026-10-18T12:00:00Z\",\"food\":")
+        let date = ISO8601DateFormatter().date(from: "2026-10-18T12:00:00Z")!
+        XCTAssertNoThrow(try CompanionMealEstimate.parse(dated, maximumGrams: 250, absorptionRange: 900...28800, dateRange: date.addingTimeInterval(-3600)...date.addingTimeInterval(3600)))
+        XCTAssertThrowsError(try CompanionMealEstimate.parse(dated, maximumGrams: 250, absorptionRange: 900...28800))
+    }
+
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     func testCycleQuestionsRequestTrackerContextBeforeModelResponse() {
