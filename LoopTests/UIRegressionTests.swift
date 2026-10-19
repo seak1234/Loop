@@ -239,7 +239,7 @@ final class UIRegressionTests: XCTestCase {
         layoutAndCheckBubble()
         for _ in 0..<3 {
             await Task.yield()
-            cell.refreshBubbleLayout()
+            XCTAssertFalse(cell.refreshBubbleLayout())
             layoutAndCheckBubble()
         }
         cell.prepareForReuse()
@@ -251,6 +251,7 @@ final class UIRegressionTests: XCTestCase {
         await controller.dismissDashboard()
         cell.refreshBubbleLayout()
         layoutHeader()
+        XCTAssertFalse(cell.refreshBubbleLayout())
         XCTAssertTrue(bubble.isHidden)
         XCTAssertEqual(bubble.frame.height, 0, accuracy: 0.5)
         XCTAssertEqual(banner.frame.maxY, cell.contentView.bounds.maxY, accuracy: 0.5)

@@ -79,11 +79,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
         guard viewIfLoaded?.window != nil, shouldShowHUD else { return }
         UIView.performWithoutAnimation {
+            var visibilityChanged = false
             for case let cell as DashboardGraphicTableViewCell in tableView.visibleCells {
-                cell.refreshBubbleLayout()
+                visibilityChanged = cell.refreshBubbleLayout() || visibilityChanged
             }
-            tableView.performBatchUpdates(nil)
-            tableView.layoutIfNeeded()
+            if visibilityChanged {
+                tableView.performBatchUpdates(nil)
+                tableView.layoutIfNeeded()
+            }
         }
     }
 
@@ -1858,14 +1861,17 @@ final class StatusTableViewController: LoopChartsTableViewController {
             refreshBubbleLayout()
         }
 
-        func refreshBubbleLayout(now: Date = Date()) {
-            guard let companion, let bubbleController else { return }
+        @discardableResult
+        func refreshBubbleLayout(now: Date = Date()) -> Bool {
+            guard let companion, let bubbleController else { return false }
             let hidden = companion.state.isDashboardDismissed(at: now)
+            // An unchanged startup check must not invalidate a correctly measured hosting view.
+            guard bubbleController.view.isHidden != hidden || hiddenBubbleHeightConstraint?.isActive != hidden else { return false }
             bubbleController.view.isHidden = hidden
             bubbleTopConstraint?.constant = hidden ? 0 : -12
             hiddenBubbleHeightConstraint?.isActive = hidden
-            bubbleController.view.invalidateIntrinsicContentSize()
             setNeedsLayout()
+            return true
         }
 
         private let graphicImageView: UIImageView = {
