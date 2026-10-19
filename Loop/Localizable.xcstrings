@@ -14892,17 +14892,6 @@
     "Cycle" : {
       "comment" : "Cycle summary card title\nCycle tracker navigation title"
     },
-    "Cycle day %d of %d" : {
-      "comment" : "Current cycle day and cycle length",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Cycle day %1$d of %2$d"
-          }
-        }
-      }
-    },
     "Cycle length" : {
       "comment" : "Cycle tracker cycle length title"
     },
@@ -15036,9 +15025,6 @@
           }
         }
       }
-    },
-    "DAY" : {
-      "comment" : "Cycle day heading"
     },
     "dB" : {
       "comment" : "The short unit display string for decibles",
@@ -35846,9 +35832,6 @@
         }
       }
     },
-    "Start cycle tracking" : {
-      "comment" : "Cycle tracker empty state title"
-    },
     "Start time is out of range: %@" : {
       "comment" : "Carb error description: invalid start time is out of range.",
       "localizations" : {
@@ -36781,9 +36764,6 @@
     },
     "Tap My period started" : {
       "comment" : "Cycle summary prompt before a period is logged"
-    },
-    "Tap My period started when your period begins." : {
-      "comment" : "Cycle tracker empty state instructions"
     },
     "Tap to Add" : {
       "comment" : "The subtitle of the cell displaying an action to add a manually measurement glucose value",

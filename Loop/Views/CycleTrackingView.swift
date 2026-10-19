@@ -454,7 +454,6 @@ struct CycleTrackingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                phaseCard
                 CompanionCycleCard()
                 calendarCard
                 statsRow
@@ -496,7 +495,6 @@ struct CycleTrackingView: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.layoutDirection) private var layoutDirection
 
     private var coral: Color { Color(uiColor: .dashboardCoral) }
     private var ink: Color { Color(uiColor: .dashboardInk) }
@@ -504,119 +502,6 @@ struct CycleTrackingView: View {
     private var surface: Color { Color(uiColor: .dashboardSurface) }
     private var border: Color { Color(uiColor: .dashboardBorder) }
     private var gold: Color { Color(red: 0.89, green: 0.61, blue: 0.20) }
-
-    private var summary: CycleTrackingStore.Summary {
-        store.summary()
-    }
-
-    private var phaseCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let cycleDay = summary.cycleDay {
-                HStack(alignment: .center, spacing: 12) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text(NSLocalizedString("DAY", comment: "Cycle day heading"))
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .tracking(1)
-                        Text("\(cycleDay)")
-                            .font(.system(size: 32, weight: .light, design: .serif))
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(ink)
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(summary.phaseName.uppercased())
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .tracking(1)
-                            .foregroundStyle(coral)
-                        Text(String(
-                            format: NSLocalizedString("Cycle day %d of %d", comment: "Current cycle day and cycle length"),
-                            cycleDay, summary.cycleLength
-                        ))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(mutedInk)
-                    }
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(NSLocalizedString("Start cycle tracking", comment: "Cycle tracker empty state title"))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(ink)
-                    Text(NSLocalizedString("Tap My period started when your period begins.", comment: "Cycle tracker empty state instructions"))
-                        .font(.footnote)
-                        .foregroundStyle(mutedInk)
-                }
-            }
-            phaseProgressBar
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(cardBackground)
-    }
-
-    private var phaseProgressBar: some View {
-        VStack(spacing: 6) {
-            GeometryReader { proxy in
-                let progress = summary.progress
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(phaseBarGradient.opacity(colorScheme == .dark ? 0.20 : 0.13))
-
-                    phaseBarGradient
-                        .opacity(colorScheme == .dark ? 0.90 : 0.86)
-                        .frame(width: proxy.size.width)
-                        .frame(width: proxy.size.width * progress, alignment: .leading)
-                        .clipped()
-                }
-                .clipShape(Capsule())
-            }
-            .frame(height: 14)
-
-            GeometryReader { proxy in
-                let width = proxy.size.width
-                let transitions: [Double] = {
-                    if let t = summary.phaseTransitions, t.count == 3 {
-                        return t
-                    }
-                    let length = Double(max(20, summary.cycleLength))
-                    let periodLength = 5.0
-                    let ovulationDay = max(10.0, length - 14.0)
-                    return [
-                        periodLength / length,
-                        (ovulationDay - 2.0) / length,
-                        (ovulationDay + 1.0) / length
-                    ]
-                }()
-
-                let follicularFraction = (transitions[0] + transitions[1]) / 2.0
-                let ovulationFraction = (transitions[1] + transitions[2]) / 2.0
-
-                let follicularX = layoutDirection == .rightToLeft
-                    ? width * (1.0 - follicularFraction)
-                    : width * follicularFraction
-                let ovulationX = layoutDirection == .rightToLeft
-                    ? width * (1.0 - ovulationFraction)
-                    : width * ovulationFraction
-
-                ZStack(alignment: .leading) {
-                    Text(NSLocalizedString("Period", comment: "Cycle phase progress label"))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text(NSLocalizedString("Follicular", comment: "Cycle phase progress label"))
-                        .position(x: follicularX, y: proxy.size.height / 2)
-
-                    Text(NSLocalizedString("Ovulation", comment: "Cycle phase progress label"))
-                        .position(x: ovulationX, y: proxy.size.height / 2)
-
-                    Text(NSLocalizedString("Luteal", comment: "Cycle phase progress label"))
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-            .frame(height: 14)
-            .font(.system(size: 10, weight: .medium, design: .rounded))
-            .foregroundStyle(mutedInk)
-        }
-    }
 
     private var calendarCard: some View {
         VStack(spacing: 14) {
@@ -945,42 +830,6 @@ struct CycleTrackingView: View {
             return isDark
                 ? Color(red: 0.496, green: 0.483, blue: 0.517)
                 : Color(red: 225.0 / 255.0, green: 229.0 / 255.0, blue: 244.0 / 255.0)
-        }
-    }
-
-    private var phaseBarGradient: LinearGradient {
-        guard let transitions = summary.phaseTransitions,
-              transitions.count == 3
-        else {
-            return LinearGradient(
-                colors: [mutedInk.opacity(0.40), mutedInk.opacity(0.40)],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        }
-
-        return LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: phaseProgressColor(.period), location: 0),
-                .init(color: phaseProgressColor(.period), location: transitions[0]),
-                .init(color: phaseProgressColor(.follicular), location: transitions[0]),
-                .init(color: phaseProgressColor(.follicular), location: transitions[1]),
-                .init(color: phaseProgressColor(.ovulation), location: transitions[1]),
-                .init(color: phaseProgressColor(.ovulation), location: transitions[2]),
-                .init(color: phaseProgressColor(.luteal), location: transitions[2]),
-                .init(color: phaseProgressColor(.luteal), location: 1)
-            ]),
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
-
-    private func phaseProgressColor(_ phase: CycleTrackingStore.Phase) -> Color {
-        switch phase {
-        case .period: return Color(uiColor: .dashboardPeriodProgress)
-        case .follicular: return Color(uiColor: .dashboardFollicularProgress)
-        case .ovulation: return Color(uiColor: .dashboardOvulationProgress)
-        case .luteal: return Color(uiColor: .dashboardLutealProgress)
         }
     }
 
