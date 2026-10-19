@@ -390,6 +390,88 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         XCTAssertEqual(journal.state.notes.count, 1)
     }
 
+    func testAddToCalendarSavesTodayWithoutJournalReadPermission() async throws {
+        let (controller, provider, tracker, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        try controller.cycleJournal.update { $0.allowMochiWrite = true }
+        let report = "I'm just really insulin resistant today."
+        let arguments = try JSONSerialization.data(withJSONObject: ["date": "today", "text": report, "tags": ["resistant"]])
+        provider.handler = { messages, tools in
+            let names = tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
+            XCTAssertTrue(names.contains("save_cycle_note"))
+            XCTAssertFalse(names.contains("get_cycle_journal"))
+            XCTAssertTrue((messages.first?["content"] as? String ?? "").lowercased().contains("add this to my calendar"))
+            if provider.requestCount == 1 {
+                return CompanionCompletion(message: ["role": "assistant", "tool_calls": [["id": "save-today", "type": "function", "function": ["name": "save_cycle_note", "arguments": String(decoding: arguments, as: UTF8.self)]]]], text: "", calls: [.init(id: "save-today", name: "save_cycle_note", arguments: arguments)])
+            }
+            return CompanionCompletion(message: [:], text: "Saved your note for today.", calls: [])
+        }
+        let reply = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: report + " Add this to my calendar")])
+        let saved = try XCTUnwrap(controller.cycleJournal.state.notes.first)
+        XCTAssertEqual(saved.day, CycleDay.key(Date()))
+        XCTAssertEqual(saved.text, report)
+        XCTAssertEqual(saved.tags, [.resistant])
+        XCTAssertEqual(saved.cycleContext, tracker.noteContext(on: saved.occurredAt))
+        XCTAssertEqual(reply.cycleNoteIDs, [saved.id])
+        XCTAssertEqual(controller.cycleJournal.state.notes.count, 1)
+    }
+
+    func testInvalidJournalReadCanRecoverToLatestCalendarSaveRequest() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        try controller.cycleJournal.update { $0.allowMochiRead = true; $0.allowMochiWrite = true }
+        provider.handler = { messages, _ in
+            let name: String
+            let args: [String: Any]
+            switch provider.requestCount {
+            case 1:
+                name = "get_cycle_journal"
+                args = ["start": "today", "end": "tonight"]
+            case 2:
+                XCTAssertTrue(controller.cycleJournal.state.notes.isEmpty)
+                let payload = try XCTUnwrap(messages.last?["content"] as? String)
+                XCTAssertTrue(payload.contains("not_completed"))
+                XCTAssertTrue(payload.contains("past journal range"))
+                name = "save_cycle_note"
+                args = ["date": "today", "text": "I'm just really insulin resistant today.", "tags": ["resistant"]]
+            default:
+                return CompanionCompletion(message: [:], text: "Saved your note for today.", calls: [])
+            }
+            let arguments = try JSONSerialization.data(withJSONObject: args)
+            let id = "call-\(provider.requestCount)"
+            return CompanionCompletion(message: ["role": "assistant", "tool_calls": [["id": id, "type": "function", "function": ["name": name, "arguments": String(decoding: arguments, as: UTF8.self)]]]], text: "", calls: [.init(id: id, name: name, arguments: arguments)])
+        }
+        let reply = try await controller.replyToCycleConversation([
+            CompanionMessage(role: "user", text: "Which symptoms stand out across my period phase?"),
+            CompanionMessage(role: "user", text: "I'm just really insulin resistant today. Add this to my calendar")
+        ])
+        XCTAssertEqual(provider.requestCount, 3)
+        XCTAssertEqual(controller.cycleJournal.state.notes.count, 1)
+        XCTAssertEqual(reply.cycleNoteIDs, controller.cycleJournal.state.notes.map(\.id))
+    }
+
+    func testFutureNoteDateIsRejectedBeforeModelCorrectsItToToday() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        try controller.cycleJournal.update { $0.allowMochiWrite = true }
+        provider.handler = { messages, _ in
+            if provider.requestCount == 3 { return CompanionCompletion(message: [:], text: "Saved.", calls: []) }
+            if provider.requestCount == 2 {
+                XCTAssertTrue(controller.cycleJournal.state.notes.isEmpty)
+                XCTAssertTrue((messages.last?["content"] as? String ?? "").contains("not_completed"))
+            }
+            let date = provider.requestCount == 1
+                ? ISO8601DateFormatter().string(from: Date().addingTimeInterval(86400)) : "today"
+            let args = try JSONSerialization.data(withJSONObject: ["date": date, "text": "Cravings today", "tags": ["cravings"]])
+            let id = "save-\(provider.requestCount)"
+            return CompanionCompletion(message: ["role": "assistant", "tool_calls": [["id": id, "type": "function", "function": ["name": "save_cycle_note", "arguments": String(decoding: args, as: UTF8.self)]]]], text: "", calls: [.init(id: id, name: "save_cycle_note", arguments: args)])
+        }
+        let reply = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Save cravings for today")])
+        XCTAssertEqual(controller.cycleJournal.state.notes.count, 1)
+        XCTAssertEqual(controller.cycleJournal.state.notes.first?.day, CycleDay.key(Date()))
+        XCTAssertEqual(reply.cycleNoteIDs?.count, 1)
+    }
+
     func testJournalReadIsScopedAndContainsNoGraphOrUnrelatedChat() async throws {
         let (controller, provider, _, cleanup) = try fixture(sharing: true)
         defer { cleanup() }

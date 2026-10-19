@@ -488,11 +488,15 @@ struct CycleTrackingView: View {
     @State private var showsPeriodEditor = false
     @State private var confirmationTitle = ""
     @State private var journalPresentation: JournalPresentation?
+    @State private var quickTags = Set<CycleNoteTag>()
+    @State private var quickSaveError: String?
+    @State private var quickSavedNoteID: UUID?
 
     private struct JournalPresentation: Identifiable {
         let id = UUID()
         let date: Date
         var addingNote = false
+        var initialTags: [CycleNoteTag] = []
     }
 
     init(onDataChanged: @escaping () -> Void = {}) {
@@ -508,7 +512,7 @@ struct CycleTrackingView: View {
                 if store.periodEntries.isEmpty { historyWelcome }
                 CompanionCycleCard()
                 calendarCard
-                addNotesButton
+                quickPickTagsCard
                 statsRow
                 periodActions
             }
@@ -547,10 +551,19 @@ struct CycleTrackingView: View {
         }
         .sheet(item: $journalPresentation) { presentation in
             if presentation.addingNote {
-                CycleNoteEditor(item: CycleNoteEditorItem(note: nil, date: presentation.date), journal: journal)
+                CycleNoteEditor(item: CycleNoteEditorItem(note: nil, date: presentation.date, initialTags: presentation.initialTags), journal: journal) {
+                    quickTags.removeAll()
+                    quickSavedNoteID = nil
+                    onDataChanged()
+                }
             } else {
                 CycleJournalSheet(date: presentation.date, tracker: store)
             }
+        }
+        .onChange(of: selectedDate) { _ in
+            quickTags.removeAll()
+            quickSavedNoteID = nil
+            quickSaveError = nil
         }
     }
 
@@ -562,6 +575,13 @@ struct CycleTrackingView: View {
     private var surface: Color { Color(uiColor: .dashboardSurface) }
     private var border: Color { Color(uiColor: .dashboardBorder) }
     private var gold: Color { Color(red: 0.89, green: 0.61, blue: 0.20) }
+    private var noteAccent: Color {
+        colorScheme == .dark
+            ? Color(red: 0.62, green: 0.23, blue: 0.33)
+            : Color(red: 0.70, green: 0.27, blue: 0.38)
+    }
+    private var noteButtonSurface: Color { coral.opacity(colorScheme == .dark ? 0.10 : 0.06) }
+    private var noteIconTint: Color { colorScheme == .dark ? coral : noteAccent }
 
     private var historyWelcome: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -644,18 +664,109 @@ struct CycleTrackingView: View {
 
     private var addNotesButton: some View {
         Button {
-            journalPresentation = JournalPresentation(date: selectedDate, addingNote: true)
+            journalPresentation = JournalPresentation(date: selectedDate, addingNote: true, initialTags: Array(quickTags))
         } label: {
             Label("Add notes", systemImage: "square.and.pencil")
                 .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 48)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(coral)
-        .background(cardBackground)
+        .foregroundStyle(ink)
+        .background(noteButtonSurface, in: Capsule())
+        .overlay(Capsule().strokeBorder(border, lineWidth: 0.75))
         .disabled(selectedDate > Date() || journal.failure != nil)
         .accessibilityHint("Add a cycle note for \(selectedDate.formatted(date: .complete, time: .omitted))")
+    }
+
+    private var quickPickTagsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(calendar.isDateInToday(selectedDate) ? "How are you feeling?" : "How did you feel?")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(ink)
+            if !calendar.isDateInToday(selectedDate) {
+                Text(selectedDate.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption).foregroundStyle(mutedInk)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                ForEach(CycleNoteTag.availableTags) { tag in quickTagButton(tag) }
+            }
+            HStack(spacing: 8) {
+                if !quickTags.isEmpty {
+                    Button("Save tags") { saveQuickTags() }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .foregroundStyle(.white)
+                        .background(noteAccent, in: Capsule())
+                        .buttonStyle(.plain)
+                        .disabled(selectedDate > Date() || journal.failure != nil)
+                }
+                addNotesButton
+            }
+            if let id = quickSavedNoteID, journal.state.notes.contains(where: { $0.id == id }) {
+                HStack {
+                    Label("Saved", systemImage: "checkmark.circle.fill")
+                    Spacer()
+                    Button("View note") { journalPresentation = JournalPresentation(date: selectedDate) }
+                }
+                .font(.caption).foregroundStyle(.primary)
+            }
+            if let quickSaveError { Text(quickSaveError).font(.caption).foregroundStyle(.red) }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+    }
+
+    private func quickTagButton(_ tag: CycleNoteTag) -> some View {
+        let selected = quickTags.contains(tag)
+        return Button {
+            if selected { quickTags.remove(tag) } else { quickTags.insert(tag) }
+            quickSavedNoteID = nil
+            quickSaveError = nil
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: selected ? "checkmark" : tag.symbolName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(selected ? Color.white : noteIconTint)
+                    .frame(width: 28, height: 28)
+                    .background(selected ? noteAccent : coral.opacity(0.14), in: Circle())
+                Text(quickTagTitle(tag))
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .background(selected ? coral.opacity(0.22) : noteButtonSurface, in: Capsule())
+            .overlay(Capsule().strokeBorder(selected ? noteIconTint.opacity(0.5) : border, lineWidth: 0.75))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedDate > Date() || journal.failure != nil)
+        .accessibilityLabel(tag.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func quickTagTitle(_ tag: CycleNoteTag) -> String {
+        switch tag {
+        case .sensitive: return "Insulin sensitive"
+        case .resistant: return "Insulin resistant"
+        default: return tag.title
+        }
+    }
+
+    private func saveQuickTags() {
+        guard !quickTags.isEmpty else { return }
+        do {
+            let date = calendar.isDateInToday(selectedDate) ? Date() : selectedDate
+            let note = try journal.saveNote(date: date, text: "", tags: Array(quickTags), cycleContext: store.noteContext(on: date))
+            quickSavedNoteID = note.id
+            quickTags.removeAll()
+            quickSaveError = nil
+            onDataChanged()
+        } catch { quickSaveError = error.localizedDescription }
     }
 
     private var monthDates: [Date] {

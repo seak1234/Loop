@@ -18,8 +18,11 @@ enum CycleDay {
 }
 
 enum CycleNoteTag: String, Codable, CaseIterable, Identifiable {
-    case sensitive, resistant, highs, lows, variable, cravings, sleep, stress, exercise, illness, cramps
+    case sensitive, resistant, highs, lows, variable, cravings, sleep, stress, exercise, illness, cramps, lowEnergy
     var id: String { rawValue }
+    // Both note entry points share this list. Keep legacy cases decodable so
+    // existing notes and Nightscout entries retain their saved tags.
+    static let availableTags: [Self] = [.sensitive, .resistant, .cravings, .stress, .exercise, .illness]
     var title: String {
         switch self {
         case .sensitive: return "Felt more insulin sensitive"
@@ -33,6 +36,24 @@ enum CycleNoteTag: String, Codable, CaseIterable, Identifiable {
         case .exercise: return "Exercise"
         case .illness: return "Illness"
         case .cramps: return "Cramps"
+        case .lowEnergy: return "Low energy"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .sensitive: return "arrow.down.right"
+        case .resistant: return "arrow.up.right"
+        case .highs: return "arrow.up"
+        case .lows: return "arrow.down"
+        case .variable: return "waveform.path"
+        case .cravings: return "fork.knife"
+        case .sleep: return "moon.fill"
+        case .stress: return "cloud.bolt"
+        case .exercise: return "figure.walk"
+        case .illness: return "thermometer"
+        case .cramps: return "bolt.fill"
+        case .lowEnergy: return "battery.25percent"
         }
     }
 }

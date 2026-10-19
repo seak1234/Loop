@@ -131,6 +131,7 @@ struct CycleNoteEditorItem: Identifiable {
     private let draftID = UUID()
     var note: CycleJournalNote?
     var date: Date
+    var initialTags: [CycleNoteTag] = []
 }
 
 struct CycleNoteEditor: View {
@@ -140,48 +141,32 @@ struct CycleNoteEditor: View {
     @State private var text: String
     @State private var date: Date
     @State private var tags: Set<CycleNoteTag>
-    @State private var cycleContext: CycleNoteContext
     @State private var error: String?
     @State private var confirmsDelete = false
+    private let onSave: () -> Void
 
-    init(item: CycleNoteEditorItem, journal: CycleJournalStore) {
+    init(item: CycleNoteEditorItem, journal: CycleJournalStore, onSave: @escaping () -> Void = {}) {
         self.item = item; self.journal = journal
+        self.onSave = onSave
         _text = State(initialValue: item.note?.text ?? "")
         _date = State(initialValue: min(item.note?.occurredAt ?? item.date, Date()))
-        _tags = State(initialValue: Set(item.note?.tags ?? []))
-        _cycleContext = State(initialValue: item.note.map { CycleTrackingStore.shared.noteContext(for: $0) }
-            ?? CycleTrackingStore.shared.noteContext(on: item.date))
+        _tags = State(initialValue: Set(item.note?.tags ?? item.initialTags))
     }
 
     var body: some View {
         NavigationView {
             Form {
                 DatePicker("When", selection: $date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
-                    .onChange(of: CycleDay.key(date)) { _ in cycleContext = CycleTrackingStore.shared.noteContext(on: date) }
                 Section(header: Text("Your note (optional)"), footer: Text("Select a tag, write a note, or do both. Notes about insulin sensitivity reflect how you felt, not a measured diagnosis.")) {
                     TextEditor(text: $text).frame(minHeight: 130).accessibilityLabel("Cycle note")
                     Text("\(text.count)/6,000").font(.caption).foregroundColor(text.count > 6000 ? .red : .secondary)
                 }
                 Section(header: Text("Optional tags")) {
-                    ForEach(CycleNoteTag.allCases) { tag in
+                    ForEach(CycleNoteTag.availableTags) { tag in
                         Toggle(tag.title, isOn: Binding(get: { tags.contains(tag) }, set: { enabled in
                             if enabled { tags.insert(tag) } else { tags.remove(tag) }
                         }))
                     }
-                }
-                Section(header: Text("Cycle context"), footer: Text("These values stay with this note and sync both ways with Nightscout. Editing them does not change period history. Calendar phases are estimates, not confirmation of ovulation.")) {
-                    TextField("Cycle day (unknown if blank)", text: contextDay(\.cycleDay)).keyboardType(.numberPad)
-                    Picker("Phase", selection: Binding(get: { cycleContext.phase?.rawValue ?? "unknown" }, set: { value in
-                        cycleContext.phase = CycleNoteContext.Phase(rawValue: value)
-                        if cycleContext.phase == nil { cycleContext.phaseDay = nil }
-                    })) {
-                        Text("Unknown").tag("unknown")
-                        ForEach(CycleNoteContext.Phase.allCases) { phase in Text(phase.title).tag(phase.rawValue) }
-                    }
-                    TextField("Day within phase (unknown if blank)", text: contextDay(\.phaseDay))
-                        .keyboardType(.numberPad).disabled(cycleContext.phase == nil)
-                    Toggle("Calendar estimate", isOn: $cycleContext.isEstimated)
-                    Button("Use cycle tracker values") { cycleContext = CycleTrackingStore.shared.noteContext(on: date) }
                 }
                 if item.note != nil {
                     Section { Button("Delete note", role: .destructive) { confirmsDelete = true } }
@@ -195,7 +180,8 @@ struct CycleNoteEditor: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         do {
-                            try journal.saveNote(id: item.note?.id, date: date, text: text, tags: Array(tags), cycleContext: cycleContext)
+                            try journal.saveNote(id: item.note?.id, date: date, text: text, tags: Array(tags), cycleContext: automaticCycleContext)
+                            onSave()
                             dismiss()
                         } catch { self.error = error.localizedDescription }
                     }.disabled((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && tags.isEmpty) || text.count > 6000)
@@ -210,10 +196,14 @@ struct CycleNoteEditor: View {
             } message: { Text("Cycle comparisons will update without this note.") }
         }.navigationViewStyle(.stack)
     }
-    private func contextDay(_ path: WritableKeyPath<CycleNoteContext, Int?>) -> Binding<String> {
-        Binding(get: { cycleContext[keyPath: path].map(String.init) ?? "" }, set: { value in
-            cycleContext[keyPath: path] = value.isEmpty ? nil : (Int(value) ?? 0)
-        })
+    private var automaticCycleContext: CycleNoteContext {
+        if let original = item.note, CycleDay.key(date) == CycleDay.key(original.occurredAt) {
+            // Preserve synced values on ordinary edits and fill any missing fields.
+            let note = journal.state.notes.first(where: { $0.id == original.id }) ?? original
+            return CycleTrackingStore.shared.noteContext(for: note)
+        }
+        // Resolve at save time so new notes and date changes use current history.
+        return CycleTrackingStore.shared.noteContext(on: date)
     }
 }
 

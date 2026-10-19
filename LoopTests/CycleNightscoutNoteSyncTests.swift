@@ -70,6 +70,21 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         XCTAssertThrowsError(try journal.saveNote(date: Date().addingTimeInterval(86400), text: "", tags: [.sleep]))
     }
 
+    func testOriginalQuickPickTagsPersistAndSyncWithCycleContext() async throws {
+        let (journal, server, sync) = try fixture(); defer { cleanup(journal) }
+        let context = CycleNoteContext(cycleDay: 2, phase: .period, phaseDay: 2)
+        let note = try journal.saveNote(date: date, text: "", tags: [.resistant, .cramps], cycleContext: context)
+        try await sync.run()
+        let id = remoteID(journal, note.id)
+        let decoded = try CycleNightscoutNoteClient.decode(server.rows[id]!)
+        XCTAssertEqual(Set(decoded.content.tags), Set([.resistant, .cramps]))
+        XCTAssertEqual(decoded.content.cycleContext, context)
+        XCTAssertEqual(decoded.content.text, "")
+        XCTAssertTrue(note.displayText.contains("Felt more insulin resistant"))
+        let reloaded = CycleJournalStore(url: journal.url)
+        XCTAssertEqual(reloaded.state.notes.first?.tags, note.tags)
+    }
+
     func testTagOnlyNoteSyncsAndEditsInBothDirections() async throws {
         let (journal, server, sync) = try fixture(); defer { cleanup(journal) }
         let note = try journal.saveNote(date: date, text: "", tags: [.cramps])

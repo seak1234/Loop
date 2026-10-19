@@ -10278,9 +10278,6 @@
         }
       }
     },
-    "Calendar estimate" : {
-
-    },
     "Cancel" : {
       "comment" : "Button label for cancel\nButton text to cancel\nCancel button for reset loop alert\nCancel export button title\nCancel period history edits\nThe title of the cancel action in an action sheet",
       "localizations" : {
@@ -14981,12 +14978,6 @@
     "Cycle comparisons will update without this note." : {
 
     },
-    "Cycle context" : {
-
-    },
-    "Cycle day (unknown if blank)" : {
-
-    },
     "Cycle day %lld · %@" : {
       "localizations" : {
         "en" : {
@@ -15145,9 +15136,6 @@
           }
         }
       }
-    },
-    "Day within phase (unknown if blank)" : {
-
     },
     "dB" : {
       "comment" : "The short unit display string for decibles",
@@ -21586,6 +21574,9 @@
     "Hours" : {
 
     },
+    "How are you feeling?" : {
+
+    },
     "How can I silence non-Critical Alerts?" : {
       "localizations" : {
         "da" : {
@@ -21760,6 +21751,9 @@
           }
         }
       }
+    },
+    "How did you feel?" : {
+
     },
     "How to update (LoopDocs)" : {
       "comment" : "The title text for how to update",
@@ -30450,9 +30444,6 @@
     "Period started" : {
       "comment" : "Confirmation after recording the start of a period"
     },
-    "Phase" : {
-
-    },
     "Photo estimates are approximate. You can edit the form or ask Mochi to adjust it." : {
 
     },
@@ -34739,6 +34730,9 @@
         }
       }
     },
+    "Save tags" : {
+
+    },
     "Save without Bolusing" : {
       "comment" : "Button text to save carbs and/or manual glucose entry without a bolus",
       "localizations" : {
@@ -34833,6 +34827,9 @@
           }
         }
       }
+    },
+    "Saved" : {
+
     },
     "Saved cycle note · %@" : {
 
@@ -38695,9 +38692,6 @@
     "These permissions also require health sharing in Mochi settings. Relevant notes and recorded summaries are sent to OpenRouter and your selected model when requested in chat. Saving permission lets Mochi add notes only when you ask. Existing transmitted content cannot be recalled." : {
 
     },
-    "These values stay with this note and sync both ways with Nightscout. Editing them does not change period history. Calendar phases are estimates, not confirmation of ovulation." : {
-
-    },
     "This is the development version of Loop, built from the dev branch. Any updates on this branch may contain new, untested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main." : {
       "comment" : "Body of the warning shown at launch on development builds",
       "localizations" : {
@@ -40889,9 +40883,6 @@
         }
       }
     },
-    "Use cycle tracker values" : {
-
-    },
     "Use Pre-Meal Preset" : {
       "comment" : "The title of the alert controller used to select a duration for pre-meal targets",
       "localizations" : {
@@ -41271,6 +41262,9 @@
       }
     },
     "Use your own OpenRouter key and credits. Your key stays in this device’s Keychain. Choose a model that supports tool calling." : {
+
+    },
+    "View note" : {
 
     },
     "View supporting records" : {
