@@ -79,7 +79,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
         guard viewIfLoaded?.window != nil, shouldShowHUD else { return }
         let indexPath = IndexPath(row: 0, section: Section.companion.rawValue)
-        tableView.reloadRows(at: [indexPath], with: .none)
+        UIView.performWithoutAnimation {
+            tableView.reloadRows(at: [indexPath], with: .none)
+            tableView.layoutIfNeeded()
+        }
     }
 
     override func viewDidLoad() {
@@ -2846,6 +2849,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         super.tableView(tableView, willDisplay: cell, forRowAt: indexPath)
+        if cell is CompanionTableViewCell {
+            cell.layer.zPosition = 1
+        }
         if let cell = cell as? CycleSummaryTableViewCell {
             cell.configure(with: CycleTrackingStore.shared.summary(), isCollapsed: isCollapsedChartRow(.cycle))
         }
@@ -3155,20 +3161,27 @@ final class StatusTableViewController: LoopChartsTableViewController {
         private var hostingController: UIHostingController<CompanionDashboardCard>?
 
         func configure(owner: UIViewController, open: @escaping () -> Void) {
+            // The bubble overlaps the banner, including on its first display and after reuse.
+            layer.zPosition = 1
+            backgroundColor = .clear
+            clipsToBounds = false
+            contentView.clipsToBounds = false
+            selectionStyle = .none
             let card = CompanionDashboardCard(open: open, onMessageChanged: { [weak self, weak owner] in
                 DispatchQueue.main.async {
-                    self?.hostingController?.view.invalidateIntrinsicContentSize()
-                    (owner as? UITableViewController)?.tableView.performBatchUpdates(nil)
+                    guard let self else { return }
+                    UIView.performWithoutAnimation {
+                        self.hostingController?.view.invalidateIntrinsicContentSize()
+                        guard self.window != nil, let tableView = (owner as? UITableViewController)?.tableView else { return }
+                        tableView.performBatchUpdates(nil)
+                        tableView.layoutIfNeeded()
+                    }
                 }
             })
             if let hostingController {
                 hostingController.rootView = card
                 return
             }
-            backgroundColor = .clear
-            clipsToBounds = false
-            contentView.clipsToBounds = false
-            selectionStyle = .none
             let controller = UIHostingController(rootView: card)
             if #available(iOS 16.0, *) { controller.sizingOptions = .intrinsicContentSize }
             owner.addChild(controller)
@@ -3177,7 +3190,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
             controller.view.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(controller.view)
             NSLayoutConstraint.activate([
-                controller.view.topAnchor.constraint(equalTo: contentView.topAnchor),
+                // Give SwiftUI its full bounds; position the entire hosting view above this row.
+                controller.view.topAnchor.constraint(equalTo: contentView.topAnchor, constant: -12),
                 controller.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
                 controller.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
                 controller.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)

@@ -354,7 +354,7 @@ private struct MochiDashboardSpeechBubble: Shape {
     func path(in rect: CGRect) -> Path {
         let body = CGRect(x: rect.minX, y: rect.minY + 10, width: rect.width, height: max(0, rect.height - 10))
         var path = Path(roundedRect: body, cornerRadius: 18)
-        // Keep the pointer inside this row, aligned with Mochi in the banner above.
+        // Keep the pointer inside the hosting view, aligned with Mochi in the banner above.
         path.move(to: CGPoint(x: rect.minX + 42, y: body.minY + 1))
         path.addCurve(to: CGPoint(x: rect.minX + 48, y: rect.minY),
                       control1: CGPoint(x: rect.minX + 44, y: rect.minY + 8),
@@ -447,7 +447,6 @@ struct CompanionDashboardCard: View {
                 .shadow(color: MochiStyle.blue.opacity(0.08), radius: 5, y: 2)
         }
         .padding(.horizontal, 16)
-        .padding(.top, -12)
         .padding(.bottom, 10)
     }
 }
