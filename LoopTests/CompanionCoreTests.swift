@@ -6,6 +6,54 @@ import XCTest
 #endif
 
 final class CompanionCoreTests: XCTestCase {
+    func testMessageNoveltyRejectsGreetingAndSynonymSwaps() throws {
+        let recent = ["Hey, Michelle! I'm happy to see you checking in."]
+        XCTAssertTrue(CompanionMessageVariety.isRepeat("Hi Michelle, I'm glad to see you check in!", recent: recent, name: "Michelle"))
+        XCTAssertTrue(CompanionMessageVariety.isRepeat("Happy to see you here.", recent: ["Glad to see you today."]))
+        XCTAssertTrue(CompanionMessageVariety.isRepeat("What could I notice about sleep during the luteal phase?",
+            recent: ["What can I notice about sleep in the luteal phase?"]))
+        XCTAssertFalse(CompanionMessageVariety.isRepeat("Your questions deserve space here.", recent: recent, name: "Michelle"))
+        let raw = #"{"text":"Hi Michelle, I'm glad to see you check in!","kind":"motivation","question":"Can I ask about my readings?","factID":null,"topicID":null}"#
+        XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.motivation], factID: "", topicIDs: [], recentTexts: recent, name: "Michelle", useName: true))
+    }
+
+    func testCycleFallbackPoolHasEightDistinctValidTopicsPerPhase() throws {
+        for phase in CompanionCycleCardPhase.allCases {
+            let cards = CompanionCycleCardMessage.topics(for: phase)
+            XCTAssertTrue(cards.count >= 8)
+            XCTAssertEqual(Set(cards.map(\.question)).count, cards.count)
+            for card in cards {
+                let json = String(decoding: try JSONEncoder().encode(card), as: UTF8.self)
+                XCTAssertNoThrow(try CompanionCycleCardMessage.decode(json))
+                if phase != .unknown {
+                    XCTAssertTrue(card.text.localizedCaseInsensitiveContains(phase.rawValue))
+                    XCTAssertTrue(card.question.localizedCaseInsensitiveContains(phase.rawValue))
+                }
+            }
+        }
+    }
+
+    func testFallbackDashboardMessagesRotateWithoutRepeatingRecentContent() throws {
+        var recent: [String] = []
+        for index in 0..<12 {
+            let message = CompanionMessageVariety.dashboardFallback(index: index, name: "Michelle", morning: false, recent: recent)
+            XCTAssertTrue(CompanionDashboardRefresh.isConcise(message.text))
+            XCTAssertFalse(CompanionMessageVariety.isRepeat(message.text, recent: recent, name: "Michelle"))
+            recent.append(message.text)
+        }
+        XCTAssertEqual(Set(recent).count, 12)
+        let morning = CompanionMessageVariety.dashboardFallback(index: 0, name: "Michelle", morning: true)
+        XCTAssertTrue(morning.text.hasPrefix("Good morning, Michelle!"))
+        XCTAssertTrue(CompanionDashboardRefresh.isConcise(morning.text))
+    }
+
+    func testTopicFallbacksAvoidRecentQuestionsAcrossVisits() throws {
+        let previous = Array(CompanionTopic.fallbackTopics.prefix(12))
+        let next = CompanionTopic.freshFallback(index: 0, recent: previous)
+        XCTAssertEqual(next.count, 2)
+        XCTAssertTrue(next.allSatisfy { !CompanionMessageVariety.isRepeat($0.prompt, recent: previous.map(\.prompt)) })
+        XCTAssertEqual(Set(next.map(\.title)).count, 2)
+    }
     func testMealEstimateRequiresCompleteBoundedProposal() throws {
         let valid = #"{"food":"🌮","grams":42,"absorptionMinutes":180,"explanation":"Mixed meal estimate.","assumptions":"Assumes one cup of rice; sauce is uncertain."}"#
         let estimate = try CompanionMealEstimate.parse(valid, maximumGrams: 250, absorptionRange: 900...28800)

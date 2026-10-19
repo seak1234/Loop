@@ -84,6 +84,8 @@ struct CompanionMessage: Codable, Identifiable {
     var date = Date()
     var includesHealthData: Bool?
     var dashboardOrigin: Bool?
+    var cycleNoteIDs: [UUID]?
+    var includesCycleJournal: Bool?
 }
 
 /// A read-only snapshot: logged bleeding dates and estimated hormonal phases are
@@ -168,7 +170,7 @@ struct CompanionCycleContext: Encodable {
         estimatedNextPeriodStart = hasLoggedPeriods && self.phase != .unknown ? nextPeriodStart : nil
         notes = [
             "Source: period dates logged in this app. Phase estimates are not confirmation of ovulation, hormone levels, fertility, or insulin resistance.",
-            "Energy, mood, sleep and cravings are not recorded by this tracker. Ask the user about their own experience.",
+            "Optional cycle-journal notes about energy, mood, sleep and cravings are separate user reports. Use get_cycle_journal if the user enabled journal access; never infer symptoms from dates.",
             "No glucose or insulin comparison has been performed in this snapshot. Use those read tools for matching dates before describing a personal pattern."
         ]
         if !hasLoggedPeriods { notes.append("No periods have been logged. Do not infer a cycle day, phase, or a personal cycle length.") }
@@ -333,6 +335,34 @@ struct CompanionTopic: Codable, Equatable, Identifiable {
     var prompt: String
     var id: String { title }
 
+    static let fallbackTopics: [Self] = [
+        Self(title: "Food labels", prompt: "How can I make sense of a food label?"),
+        Self(title: "Sensor questions", prompt: "What can affect how a glucose sensor reads?"),
+        Self(title: "Movement and glucose", prompt: "Why might different activities affect glucose differently?"),
+        Self(title: "Sleep connections", prompt: "How can sleep and glucose relate to each other?"),
+        Self(title: "Stress signals", prompt: "What is useful to know about stress and glucose?"),
+        Self(title: "Mixed meals", prompt: "Why can meals with different ingredients behave differently?"),
+        Self(title: "Cycle journaling", prompt: "What could I include in notes about my cycle and T1D?"),
+        Self(title: "Insulin timing", prompt: "What is the difference between insulin delivered and insulin still active?"),
+        Self(title: "Graph gaps", prompt: "How can missing sensor data affect my understanding of a graph?"),
+        Self(title: "Everyday logistics", prompt: "Can we talk about the practical side of diabetes care?"),
+        Self(title: "Pattern or coincidence", prompt: "How can I explore whether an observation is a pattern or a coincidence?"),
+        Self(title: "Changing routines", prompt: "What could I note when my usual routine changes?"),
+        Self(title: "Meal composition", prompt: "What roles do fat and protein play in a mixed meal?"),
+        Self(title: "Diabetes language", prompt: "Can you explain a diabetes term I'm unsure about?"),
+        Self(title: "Care and kindness", prompt: "How can I avoid judging myself by individual readings?"),
+        Self(title: "Questions for visits", prompt: "How can I turn my observations into questions for my care team?")
+    ]
+
+    static func freshFallback(index: Int, recent: [Self]) -> [Self] {
+        let ordered = (0..<fallbackTopics.count).map { fallbackTopics[(max(0, index) + $0) % fallbackTopics.count] }
+        let fresh = ordered.filter { candidate in
+            !CompanionMessageVariety.isRepeat(candidate.title, recent: recent.map(\.title))
+                && !CompanionMessageVariety.isRepeat(candidate.prompt, recent: recent.map(\.prompt))
+        }
+        return Array((fresh.count >= 2 ? fresh : ordered).prefix(2))
+    }
+
     static func decodeSuggestions(_ text: String) throws -> [CompanionTopic] {
         struct Response: Decodable { var topics: [CompanionTopic] }
         guard text.utf8.count <= 4000 else { throw CompanionError.invalid("Topic response is too long.") }
@@ -346,6 +376,78 @@ struct CompanionTopic: Codable, Equatable, Identifiable {
             throw CompanionError.invalid("Mochi could not create two short topics.")
         }
         return topics
+    }
+}
+
+/// Compare content words, not just punctuation, names and greeting changes.
+enum CompanionMessageVariety {
+    static func isRepeat(_ text: String, recent: [String], name: String = "") -> Bool {
+        let ignored = Set(("a an the and or but i im its it is are be been to of for with in on at my your you we our me this that how what can could would do does about lets hi hey hello good morning evening please so very really " + name.lowercased())
+            .split(whereSeparator: \.isWhitespace).map(String.init))
+        func tokens(_ value: String) -> [String] {
+            value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty && !ignored.contains($0) }
+                .map { word in
+                    switch word {
+                    case "checking", "checked": return "check"
+                    case "happy", "glad", "pleased": return "happy"
+                    case "readings": return "reading"
+                    case "patterns": return "pattern"
+                    case "noticing", "noticed": return "notice"
+                    default: return word
+                    }
+                }
+        }
+        let candidate = tokens(text)
+        guard !candidate.isEmpty else { return recent.contains { $0.caseInsensitiveCompare(text) == .orderedSame } }
+        return recent.contains { previous in
+            let old = tokens(previous)
+            if candidate == old { return true }
+            let a = Set(candidate), b = Set(old), common = a.intersection(b).count
+            // "Glad to see you today" and "Happy to see you here" are the
+            // same welcome even when their remaining content words differ.
+            if a.contains("happy"), b.contains("happy"), a.contains("see"), b.contains("see") { return true }
+            return common >= 3 && Double(common) / Double(max(1, a.union(b).count)) >= 0.64
+        }
+    }
+
+    static let dashboardFocuses = [
+        "Recognize invisible planning and preparation, without assuming what happened today.",
+        "Offer patience with making sense of information; do not offer another welcome or check-in greeting as the message's point.",
+        "Make room for the user's own questions and priorities, without assigning homework.",
+        "Acknowledge the many small decisions care involves, without grading how they were handled.",
+        "Offer self-kindness without implying the user is upset, struggling, or doing well.",
+        "Recognize that a person is more than the numbers on a screen, without dismissing the importance of care.",
+        "Respect the user's agency and experience; avoid generic praise or coaching slogans.",
+        "Offer a little encouragement about understanding one thing at a time, without prescribing a break from care.",
+        "Acknowledge the practical logistics of diabetes, without inventing today's tasks or routines.",
+        "Invite the user's perspective without repeating an offer to review readings.",
+        "If the supplied snapshot supports an insight, choose a different evidence-backed aspect from recent messages; otherwise offer grounded patience.",
+        "Use a fresh, natural observation about the effort of care. Avoid happy-to-see-you, checking-in, and you've-got-this wording."
+    ]
+
+    static func dashboardFallback(index: Int, name: String, morning: Bool, recent: [String] = []) -> CompanionDashboardSuggestion {
+        let options: [(String, String)] = [
+            ("There's plenty of unseen planning behind diabetes care.", "Can we talk about the planning side of diabetes?"),
+            ("You deserve room for your own questions here.", "Can I talk through a diabetes question?"),
+            ("A graph can't capture all the effort behind your care.", "How can I put a glucose graph in perspective?"),
+            ("Making sense of the details can take time.", "Can we unpack something I find confusing?"),
+            ("Your experience matters alongside the numbers.", "Can I share something I've noticed?"),
+            ("There are a lot of small decisions behind everyday care.", "Can we talk about the daily decisions of diabetes?"),
+            ("You don't have to phrase a question perfectly to ask it.", "Can you help me put a question into words?"),
+            ("Being kind to yourself belongs in the conversation, too.", "How can I talk to myself more kindly about diabetes?"),
+            ("We can untangle one question at a time.", "Can we start with one thing I'm wondering about?"),
+            ("Your priorities can lead this conversation.", "Can we focus on what's on my mind?"),
+            ("There's more to your day than what fits on this screen.", "Can we put these numbers in everyday context?"),
+            ("I'm here to help make the details easier to understand.", "Can you help explain something about my care?")
+        ]
+        func message(_ offset: Int) -> CompanionDashboardSuggestion {
+            let item = options[(max(0, index) + offset) % options.count]
+            let greeting = morning ? (name.isEmpty ? "Good morning! " : "Good morning, \(name)! ") : (name.isEmpty ? "" : "Hey, \(name)! ")
+            return CompanionDashboardSuggestion(text: greeting + item.0, kind: .motivation, question: item.1, factID: nil, topicID: nil)
+        }
+        return (0..<options.count).map(message).first { !isRepeat($0.text, recent: recent, name: name) } ?? message(0)
     }
 }
 
@@ -370,31 +472,77 @@ struct CompanionCycleCardMessage: Codable, Identifiable {
     ]
 
     static func topics(for phase: CompanionCycleCardPhase) -> [Self] {
+        let base: [Self]
         switch phase {
         case .period:
-            return [
+            base = [
                 Self(text: "Period phase: let's talk comfort, energy and everyday routines.", question: "What can I pay attention to for comfort and wellbeing during the period phase?"),
                 Self(text: "Period phase and T1D: what might be useful to notice in your glucose?", question: "What could I track about glucose and how I feel during the period phase with T1D?")
             ]
         case .follicular:
-            return [
+            base = [
                 Self(text: "Follicular phase: curious about energy, mood and your everyday rhythm?", question: "What can I notice about energy and mood during the follicular phase?"),
                 Self(text: "Follicular phase and T1D: let's explore this part of the cycle.", question: "How can the follicular phase relate to glucose and insulin sensitivity with T1D?")
             ]
         case .ovulation:
-            return [
+            base = [
                 Self(text: "Estimated ovulation phase: what can your calendar tell you?", question: "What can a tracker estimate about the ovulation phase, and what can't it confirm?"),
                 Self(text: "Around estimated ovulation: let's talk about your cycle and T1D.", question: "What could I notice about glucose and how I feel around estimated ovulation with T1D?")
             ]
         case .luteal:
-            return [
+            base = [
                 Self(text: "Luteal phase: curious about sleep, cravings or mood before your period?", question: "How can sleep, cravings and mood relate to the luteal phase before a period?"),
                 Self(text: "Luteal phase and T1D: what would be useful to notice before your period?", question: "How can the luteal phase relate to glucose and insulin sensitivity with T1D?")
             ]
         case .unknown:
-            return [Self(text: "Let's get to know your cycle. Log a period start to follow its phases.", question: "How can logging period dates help me understand my cycle and T1D?")]
+            base = [Self(text: "Let's get to know your cycle. Log a period start to follow its phases.", question: "How can logging period dates help me understand my cycle and T1D?")]
         }
+        return base + additionalTopics[phase, default: []]
     }
+
+    private static let additionalTopics: [CompanionCycleCardPhase: [Self]] = [
+        .period: [
+            Self(text: "Sleep during the period phase is a different angle worth exploring.", question: "What might be useful to notice about sleep during the period phase?"),
+            Self(text: "Mood belongs in the period-phase conversation, too.", question: "How can I describe mood changes during the period phase without jumping to conclusions?"),
+            Self(text: "What does movement feel like during your period phase?", question: "What could I notice about movement and comfort during the period phase?"),
+            Self(text: "Period-phase notes can hold details a glucose graph misses.", question: "What everyday details could I include in a period-phase journal?"),
+            Self(text: "Cramps and the period phase: there is room for practical questions.", question: "What questions could I ask about cramps during the period phase?"),
+            Self(text: "The period phase can bring up questions about everyday planning.", question: "What might I want to plan around during the period phase?"),
+        ],
+        .follicular: [
+            Self(text: "Sleep is another angle on the follicular phase.", question: "What could I notice about sleep during the follicular phase?"),
+            Self(text: "Follicular-phase movement: curiosity can start with how an activity feels.", question: "What could I track about movement during the follicular phase?"),
+            Self(text: "The transition into the follicular phase deserves its own conversation.", question: "How does a tracker place the transition into the follicular phase?"),
+            Self(text: "Hunger and the follicular phase: what would you like to understand?", question: "What could I notice about appetite during the follicular phase?"),
+            Self(text: "Your follicular-phase notes can include the ordinary details of a day.", question: "What everyday details belong in a follicular-phase journal?"),
+            Self(text: "Follicular-phase experiences can raise very different questions for different people.", question: "How can I explore my own follicular-phase observations without assuming a standard pattern?"),
+        ],
+        .ovulation: [
+            Self(text: "Estimated ovulation: a date on a calendar can leave room for questions.", question: "Why is a calendar estimate of ovulation different from confirmation?"),
+            Self(text: "The estimated ovulation phase may be a useful time to compare your notes.", question: "What details could I compare around estimated ovulation without assuming a cause?"),
+            Self(text: "Sleep is a fresh angle on the estimated ovulation phase.", question: "What might I note about sleep around estimated ovulation?"),
+            Self(text: "Estimated ovulation brings up questions about how cycle timing is calculated.", question: "How does a tracker calculate estimated ovulation?"),
+            Self(text: "Energy around estimated ovulation is something you can describe in your own words.", question: "What could I note about energy around estimated ovulation?"),
+            Self(text: "Estimated ovulation and movement: what would you like to explore?", question: "What might be useful to notice about movement around estimated ovulation?"),
+        ],
+        .luteal: [
+            Self(text: "Appetite deserves its own luteal-phase conversation.", question: "How could I describe appetite changes during the luteal phase?"),
+            Self(text: "Luteal-phase rest: what would you like to understand about it?", question: "What could I notice about rest during the luteal phase?"),
+            Self(text: "Energy is another way to explore the luteal phase.", question: "What could I note about energy during the luteal phase?"),
+            Self(text: "Movement during the luteal phase can prompt different questions.", question: "What could I track about how movement feels during the luteal phase?"),
+            Self(text: "A luteal-phase journal can keep symptoms and assumptions separate.", question: "How can I describe luteal-phase symptoms without assuming what caused them?"),
+            Self(text: "The luteal phase raises questions about when the next period might arrive.", question: "What can cycle dates tell me about luteal-phase timing, and what remains an estimate?"),
+        ],
+        .unknown: [
+            Self(text: "Your cycle questions can start before you have a full history.", question: "What would be useful to record when starting a cycle journal?"),
+            Self(text: "Irregular timing leaves plenty of room for thoughtful cycle questions.", question: "How can I keep useful notes when my cycle timing varies?"),
+            Self(text: "A few period dates can be a starting point for understanding a tracker.", question: "How does a cycle tracker use previous period dates?"),
+            Self(text: "Calendar estimates and confirmed events answer different questions.", question: "What can cycle calendar estimates tell me, and what can they not confirm?"),
+            Self(text: "Diabetes and cycle tracking can share a conversation without assuming a phase.", question: "What could I track to explore my cycle and T1D together?"),
+            Self(text: "Everyday details can give a cycle journal more context.", question: "What could I note about sleep, mood or energy before I know my cycle phase?"),
+            Self(text: "There is no perfect wording for a cycle question.", question: "Can you help me turn a cycle observation into a useful question?"),
+        ],
+    ]
 
     static func decode(_ text: String) throws -> Self {
         guard text.utf8.count <= 2000 else { throw CompanionError.invalid("Cycle message is too long.") }
@@ -655,7 +803,7 @@ struct CompanionDashboardSuggestion: Decodable {
               (value.kind != .fact || value.factID == factID),
               (value.kind != .followUp || value.topicID.map { topicIDs.contains($0) } == true),
               value.topicID.map({ topicIDs.contains($0) }) ?? true,
-              !recentTexts.contains(where: { normalized($0) == normalized(value.text) }) else {
+              !CompanionMessageVariety.isRepeat(value.text, recent: recentTexts, name: name) else {
             throw CompanionError.invalid("Mochi couldn’t create a fresh, useful dashboard message.")
         }
         if !name.isEmpty {
@@ -673,9 +821,7 @@ struct CompanionDashboardSuggestion: Decodable {
         return value
     }
 
-    private static func normalized(_ text: String) -> String {
-        text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
-    }
+
 }
 
 enum CompanionDashboardGreeting {
@@ -693,7 +839,7 @@ enum CompanionDashboardGreeting {
 }
 
 enum CompanionDashboardRefresh {
-    static let styleVersion = 12
+    static let styleVersion = 13
     static let maximumCharacters = 140
     static let maximumWords = 24
 
@@ -729,6 +875,10 @@ struct CompanionState: Codable {
     var useRecentChatsForDashboard: Bool? = true
     var dashboardRecentMessages: [CompanionDashboardMessage]?
     var dashboardGenerationCount: Int?
+    var cycleCardHistory: [String: [CompanionCycleCardMessage]]?
+    var cycleCardGenerationCount: Int?
+    var recentSuggestedTopics: [CompanionTopic]?
+    var suggestedTopicGenerationCount: Int?
     var dashboardMorningGreetingDate: Date?
     var dashboardDismissedAt: Date?
     var dashboardSnoozeMinutes: Int?

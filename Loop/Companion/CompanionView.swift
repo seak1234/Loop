@@ -168,7 +168,7 @@ struct CompanionCycleCard: View {
     @ObservedObject private var controller = CompanionController.shared
     @State private var phaseCards: [CompanionCycleCardPhase: CompanionCycleCardMessage] = [:]
     @State private var now = Date()
-    @State private var fallbackIndex = Int.random(in: 0..<2)
+    @State private var fallbackIndex = Int.random(in: 0..<8)
     @State private var discussion: CompanionCycleCardMessage?
     private let dayTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -180,7 +180,7 @@ struct CompanionCycleCard: View {
     }
 
     private var generationIdentity: String {
-        "\(controller.hasKey):\(controller.state.model):\(controller.state.reasoningEffort?.rawValue ?? "default"):\(controller.state.personality)"
+        "\(controller.hasKey):\(controller.state.model):\(controller.state.reasoningEffort?.rawValue ?? "default"):\(controller.state.personality):\(Int(now.timeIntervalSince1970 / 900))"
     }
 
     var body: some View {
@@ -191,8 +191,6 @@ struct CompanionCycleCard: View {
         .accessibilityLabel(message.text)
         .accessibilityHint("Talk with Mochi about your cycle and T1D")
         .task(id: generationIdentity) {
-            phaseCards = [:]
-            guard controller.hasKey else { return }
             do { phaseCards = try await controller.makeCycleCards() }
             catch { /* Keep the current phase's invitation when generation is unavailable. */ }
         }
@@ -207,9 +205,10 @@ struct CompanionCycleCard: View {
 }
 
 @MainActor
-private struct CompanionCycleChat: View {
+struct CompanionCycleChat: View {
     let openingQuestion: String
     @ObservedObject private var controller = CompanionController.shared
+    @ObservedObject private var journal = CycleJournalStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var turns: [CompanionMessage] = []
     @State private var input = ""
@@ -236,7 +235,12 @@ private struct CompanionCycleChat: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 16))
                                     if turn.role != "user" { Spacer(minLength: 28) }
                                 }
+                                if let ids = turn.cycleNoteIDs, !ids.isEmpty {
+                                    CycleSavedNoteCards(ids: ids, journal: controller.cycleJournal)
+                                }
                             }
+                            CycleUnlinkedSavedNotes(since: turns.last(where: { $0.role == "user" })?.date,
+                                linkedIDs: turns.flatMap { $0.cycleNoteIDs ?? [] }, journal: controller.cycleJournal)
                             if requestID != nil {
                                 HStack {
                                     ProgressView("Mochi is thinking…")
@@ -307,6 +311,11 @@ private struct CompanionCycleChat: View {
             requestID = nil
             if !allowed { turns.removeAll { $0.includesHealthData == true } }
         }
+        .onChange(of: journal.state.allowMochiRead) { allowed in
+            requestID = nil
+            if !allowed { turns.removeAll { $0.includesCycleJournal == true } }
+        }
+        .onChange(of: journal.state.allowMochiWrite) { _ in requestID = nil }
         .sheet(isPresented: $showsSettings) { CompanionSettingsView(controller: controller) }
     }
 
@@ -510,7 +519,12 @@ struct CompanionView: View {
                                     if message.role != "user" { Spacer(minLength: 24) }
                                 }
                                 .id(message.id)
+                                if let ids = message.cycleNoteIDs, !ids.isEmpty {
+                                    CycleSavedNoteCards(ids: ids, journal: controller.cycleJournal)
+                                }
                             }
+                            CycleUnlinkedSavedNotes(since: controller.state.messages.last(where: { $0.role == "user" })?.date,
+                                linkedIDs: controller.state.messages.flatMap { $0.cycleNoteIDs ?? [] }, journal: controller.cycleJournal)
                             ForEach(controller.state.actions.filter { $0.status == .pending }) { action in
                                 actionCard(action)
                             }
@@ -785,7 +799,7 @@ struct CompanionSettingsView: View {
                     TextEditor(text: $personality).frame(minHeight: 130)
                         .accessibilityLabel("Custom personality prompt")
                 }
-                Section(header: Text("Data & privacy"), footer: Text("Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; energy, mood, sleep and cravings are not tracked unless you describe them in chat. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent.")) {
+                Section(header: Text("Data & privacy"), footer: Text("Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; Cycle journal notes and retained daily records require separate journal access, controlled on the cycle page. Notes can be saved only when you ask and enable saving permission. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent.")) {
                     Toggle("Allow health data for Mochi", isOn: $allowHealthData)
                     Text("Chat history, rules and preferences are stored on this device and excluded from backups. Notification previews may show glucose information; control previews in iOS Settings.")
                         .font(.caption).foregroundColor(.secondary)

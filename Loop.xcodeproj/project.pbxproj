@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0C090000000000000000004 /* CycleNightscoutNoteSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C090000000000000000003 /* CycleNightscoutNoteSyncTests.swift */; };
+		D0C090000000000000000002 /* CycleNightscoutNoteSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C090000000000000000001 /* CycleNightscoutNoteSync.swift */; };
+		D0C080000000000000000002 /* CycleNightscoutHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C080000000000000000001 /* CycleNightscoutHistory.swift */; };
+		D0C070000000000000000004 /* CycleJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C070000000000000000002 /* CycleJournalView.swift */; };
+		D0C070000000000000000003 /* CycleJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C070000000000000000001 /* CycleJournal.swift */; };
 		D0C060000000000000000002 /* UIRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C060000000000000000001 /* UIRegressionTests.swift */; };
 		D0C050000000000000000002 /* CompanionCycleIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */; };
 		D0C040000000000000000002 /* CompanionCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C040000000000000000001 /* CompanionCoreTests.swift */; };
@@ -772,6 +777,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0C090000000000000000003 /* CycleNightscoutNoteSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleNightscoutNoteSyncTests.swift; sourceTree = "<group>"; };
+		D0C090000000000000000001 /* CycleNightscoutNoteSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleNightscoutNoteSync.swift; sourceTree = "<group>"; };
+		D0C080000000000000000001 /* CycleNightscoutHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleNightscoutHistory.swift; sourceTree = "<group>"; };
+		D0C070000000000000000002 /* CycleJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Views/CycleJournalView.swift"; sourceTree = "<group>"; };
+		D0C070000000000000000001 /* CycleJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CycleJournal.swift"; sourceTree = "<group>"; };
 		D0C060000000000000000001 /* UIRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIRegressionTests.swift; sourceTree = "<group>"; };
 		D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCycleIntegrationTests.swift; sourceTree = "<group>"; };
 		D0C040000000000000000001 /* CompanionCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCoreTests.swift; sourceTree = "<group>"; };
@@ -1553,6 +1563,10 @@
 		D0C030000000000000000001 /* Companion */ = {
 			isa = PBXGroup;
 			children = (
+				D0C070000000000000000001 /* CycleJournal.swift */,
+				D0C070000000000000000002 /* CycleJournalView.swift */,
+				D0C080000000000000000001 /* CycleNightscoutHistory.swift */,
+				D0C090000000000000000001 /* CycleNightscoutNoteSync.swift */,
 				D0C010000000000000000001 /* CompanionCore.swift */,
 				D0C010000000000000000002 /* CompanionProvider.swift */,
 				D0C010000000000000000003 /* CompanionController.swift */,
@@ -2103,6 +2117,7 @@
 				A96DAC292838EF8A00D94E38 /* DiagnosticLogTests.swift */,
 				D0C060000000000000000001 /* UIRegressionTests.swift */,
 				D0C050000000000000000001 /* CompanionCycleIntegrationTests.swift */,
+				D0C090000000000000000003 /* CycleNightscoutNoteSyncTests.swift */,
 				D0C040000000000000000001 /* CompanionCoreTests.swift */,
 				D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */,
 				A9DAE7CF2332D77F006AE942 /* LoopTests.swift */,
@@ -3429,6 +3444,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C070000000000000000003 /* CycleJournal.swift in Sources */,
+				D0C070000000000000000004 /* CycleJournalView.swift in Sources */,
+				D0C080000000000000000002 /* CycleNightscoutHistory.swift in Sources */,
+				D0C090000000000000000002 /* CycleNightscoutNoteSync.swift in Sources */,
 				D0C020000000000000000001 /* CompanionCore.swift in Sources */,
 				D0C020000000000000000002 /* CompanionProvider.swift in Sources */,
 				D0C020000000000000000003 /* CompanionController.swift in Sources */,
@@ -3813,6 +3832,7 @@
 				A96DAC2A2838EF8A00D94E38 /* DiagnosticLogTests.swift in Sources */,
 				D0C060000000000000000002 /* UIRegressionTests.swift in Sources */,
 				D0C050000000000000000002 /* CompanionCycleIntegrationTests.swift in Sources */,
+				D0C090000000000000000004 /* CycleNightscoutNoteSyncTests.swift in Sources */,
 				D0C040000000000000000002 /* CompanionCoreTests.swift in Sources */,
 				D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */,
 				A9DAE7D02332D77F006AE942 /* LoopTests.swift in Sources */,

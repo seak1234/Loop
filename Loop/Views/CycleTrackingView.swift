@@ -271,6 +271,31 @@ final class CycleTrackingStore: ObservableObject {
         return phase(for: context, on: date)
     }
 
+    func noteContext(on date: Date) -> CycleNoteContext {
+        guard let context = projectedCycleContext(on: date) ?? cycleContext(on: date) else { return CycleNoteContext() }
+        let phase = phase(for: context, on: date)
+        let notePhase: CycleNoteContext.Phase?
+        let phaseStart: Int?
+        switch phase {
+        case .period: notePhase = .period; phaseStart = 1
+        case .follicular: notePhase = .follicular; phaseStart = context.periodLength + 1
+        case .ovulation: notePhase = .ovulation; phaseStart = context.ovulationDay.map { $0 - 1 }
+        case .luteal: notePhase = .luteal; phaseStart = context.ovulationDay.map { $0 + 2 }
+        case nil: notePhase = nil; phaseStart = nil
+        }
+        return CycleNoteContext(cycleDay: context.day, phase: notePhase,
+            phaseDay: phaseStart.map { context.day - $0 + 1 },
+            isEstimated: phase != .period || !isRecordedPeriodDay(date)
+                || (context.isOpen && context.day > 1))
+    }
+
+    func noteContext(for note: CycleJournalNote) -> CycleNoteContext {
+        // Resolve the note's civil day, rather than the day its timestamp falls
+        // on after travel. Use the same projected context as the cycle calendar.
+        let date = CycleDay.date(note.day, calendar: calendar) ?? note.occurredAt
+        return (note.cycleContext ?? CycleNoteContext()).fillingMissing(from: noteContext(on: date))
+    }
+
     func calendarMarker(for date: Date) -> Marker? {
         if isRecordedPeriodDay(date) { return .period }
         guard let context = projectedCycleContext(on: date) ?? cycleContext(on: date) else { return nil }
@@ -408,6 +433,24 @@ final class CycleTrackingStore: ObservableObject {
         return day <= end
     }
 
+    static func historyValidationError(_ entries: [PeriodEntry], now: Date = Date(), calendar: Calendar = .current) -> String? {
+        let today = calendar.startOfDay(for: now)
+        let sorted = entries.sorted { $0.startDate < $1.startDate }
+        for (index, entry) in sorted.enumerated() {
+            let start = calendar.startOfDay(for: entry.startDate)
+            if start > today { return "A period cannot start in the future." }
+            if let end = entry.endDate {
+                if calendar.startOfDay(for: end) < start || calendar.startOfDay(for: end) > today { return "Choose an end date between the period start and today." }
+            } else if index != sorted.count - 1 { return "Only the most recent period can be ongoing. Add an end date to earlier periods." }
+            if index + 1 < sorted.count {
+                let next = calendar.startOfDay(for: sorted[index + 1].startDate)
+                if next <= start { return "Two periods cannot have the same start date." }
+                if let end = entry.endDate, calendar.startOfDay(for: end) >= next { return "Period dates overlap. Correct the dates before saving." }
+            }
+        }
+        return nil
+    }
+
     private func normalized(_ entries: [PeriodEntry]) -> [PeriodEntry] {
         var result = entries.map { entry in
             let start = calendar.startOfDay(for: entry.startDate)
@@ -437,12 +480,20 @@ struct CycleTrackingView: View {
     private let calendar = Calendar.current
     private let onDataChanged: () -> Void
 
+    @ObservedObject private var journal = CycleJournalStore.shared
     @ObservedObject private var store = CycleTrackingStore.shared
     @State private var displayedMonth: Date
     @State private var selectedDate: Date
     @State private var showsPeriodConfirmation = false
     @State private var showsPeriodEditor = false
     @State private var confirmationTitle = ""
+    @State private var journalPresentation: JournalPresentation?
+
+    private struct JournalPresentation: Identifiable {
+        let id = UUID()
+        let date: Date
+        var addingNote = false
+    }
 
     init(onDataChanged: @escaping () -> Void = {}) {
         self.onDataChanged = onDataChanged
@@ -454,8 +505,10 @@ struct CycleTrackingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                if store.periodEntries.isEmpty { historyWelcome }
                 CompanionCycleCard()
                 calendarCard
+                addNotesButton
                 statsRow
                 periodActions
             }
@@ -492,6 +545,13 @@ struct CycleTrackingView: View {
                 onDataChanged()
             }
         }
+        .sheet(item: $journalPresentation) { presentation in
+            if presentation.addingNote {
+                CycleNoteEditor(item: CycleNoteEditorItem(note: nil, date: presentation.date), journal: journal)
+            } else {
+                CycleJournalSheet(date: presentation.date, tracker: store)
+            }
+        }
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -502,6 +562,20 @@ struct CycleTrackingView: View {
     private var surface: Color { Color(uiColor: .dashboardSurface) }
     private var border: Color { Color(uiColor: .dashboardBorder) }
     private var gold: Color { Color(red: 0.89, green: 0.61, blue: 0.20) }
+
+    private var historyWelcome: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Start with your cycle history").font(.headline)
+            Text("Add the periods you remember, starting with the most recent. Previous dates help place today in your cycle and make comparisons more useful.")
+                .font(.subheadline).foregroundStyle(mutedInk)
+            Button { showsPeriodEditor = true } label: {
+                Label("Add previous periods", systemImage: "calendar.badge.plus")
+                    .font(.subheadline.bold()).padding(.vertical, 8)
+            }
+            Text("You can add more dates later. No history yet? Use ‘My period started’ when it begins.")
+                .font(.caption).foregroundStyle(mutedInk)
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(cardBackground)
+    }
 
     private var calendarCard: some View {
         VStack(spacing: 14) {
@@ -568,6 +642,22 @@ struct CycleTrackingView: View {
         .background(cardBackground)
     }
 
+    private var addNotesButton: some View {
+        Button {
+            journalPresentation = JournalPresentation(date: selectedDate, addingNote: true)
+        } label: {
+            Label("Add notes", systemImage: "square.and.pencil")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(14)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(coral)
+        .background(cardBackground)
+        .disabled(selectedDate > Date() || journal.failure != nil)
+        .accessibilityHint("Add a cycle note for \(selectedDate.formatted(date: .complete, time: .omitted))")
+    }
+
     private var monthDates: [Date] {
         guard
             let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth),
@@ -607,6 +697,7 @@ struct CycleTrackingView: View {
 
         return Button {
             selectedDate = date
+            journalPresentation = JournalPresentation(date: date)
         } label: {
             ZStack {
                 if let phase {
@@ -617,7 +708,7 @@ struct CycleTrackingView: View {
                     .fill(phaseColor(phase))
                 }
 
-                VStack(spacing: 3) {
+                ZStack {
                     ZStack {
                         if isSelected {
                             Circle()
@@ -635,16 +726,25 @@ struct CycleTrackingView: View {
                     }
                     .frame(width: 34, height: 34)
 
-                    Circle()
-                        .fill(markerColor(marker) ?? Color.clear)
-                        .frame(width: 6, height: 6)
-                        .offset(y: -3)
+                    HStack(spacing: 3) {
+                        if !journal.notes(on: date).isEmpty {
+                            Circle().fill(ink).frame(width: 4, height: 4)
+                        }
+                        if let color = markerColor(marker) {
+                            Circle().fill(color).frame(width: 5, height: 5)
+                        }
+                    }
+                    .frame(height: 5)
+                    .offset(y: 17)
+                    .accessibilityHidden(true)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 43)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(date.formatted(date: .complete, time: .omitted))
+        .accessibilityLabel(date.formatted(date: .complete, time: .omitted) + (journal.notes(on: date).isEmpty ? "" : ", has cycle notes"))
+        .accessibilityHint("Open this day's cycle journal")
     }
 
     private var statsRow: some View {
@@ -730,7 +830,7 @@ struct CycleTrackingView: View {
                 showsPeriodEditor = true
             } label: {
                 Label(
-                    NSLocalizedString("Edit previous period days", comment: "Button to edit saved period history"),
+                    NSLocalizedString("Add or edit previous periods", comment: "Button to add or edit saved period history"),
                     systemImage: "pencil"
                 )
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -738,9 +838,8 @@ struct CycleTrackingView: View {
                 .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(store.periodEntries.isEmpty ? mutedInk : coral)
+            .foregroundStyle(coral)
             .background(surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .disabled(store.periodEntries.isEmpty)
         }
     }
 
@@ -874,8 +973,13 @@ private struct CalendarPhaseBandShape: Shape {
 private struct CyclePeriodHistoryEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draftEntries: [CycleTrackingStore.PeriodEntry]
+    @State private var validationError: String?
 
     private let onSave: ([CycleTrackingStore.PeriodEntry]) -> Void
+
+    private var latestEntryID: UUID? {
+        draftEntries.max { $0.startDate < $1.startDate }?.id
+    }
 
     init(
         entries: [CycleTrackingStore.PeriodEntry],
@@ -890,13 +994,23 @@ private struct CyclePeriodHistoryEditor: View {
             List {
                 Section {
                     Text(NSLocalizedString(
-                        "Correct the start and end dates for previously logged periods. Cycle phases and predictions update when you save.",
+                        "Add the periods you remember or correct existing dates. Choose the actual start and end dates before saving. Cycle estimates and journal comparisons update when you save.",
                         comment: "Instructions for editing cycle period history"
                     ))
                     .font(.footnote)
                     .foregroundStyle(Color(uiColor: .dashboardMutedInk))
                 }
 
+                Section {
+                    Button {
+                        let calendar = Calendar.current
+                        let anchor = draftEntries.map(\.startDate).min() ?? calendar.startOfDay(for: Date())
+                        let start = calendar.date(byAdding: .day, value: -28, to: anchor)!
+                        let end = calendar.date(byAdding: .day, value: 4, to: start)!
+                        draftEntries.insert(.init(startDate: start, endDate: end), at: 0)
+                    } label: { Label("Add a previous period", systemImage: "calendar.badge.plus") }
+                }
+                if let validationError { Section { Text(validationError).foregroundColor(.red) } }
                 ForEach($draftEntries) { $entry in
                     Section {
                         DatePicker(
@@ -906,18 +1020,25 @@ private struct CyclePeriodHistoryEditor: View {
                             displayedComponents: .date
                         )
 
-                        Toggle(
-                            NSLocalizedString("Period ended", comment: "Period history ended toggle"),
-                            isOn: hasEndDateBinding(for: $entry)
-                        )
+                        if entry.id == latestEntryID {
+                            Toggle(
+                                NSLocalizedString("Period ended", comment: "Period history ended toggle"),
+                                isOn: hasEndDateBinding(for: $entry)
+                            )
+                        }
 
-                        if entry.endDate != nil {
+                        if entry.endDate != nil || entry.id != latestEntryID {
                             DatePicker(
                                 NSLocalizedString("Ended", comment: "Period history end date label"),
                                 selection: endDateBinding(for: $entry),
                                 in: entry.startDate...Date(),
                                 displayedComponents: .date
                             )
+                            if entry.endDate == nil {
+                                Text("Choose an end date for this earlier period.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         Button(role: .destructive) {
@@ -933,7 +1054,7 @@ private struct CyclePeriodHistoryEditor: View {
                     }
                 }
             }
-            .navigationTitle(NSLocalizedString("Edit period days", comment: "Period history editor title"))
+            .navigationTitle(NSLocalizedString("Period history", comment: "Period history editor title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -943,8 +1064,12 @@ private struct CyclePeriodHistoryEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(NSLocalizedString("Save", comment: "Save period history edits")) {
-                        onSave(draftEntries)
-                        dismiss()
+                        if let message = CycleTrackingStore.historyValidationError(draftEntries) {
+                            validationError = message
+                        } else {
+                            onSave(draftEntries)
+                            dismiss()
+                        }
                     }
                 }
             }

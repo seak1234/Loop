@@ -114,7 +114,7 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         state.messages = [CompanionMessage(role: "user", text: "PRIVATE_GENERAL_CHAT_MARKER")]
         try store.save(state)
         let provider = CycleProviderProbe()
-        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker,
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, cycleJournal: CycleJournalStore(url: directory.appendingPathComponent("journal.json")),
                                              keyReader: { "test-key-never-transmitted" })
         return (controller, provider, tracker, {
             defaults.removePersistentDomain(forName: suite)
@@ -142,6 +142,90 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         XCTAssertFalse(request.contains("PRIVATE_GENERAL_CHAT_MARKER"))
         XCTAssertFalse(request.contains("recentPeriods"))
         XCTAssertEqual(controller.state.messages.count, 1)
+    }
+
+    func testRepeatedCycleCardsRetryThenChooseDifferentTopics() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let templates = Dictionary(uniqueKeysWithValues: CompanionCycleCardPhase.allCases.map { ($0.rawValue, CompanionCycleCardMessage.topics(for: $0)[0]) })
+        let response = String(decoding: try JSONEncoder().encode(templates), as: UTF8.self)
+        provider.handler = { _, _ in CompanionCompletion(message: [:], text: response, calls: []) }
+        let first = try await controller.makeCycleCards()
+        let second = try await controller.makeCycleCards()
+        XCTAssertEqual(provider.requestCount, 3)
+        for phase in CompanionCycleCardPhase.allCases {
+            XCTAssertFalse(first[phase]?.text == second[phase]?.text)
+            XCTAssertFalse(first[phase]?.question == second[phase]?.question)
+        }
+        XCTAssertEqual(controller.state.cycleCardHistory?["period"]?.count, 2)
+        XCTAssertEqual(controller.state.cycleCardGenerationCount, 2)
+        XCTAssertTrue(String(describing: provider.messages).contains("avoid_previous_cards"))
+        XCTAssertFalse(String(describing: provider.messages).contains("PRIVATE_GENERAL_CHAT_MARKER"))
+    }
+
+    func testOfflineCycleCardsRotateAndRememberHistoryAfterRelaunch() async throws {
+        let (_, provider, tracker, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CompanionStateStore(url: directory.appendingPathComponent("state.json"))
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { nil })
+        var questions = Set<String>()
+        for _ in 0..<8 {
+            let cards = try await controller.makeCycleCards()
+            questions.insert(cards[.period]!.question)
+        }
+        XCTAssertEqual(questions.count, 8)
+        XCTAssertEqual(provider.requestCount, 0)
+        let saved = try store.load()
+        XCTAssertEqual(saved.cycleCardGenerationCount, 8)
+        let previous = saved.cycleCardHistory?["period"]?.last
+        let restarted = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { nil })
+        let next = try await restarted.makeCycleCards()
+        XCTAssertFalse(next[.period]?.question == previous?.question)
+    }
+
+    func testRepeatedDashboardMessagesRetryThenUseFreshCopy() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        provider.handler = { messages, _ in
+            let content = messages.first(where: { $0["role"] as? String == "user" })?["content"] as! String
+            let context = try JSONSerialization.jsonObject(with: Data(content.utf8)) as! [String: Any]
+            let greeting = context["morning_greeting_required"] as? Bool == true ? "Good morning, Michelle! " : "Hey, Michelle! "
+            let value = ["text": greeting + "Your questions deserve room here.", "kind": "motivation", "question": "Can we explore a question together?"]
+            return CompanionCompletion(message: [:], text: String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self), calls: [])
+        }
+        controller.setDashboardVisible(true)
+        for _ in 0..<200 where controller.isRefreshingDashboard { try await Task.sleep(nanoseconds: 10_000_000) }
+        let first = try XCTUnwrap(controller.state.dashboardMessage)
+        controller.requestDashboardRefresh(now: Date().addingTimeInterval(901))
+        for _ in 0..<200 where controller.isRefreshingDashboard { try await Task.sleep(nanoseconds: 10_000_000) }
+        let second = try XCTUnwrap(controller.state.dashboardMessage)
+        XCTAssertEqual(provider.requestCount, 3)
+        XCTAssertFalse(CompanionMessageVariety.isRepeat(second.text, recent: [first.text], name: "Michelle"))
+        XCTAssertFalse(first.followUpQuestion == second.followUpQuestion)
+        XCTAssertEqual(controller.state.dashboardRecentMessages?.count, 2)
+        XCTAssertTrue(String(describing: provider.messages).contains("variety_focus"))
+        XCTAssertFalse(String(describing: provider.messages).contains("PRIVATE_GENERAL_CHAT_MARKER"))
+    }
+
+    func testShortcutHistoryRejectsRepeatedTopicsOnLaterVisits() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        provider.handler = { _, _ in
+            CompanionCompletion(message: [:], text: #"{"topics":[{"title":"Food labels","prompt":"How can I read a food label?"},{"title":"Sleep connections","prompt":"How can sleep affect glucose?"}]}"#, calls: [])
+        }
+        controller.beginChatSession()
+        for _ in 0..<200 where controller.isGeneratingTopics { try await Task.sleep(nanoseconds: 10_000_000) }
+        let first = controller.suggestedTopics
+        controller.endChatSession()
+        controller.beginChatSession()
+        for _ in 0..<200 where controller.isGeneratingTopics { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(provider.requestCount, 3)
+        XCTAssertEqual(controller.suggestedTopics.count, 2)
+        XCTAssertTrue(controller.suggestedTopics.allSatisfy { !CompanionMessageVariety.isRepeat($0.title, recent: first.map(\.title)) })
+        XCTAssertEqual(controller.state.recentSuggestedTopics?.count, 4)
+        controller.endChatSession()
     }
 
     func testDashboardMorningFallbackIsWelcomingBeforeAnyNetworkReply() throws {
@@ -209,7 +293,10 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         defer { cleanup() }
         let reply = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Tell me about this phase.")])
         XCTAssertEqual(reply.includesHealthData, true)
-        XCTAssertTrue(provider.tools.isEmpty)
+        let names = provider.tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
+        XCTAssertTrue(names.contains("get_glucose_summary"))
+        XCTAssertFalse(names.contains("save_cycle_note"))
+        XCTAssertFalse(names.contains("propose_automation"))
         let snapshot = try XCTUnwrap(provider.messages.dropFirst().first?["content"] as? String)
         XCTAssertTrue(snapshot.contains("\"recordedPeriodCount\":1"))
         XCTAssertTrue(snapshot.contains("\"cycleDay\":3"))
@@ -238,6 +325,467 @@ final class CompanionCycleSurfaceTests: XCTestCase {
             let encoded = String(decoding: try JSONEncoder().encode(topic), as: UTF8.self)
             XCTAssertEqual(try CompanionCycleCardMessage.decode(encoded).question, topic.question)
         }
+    }
+    func testJournalPersistsEditsAndDeletesOutsideChat() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        let date = Date().addingTimeInterval(-60)
+        let saved = try journal.saveNote(date: date, text: "  More sensitive today  ", tags: [.sensitive, .sensitive])
+        XCTAssertEqual(saved.tags, [.sensitive])
+        let reloaded = CycleJournalStore(url: journal.url)
+        XCTAssertEqual(reloaded.state.notes.first?.text, "More sensitive today")
+        try reloaded.saveNote(id: saved.id, date: date, text: "Correction: after exercise", tags: [.exercise])
+        XCTAssertEqual(reloaded.state.notes.count, 1)
+        try reloaded.deleteNote(saved.id)
+        XCTAssertTrue(CycleJournalStore(url: journal.url).state.notes.isEmpty)
+        XCTAssertEqual(controller.state.messages.count, 1)
+    }
+
+    func testJournalRejectsInvalidWritesAndPreservesCorruptHistory() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        XCTAssertThrowsError(try journal.saveNote(date: Date().addingTimeInterval(86400), text: "Future", tags: []))
+        XCTAssertThrowsError(try journal.saveNote(date: Date(), text: "   ", tags: []))
+        XCTAssertThrowsError(try journal.saveNote(date: Date(), text: String(repeating: "a", count: 6001), tags: []))
+        try journal.update { $0.allowMochiRead = true }
+        let original = Data("unreadable journal".utf8)
+        try original.write(to: journal.url)
+        let broken = CycleJournalStore(url: journal.url)
+        XCTAssertTrue(broken.failure != nil)
+        XCTAssertThrowsError(try broken.saveNote(date: Date(), text: "Overwrite", tags: []))
+        XCTAssertEqual(try Data(contentsOf: journal.url), original)
+    }
+
+    func testMochiWritesRequireSeparatePermissionAndReturnRealSavedID() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        let date = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+        let args = try JSONSerialization.data(withJSONObject: ["date": date, "text": "Cravings after dinner", "tags": ["cravings"]])
+        var requested = false
+        provider.handler = { _, tools in
+            if journal.state.allowMochiWrite { XCTAssertTrue(tools.contains { ($0["function"] as? [String: Any])?["name"] as? String == "save_cycle_note" }) }
+            if !requested {
+                requested = true
+                return CompanionCompletion(message: ["role": "assistant", "tool_calls": [["id": "save", "type": "function", "function": ["name": "save_cycle_note", "arguments": String(decoding: args, as: UTF8.self)]]]], text: "", calls: [.init(id: "save", name: "save_cycle_note", arguments: args)])
+            }
+            return CompanionCompletion(message: ["role": "assistant", "content": "Saved."], text: "Saved.", calls: [])
+        }
+        // Permission to read health data alone does not permit note writes.
+        var denied = false
+        do { _ = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Save a cycle note")]) }
+        catch { denied = true }
+        XCTAssertTrue(denied)
+        XCTAssertTrue(journal.state.notes.isEmpty)
+        try journal.update { $0.allowMochiWrite = true }
+        requested = false
+        let reply = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Save a note: cravings after dinner")])
+        XCTAssertEqual(reply.cycleNoteIDs?.first, journal.state.notes.first?.id)
+        XCTAssertEqual(journal.state.notes.first?.source, "mochi")
+        let first = journal.state.notes[0]
+        let duplicate = try journal.saveNote(date: first.occurredAt, text: first.text, tags: first.tags, source: "mochi")
+        XCTAssertEqual(duplicate.id, first.id)
+        XCTAssertEqual(journal.state.notes.count, 1)
+    }
+
+    func testJournalReadIsScopedAndContainsNoGraphOrUnrelatedChat() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        try journal.update { $0.allowMochiRead = true }
+        try journal.saveNote(date: Date().addingTimeInterval(-60), text: "JOURNAL_REPORT", tags: [.cravings])
+        var read = false
+        let start = Calendar.current.startOfDay(for: Date())
+        let args = try JSONSerialization.data(withJSONObject: ["start": ISO8601DateFormatter().string(from: start), "end": ISO8601DateFormatter().string(from: Date())])
+        provider.handler = { messages, _ in
+            if !read {
+                read = true
+                return CompanionCompletion(message: ["role": "assistant", "tool_calls": [["id": "read", "type": "function", "function": ["name": "get_cycle_journal", "arguments": String(decoding: args, as: UTF8.self)]]]], text: "", calls: [.init(id: "read", name: "get_cycle_journal", arguments: args)])
+            }
+            let payload = messages.last?["content"] as? String ?? ""
+            XCTAssertTrue(payload.contains("JOURNAL_REPORT"))
+            XCTAssertTrue(payload.contains("user_report") || payload.contains("User notes are reports"))
+            XCTAssertFalse(String(describing: messages).contains("PRIVATE_GENERAL_CHAT_MARKER"))
+            return CompanionCompletion(message: [:], text: "Read your note.", calls: [])
+        }
+        _ = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Read today's notes")])
+        XCTAssertEqual(provider.requestCount, 2)
+    }
+
+    func testConsentRevokedDuringProviderRequestPreventsSaving() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        try controller.cycleJournal.update { $0.allowMochiWrite = true }
+        provider.handler = { _, _ in
+            try controller.cycleJournal.update { $0.allowMochiWrite = false }
+            return CompanionCompletion(message: [:], text: "", calls: [.init(id: "late", name: "save_cycle_note", arguments: Data("{}".utf8))])
+        }
+        var rejected = false
+        do { _ = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Save a cycle note")]) }
+        catch { rejected = true }
+        XCTAssertTrue(rejected)
+        XCTAssertTrue(controller.cycleJournal.state.notes.isEmpty)
+    }
+
+    func testWeightedGlucoseCoverageDoesNotFillGapsOrFutureTime() throws {
+        let start = CycleDay.date("2026-01-01")!
+        let end = start.addingTimeInterval(1800)
+        let points = [CycleGlucoseReading(date: start, mgdl: 100), .init(date: start.addingTimeInterval(300), mgdl: 200), .init(date: start.addingTimeInterval(1200), mgdl: 300)]
+        let summary = CycleDailySummary.make(start: start, end: end, now: end, readings: points, range: { _ in (80, 180) }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0)
+        XCTAssertEqual(summary.coveredSeconds, 900)
+        XCTAssertEqual(summary.meanMGDL, 200)
+        XCTAssertEqual(summary.timeInRange, 1.0 / 3.0)
+        XCTAssertNil(summary.insulinUnits)
+        let partial = CycleDailySummary.make(start: start, end: end, now: start.addingTimeInterval(60), readings: [points[0]], range: { _ in nil }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0)
+        XCTAssertEqual(partial.coveredSeconds, 60)
+        XCTAssertTrue(partial.isPartialDay)
+        XCTAssertFalse(partial.usableForPatterns)
+    }
+
+    func testCivilDaysAndDSTUseActualDayLength() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Detroit")!
+        XCTAssertNil(CycleDay.date("2026-02-30", calendar: calendar))
+        let start = calendar.startOfDay(for: CycleDay.date("2026-03-08", calendar: calendar)!)
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let readings = stride(from: 0.0, to: end.timeIntervalSince(start), by: 300).map { CycleGlucoseReading(date: start.addingTimeInterval($0), mgdl: 110) }
+        let summary = CycleDailySummary.make(start: start, end: end, now: end, readings: readings, range: { _ in (80, 180) }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0, calendar: calendar)
+        XCTAssertEqual(summary.daySeconds, 23 * 3600)
+        XCTAssertEqual(summary.coverage, 1)
+        XCTAssertEqual(summary.day, "2026-03-08")
+    }
+
+    private func patternFixture() -> (Calendar, [Date], Date, CycleJournalState) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let starts = ["2026-01-01", "2026-01-29", "2026-02-26"].map { CycleDay.date($0, calendar: calendar)! }
+        let now = CycleDay.date("2026-03-20", calendar: calendar)!
+        var state = CycleJournalState()
+        for start in starts.prefix(2) {
+            for day in 1...28 {
+                let date = calendar.date(byAdding: .day, value: day - 1, to: start)!
+                let summary = CycleDailySummary(day: CycleDay.key(date, calendar: calendar), timeZone: "UTC", capturedAt: now, isPartialDay: false, coveredSeconds: 86400, daySeconds: 86400,
+                    meanMGDL: (21...25).contains(day) ? 160 : 110, timeInRange: nil, insulinUnits: nil, insulinRecordCount: 0, carbGrams: nil, carbEntryCount: 0, glucose: [])
+                state.summaries.append(summary)
+            }
+            let date = calendar.date(byAdding: .day, value: 22, to: start)!
+            state.notes.append(CycleJournalNote(day: CycleDay.key(date, calendar: calendar), occurredAt: date, timeZone: "UTC", text: "Cravings", tags: [.cravings]))
+        }
+        return (calendar, starts, now, state)
+    }
+
+    func testPatternsCountDistinctCyclesAndLinkOriginalEvidence() throws {
+        let (calendar, starts, now, state) = patternFixture()
+        let insights = CyclePatternEngine.insights(starts: starts, estimatedLength: 28, journal: state, now: now, calendar: calendar)
+        XCTAssertEqual(insights.count, 2)
+        let glucose = insights.first { $0.basis == "recorded_glucose" }!
+        XCTAssertEqual(glucose.evidence.count, 2)
+        XCTAssertEqual(glucose.evidence[0].days.count, 5)
+        XCTAssertEqual(glucose.noteIDs.count, 2)
+        let notes = insights.first { $0.basis == "user_report" }!
+        XCTAssertTrue(notes.text.contains("2 previous cycles"))
+        XCTAssertEqual(notes.noteIDs.count, 2)
+    }
+
+    func testPatternsRejectPoorCoverageContradictionsAndUnconfirmedNewCycles() throws {
+        let (calendar, starts, now, original) = patternFixture()
+        var state = original
+        for index in state.summaries.indices where state.summaries[index].day >= "2026-01-29" { state.summaries[index].coveredSeconds = 1000 }
+        XCTAssertFalse(CyclePatternEngine.insights(starts: starts, estimatedLength: 28, journal: state, now: now, calendar: calendar).contains { $0.basis == "recorded_glucose" })
+        state = original
+        for index in state.summaries.indices where state.summaries[index].day >= "2026-02-18" { state.summaries[index].meanMGDL = 80 }
+        XCTAssertFalse(CyclePatternEngine.insights(starts: starts, estimatedLength: 28, journal: state, now: now, calendar: calendar).contains { $0.basis == "recorded_glucose" })
+        let overdue = calendar.date(byAdding: .day, value: 40, to: starts.last!)!
+        XCTAssertTrue(CyclePatternEngine.insights(starts: starts, estimatedLength: 28, journal: original, now: overdue, calendar: calendar).isEmpty)
+        XCTAssertTrue(CyclePatternEngine.insights(starts: [], estimatedLength: 28, journal: original, now: now, calendar: calendar).isEmpty)
+    }
+
+    func testDeletingEvidenceAndEditingPeriodDatesRecalculatesPatterns() throws {
+        let (calendar, starts, now, original) = patternFixture()
+        var state = original
+        state.notes = []
+        XCTAssertFalse(CyclePatternEngine.insights(starts: starts, estimatedLength: 28, journal: state, now: now, calendar: calendar).contains { $0.basis == "user_report" })
+        let moved = starts.dropLast() + [calendar.date(byAdding: .day, value: 10, to: starts.last!)!]
+        let recalculated = CyclePatternEngine.insights(starts: Array(moved), estimatedLength: 28, journal: original, now: now, calendar: calendar)
+        XCTAssertFalse(recalculated.contains { $0.text.contains("averaged higher") })
+        XCTAssertFalse(recalculated.contains { $0.noteIDs == original.notes.map(\.id) })
+        let before = CyclePatternEngine.comparisons(starts: starts, summaries: original.summaries, notes: original.notes, alignment: .beforePeriod, now: now, calendar: calendar)
+        XCTAssertEqual(before.count, 2)
+        XCTAssertEqual(before.first?.days.last?.offset, -1)
+        XCTAssertFalse(before.contains { $0.isCurrent })
+    }
+
+    func testRetentionNeverReplacesGoodHistoryWithGaps() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let (_, _, _, state) = patternFixture()
+        let good = state.summaries[0]
+        try controller.cycleJournal.retain([good])
+        var worse = good; worse.coveredSeconds = 0; worse.meanMGDL = nil
+        try controller.cycleJournal.retain([worse])
+        XCTAssertEqual(controller.cycleJournal.state.summaries.first?.meanMGDL, good.meanMGDL)
+        try controller.cycleJournal.update { $0.retainDailySummaries = false }
+        try controller.cycleJournal.retain([state.summaries[1]])
+        XCTAssertEqual(controller.cycleJournal.state.summaries.count, 1)
+    }
+
+    func testPeriodHistoryAllowsFirstEntryButRejectsOverlapsAndFutureDates() throws {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let first = calendar.date(byAdding: .day, value: -30, to: today)!
+        let end = calendar.date(byAdding: .day, value: -26, to: today)!
+        let valid = [CycleTrackingStore.PeriodEntry(startDate: first, endDate: end)]
+        XCTAssertNil(CycleTrackingStore.historyValidationError(valid))
+        XCTAssertTrue(CycleTrackingStore.historyValidationError(valid + [.init(startDate: first, endDate: end)]) != nil)
+        XCTAssertTrue(CycleTrackingStore.historyValidationError(valid + [.init(startDate: calendar.date(byAdding: .day, value: -28, to: today)!, endDate: end)]) != nil)
+        XCTAssertTrue(CycleTrackingStore.historyValidationError([.init(startDate: today.addingTimeInterval(86400))]) != nil)
+        XCTAssertTrue(CycleTrackingStore.historyValidationError([.init(startDate: first), .init(startDate: today)]) != nil)
+        let suite = "FirstHistory." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = CycleTrackingStore(defaults: defaults)
+        XCTAssertTrue(tracker.periodEntries.isEmpty)
+        tracker.replacePeriodEntries(with: valid)
+        XCTAssertEqual(CycleTrackingStore(defaults: defaults).periodEntries.count, 1)
+    }
+    func testRevokedJournalAccessDoesNotResendJournalDerivedReplies() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let reply = try await controller.replyToCycleConversation([
+            CompanionMessage(role: "assistant", text: "PRIVATE_JOURNAL_MARKER", includesHealthData: true, includesCycleJournal: true),
+            CompanionMessage(role: "user", text: "Explain cycle phases generally")
+        ])
+        XCTAssertFalse(String(describing: provider.messages).contains("PRIVATE_JOURNAL_MARKER"))
+        XCTAssertEqual(reply.includesCycleJournal, false)
+    }
+
+    func testSameWordsAtDifferentTimesCanBeSeparateNotes() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let date = Date().addingTimeInterval(-3600)
+        try controller.cycleJournal.saveNote(date: date, text: "Felt low", tags: [.lows], source: "mochi")
+        try controller.cycleJournal.saveNote(date: date.addingTimeInterval(1800), text: "Felt low", tags: [.lows], source: "mochi")
+        XCTAssertEqual(controller.cycleJournal.state.notes.count, 2)
+    }
+
+    func testNightscoutRequestsAreAuthenticatedReadOnlyAndDateBounded() throws {
+        let configuration = CycleNightscoutConfiguration(siteURL: URL(string: "https://example.invalid/diabetes")!, apiSecret: "password")
+        let reader = CycleNightscoutHistory(configuration: configuration)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let request = try reader.request(endpoint: "entries", start: start, end: start.addingTimeInterval(3600))
+        XCTAssertEqual(request.httpMethod, "GET")
+        XCTAssertEqual(request.url?.path, "/diabetes/api/v1/entries.json")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "api-secret"), "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8")
+        XCTAssertFalse(request.url!.absoluteString.contains("password"))
+        let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+        XCTAssertEqual(items.first { $0.name == "find[date][$gte]" }?.value, "1700000000000")
+        XCTAssertEqual(items.first { $0.name == "find[type]" }?.value, "sgv")
+        XCTAssertThrowsError(try reader.request(endpoint: "profile", start: start, end: start.addingTimeInterval(1)))
+    }
+
+    func testNightscoutDecodingDeduplicatesAndExcludesMeterDeletedAndInvalidReadings() throws {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let millis = date.timeIntervalSince1970 * 1000
+        let records: [[String: Any]] = [
+            ["type": "sgv", "date": millis, "sgv": 110],
+            ["type": "sgv", "date": millis, "sgv": 110],
+            ["type": "mbg", "date": millis + 300000, "sgv": 200],
+            ["type": "sgv", "date": millis + 300000, "sgv": true],
+            ["type": "sgv", "date": millis + 300000, "sgv": 0],
+            ["type": "sgv", "date": millis + 300000, "sgv": 120, "isDeleted": true],
+            ["type": "sgv", "date": millis + 600000, "sgv": "125"],
+            ["type": "sgv", "date": millis + 3600000, "sgv": 130]
+        ]
+        let readings = CycleNightscoutHistory.glucose(records, start: date, end: date.addingTimeInterval(3600))
+        XCTAssertEqual(readings.count, 2)
+        XCTAssertEqual(readings.map(\.mgdl), [110, 125])
+    }
+
+    func testNightscoutMealsAndBolusesDoNotCountDuplicatesOrBasalRatesAsUnits() throws {
+        let date = Date().addingTimeInterval(-3600)
+        let stamp = ISO8601DateFormatter().string(from: date)
+        let records: [[String: Any]] = [
+            ["_id": "a", "syncIdentifier": "meal", "created_at": stamp, "eventType": "Meal Bolus", "carbs": 30, "insulin": 2],
+            ["_id": "b", "syncIdentifier": "meal", "created_at": stamp, "eventType": "Meal Bolus", "carbs": 30, "insulin": 2],
+            ["_id": "c", "created_at": stamp, "eventType": "Temp Basal", "absolute": 1.5, "duration": 30, "insulin": 99],
+            ["_id": "d", "created_at": stamp, "eventType": "Correction Bolus", "insulin": 5, "isDeleted": true],
+            ["_id": "e", "created_at": stamp, "eventType": "Correction Bolus", "insulin": -2]
+        ]
+        let amounts = CycleNightscoutHistory.amounts(records, start: date.addingTimeInterval(-1), end: Date())
+        XCTAssertEqual(amounts.boluses.count, 1)
+        XCTAssertEqual(amounts.boluses.first?.amount, 2)
+        XCTAssertEqual(amounts.carbs.count, 1)
+        XCTAssertEqual(amounts.carbs.first?.amount, 30)
+    }
+
+    func testSaturatedNightscoutResponsesSplitBeforeFiltering() async throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var reader = CycleNightscoutHistory(configuration: .init(siteURL: URL(string: "https://example.invalid")!, apiSecret: "synthetic"))
+        reader.transport = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            if request.url!.path.contains("treatments") { return (Data("[]".utf8), response) }
+            let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            let lower = Double(items.first { $0.name == "find[date][$gte]" }!.value!)!
+            let upper = Double(items.first { $0.name == "find[date][$lt]" }!.value!)!
+            let rows: [[String: Any]] = upper - lower > 3_600_000
+                ? Array(repeating: ["type": "mbg", "date": lower, "sgv": 100], count: CycleNightscoutHistory.pageSize)
+                : [["type": "sgv", "date": lower + 60000, "sgv": 110]]
+            return (try JSONSerialization.data(withJSONObject: rows), response)
+        }
+        let batch = try await reader.fetch(start: start, end: start.addingTimeInterval(7200))
+        XCTAssertTrue(batch.complete)
+        XCTAssertEqual(batch.glucose?.count, 2)
+    }
+
+    func testNightscoutTreatmentFailureDoesNotDiscardGlucose() async throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var reader = CycleNightscoutHistory(configuration: .init(siteURL: URL(string: "https://example.invalid")!, apiSecret: "synthetic"))
+        reader.transport = { request in
+            let status = request.url!.path.contains("treatments") ? 403 : 200
+            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+            let records: [[String: Any]] = [["type": "sgv", "date": start.timeIntervalSince1970 * 1000, "sgv": 110]]
+            return (try JSONSerialization.data(withJSONObject: records), response)
+        }
+        let batch = try await reader.fetch(start: start, end: start.addingTimeInterval(3600))
+        XCTAssertEqual(batch.glucose?.count, 1)
+        XCTAssertNil(batch.boluses)
+        XCTAssertFalse(batch.complete)
+    }
+
+    func testNightscoutIgnoringRangeLimitsFailsWithoutPublishingTruncatedHistory() async throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var reader = CycleNightscoutHistory(configuration: .init(siteURL: URL(string: "https://example.invalid")!, apiSecret: "synthetic"))
+        reader.transport = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let rows: [[String: Any]] = request.url!.path.contains("treatments") ? [] : Array(repeating: ["type": "sgv", "date": start.timeIntervalSince1970 * 1000, "sgv": 110], count: CycleNightscoutHistory.pageSize)
+            return (try JSONSerialization.data(withJSONObject: rows), response)
+        }
+        let batch = try await reader.fetch(start: start, end: start.addingTimeInterval(3))
+        XCTAssertNil(batch.glucose)
+        XCTAssertFalse(batch.complete)
+    }
+
+    func testNightscoutMergesWithoutDoubleCountingAndPreservesFullLocalInsulin() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date().addingTimeInterval(-86400))
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let points = stride(from: 0.0, to: end.timeIntervalSince(start), by: 300).map { CycleGlucoseReading(date: start.addingTimeInterval($0), mgdl: 110) }
+        let local = CycleDailySummary.make(start: start, end: end, now: Date(), readings: points, range: { _ in (80, 180) }, insulin: 20, insulinRecords: 12, carbs: 30, carbEntries: 1)
+        try controller.cycleJournal.retain([local])
+        let batch = CycleNightscoutBatch(glucose: points, boluses: [.init(date: start, amount: 2)], carbs: [.init(date: start, amount: 30)])
+        let remote = batch.summaries(start: start, end: end, now: Date(), range: { _ in (80, 180) })
+        XCTAssertEqual(remote.first?.insulinIsPartial, true)
+        try controller.cycleJournal.retain(remote)
+        let merged = controller.cycleJournal.summary(on: start)!
+        XCTAssertEqual(merged.glucoseSource, "Nightscout")
+        XCTAssertEqual(merged.insulinUnits, 20)
+        XCTAssertFalse(merged.insulinIsPartial == true)
+        XCTAssertEqual(merged.carbGrams, 30)
+        XCTAssertEqual(merged.carbSource, "Nightscout")
+        // A later local refresh cannot double counts or replace equally covered Nightscout glucose.
+        try controller.cycleJournal.retain([local])
+        XCTAssertEqual(controller.cycleJournal.summary(on: start)?.glucoseSource, "Nightscout")
+        XCTAssertEqual(controller.cycleJournal.summary(on: start)?.carbGrams, 30)
+    }
+
+    func testNightscoutOlderDaysRetainBolusOnlyProvenance() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date().addingTimeInterval(-180 * 86400))
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let batch = CycleNightscoutBatch(glucose: [.init(date: start, mgdl: 110)], boluses: [.init(date: start, amount: 2)], carbs: [])
+        try controller.cycleJournal.retain(batch.summaries(start: start, end: end, now: Date(), range: { _ in nil }))
+        let saved = CycleJournalStore(url: controller.cycleJournal.url).summary(on: start)!
+        XCTAssertEqual(saved.insulinUnits, 2)
+        XCTAssertEqual(saved.insulinIsPartial, true)
+        XCTAssertEqual(saved.insulinSource, "Nightscout")
+        XCTAssertNil(saved.carbGrams)
+    }
+    func testTimeInRangeUsesDisplayBoundsAndUpdatesWithoutRefetching() throws {
+        let suite = "CycleDisplayRange." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = GlucoseGraphSettingsStore(defaults: defaults)
+        let start = CycleDay.date("2026-01-01")!
+        let end = start.addingTimeInterval(900)
+        let readings = [90.0, 130, 170].enumerated().map { CycleGlucoseReading(date: start.addingTimeInterval(Double($0.offset) * 300), mgdl: $0.element) }
+        // An older treatment-target calculation must not determine today's display metric.
+        let summary = CycleDailySummary.make(start: start, end: end, now: end, readings: readings, range: { _ in (80, 110) }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0)
+        XCTAssertEqual(summary.timeInRange, 1.0 / 3.0)
+        XCTAssertEqual(summary.timeInRange(using: settings.settings), 2.0 / 3.0)
+        XCTAssertEqual(summary.glucose.count, 1) // The graph alone cannot reconstruct the exact percentage.
+        XCTAssertTrue(settings.updateBounds(lowerBoundMGDL: 100, upperBoundMGDL: 145))
+        XCTAssertEqual(summary.timeInRange(using: settings.settings), 1.0 / 3.0)
+        settings.setEnabled(false) // Hiding the graph shading does not change the configured range.
+        XCTAssertEqual(summary.timeInRange(using: settings.settings), 1.0 / 3.0)
+    }
+
+    func testDisplayRangeIncludesBoundariesAndExactDurationsSurviveSaving() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let start = CycleDay.date("2026-01-01")!
+        let end = start.addingTimeInterval(1200)
+        let readings = [79.0, 80, 145, 146].enumerated().map { CycleGlucoseReading(date: start.addingTimeInterval(Double($0.offset) * 300), mgdl: $0.element) }
+        let summary = CycleDailySummary.make(start: start, end: end, now: end, readings: readings, range: { _ in (80, 145) }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0)
+        try controller.cycleJournal.retain([summary])
+        let saved = CycleJournalStore(url: controller.cycleJournal.url).state.summaries[0]
+        XCTAssertEqual(saved.timeInRange(using: .default), 0.5)
+        XCTAssertEqual(saved.glucoseDurations?.map(\.seconds).reduce(0, +), 1200)
+        XCTAssertFalse(saved.needsDisplayRangeRefresh)
+    }
+
+    func testLegacyTreatmentTargetIsUnknownUntilExactHistoryRefreshes() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let start = CycleDay.date("2026-01-01")!
+        let end = start.addingTimeInterval(600)
+        let readings = [CycleGlucoseReading(date: start, mgdl: 100), .init(date: start.addingTimeInterval(300), mgdl: 160)]
+        let refreshed = CycleDailySummary.make(start: start, end: end, now: end, readings: readings, range: { _ in (80, 145) }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0)
+        var legacy = refreshed
+        legacy.glucoseDurations = nil
+        legacy.timeInRange = 0.95
+        legacy.glucoseSource = "Nightscout"
+        try controller.cycleJournal.retain([legacy])
+        let saved = CycleJournalStore(url: controller.cycleJournal.url).state.summaries[0]
+        XCTAssertTrue(saved.needsDisplayRangeRefresh)
+        XCTAssertNil(saved.timeInRange(using: .default))
+        // Equally covered exact local records can replace a legacy remote snapshot.
+        try controller.cycleJournal.retain([refreshed])
+        XCTAssertEqual(controller.cycleJournal.state.summaries[0].timeInRange(using: .default), 0.5)
+    }
+
+    func testMochiReceivesTimeInRangeFromCurrentDisplaySettings() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let bounds = GlucoseGraphSettingsStore.shared.settings
+        let glucose = (bounds.lowerBoundMGDL + bounds.upperBoundMGDL) / 2
+        let start = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: Date()))!
+        let end = start.addingTimeInterval(300)
+        let summary = CycleDailySummary.make(start: start, end: end, now: end, readings: [.init(date: start, mgdl: glucose)], range: { _ in (glucose + 1, glucose + 2) }, insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0)
+        XCTAssertEqual(summary.timeInRange, 0)
+        try controller.cycleJournal.update { $0.allowMochiRead = true }
+        try controller.cycleJournal.retain([summary])
+        let args = try JSONSerialization.data(withJSONObject: ["start": ISO8601DateFormatter().string(from: start), "end": ISO8601DateFormatter().string(from: end)])
+        var didRead = false
+        provider.handler = { messages, _ in
+            if !didRead {
+                didRead = true
+                return CompanionCompletion(message: ["role": "assistant", "tool_calls": [["id": "range", "type": "function", "function": ["name": "get_cycle_journal", "arguments": String(decoding: args, as: UTF8.self)]]]], text: "", calls: [.init(id: "range", name: "get_cycle_journal", arguments: args)])
+            }
+            let data = Data((messages.last?["content"] as! String).utf8)
+            let payload = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+            let records = payload["dailySummaries"] as! [[String: Any]]
+            XCTAssertEqual(records[0]["timeInRange"] as? Double, 1)
+            XCTAssertNil(records[0]["glucoseDurations"])
+            XCTAssertEqual((payload["displayRangeMGDL"] as? [String: Double])?["lower"], bounds.lowerBoundMGDL)
+            return CompanionCompletion(message: [:], text: "Used your display range.", calls: [])
+        }
+        _ = try await controller.replyToCycleConversation([CompanionMessage(role: "user", text: "Read my cycle glucose records")])
     }
 }
 

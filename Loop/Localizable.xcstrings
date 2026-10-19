@@ -600,6 +600,16 @@
         }
       }
     },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "comment" : "The format for an active custom preset. (1: preset symbol)(2: preset name)",
       "localizations" : {
@@ -1086,6 +1096,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 单位 总量"
+          }
+        }
+      }
+    },
+    "%@: %@; %lld notes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@; %3$lld notes"
           }
         }
       }
@@ -3216,6 +3236,9 @@
     "%lld" : {
 
     },
+    "%lld/6,000" : {
+
+    },
     "⚠️" : {
       "localizations" : {
         "da" : {
@@ -4309,6 +4332,9 @@
         }
       }
     },
+    "About these records" : {
+
+    },
     "About you" : {
 
     },
@@ -5127,6 +5153,9 @@
         }
       }
     },
+    "Add a cycle note for %@" : {
+
+    },
     "Add a meal photo" : {
 
     },
@@ -5194,6 +5223,9 @@
           }
         }
       }
+    },
+    "Add a previous period" : {
+
     },
     "Add Carb Entry" : {
       "comment" : "Title of the user activity for adding carbs",
@@ -5448,6 +5480,9 @@
         }
       }
     },
+    "Add cycle note" : {
+
+    },
     "Add item to bottom row" : {
       "comment" : "Title for Add item",
       "extractionState" : "stale",
@@ -5639,6 +5674,15 @@
         }
       }
     },
+    "Add note" : {
+
+    },
+    "Add notes" : {
+
+    },
+    "Add or edit previous periods" : {
+      "comment" : "Button to add or edit saved period history"
+    },
     "Add predictive line" : {
       "comment" : "Title for predictive line toggle",
       "extractionState" : "stale",
@@ -5674,6 +5718,12 @@
           }
         }
       }
+    },
+    "Add previous periods" : {
+
+    },
+    "Add previous periods to compare your cycles. Daily records will build as you use the app." : {
+
     },
     "Add Pump" : {
       "comment" : "Action sheet title selecting Pump\nThe title of the pump chooser in settings\nTitle text for button to add pump device\nTitle text for button to set up a Pump",
@@ -5894,6 +5944,12 @@
           }
         }
       }
+    },
+    "Add the periods you remember or correct existing dates. Choose the actual start and end dates before saving. Cycle estimates and journal comparisons update when you save." : {
+      "comment" : "Instructions for editing cycle period history"
+    },
+    "Add the periods you remember, starting with the most recent. Previous dates help place today in your cycle and make comparisons more useful." : {
+
     },
     "Adjusted for" : {
       "localizations" : {
@@ -6445,6 +6501,12 @@
           }
         }
       }
+    },
+    "Align by" : {
+
+    },
+    "Aligned to logged period starts. Phase shading on the calendar remains an estimate." : {
+
     },
     "All Alerts Muted" : {
       "comment" : "Warning text for when alerts are muted",
@@ -10216,6 +10278,9 @@
         }
       }
     },
+    "Calendar estimate" : {
+
+    },
     "Cancel" : {
       "comment" : "Button label for cancel\nButton text to cancel\nCancel button for reset loop alert\nCancel export button title\nCancel period history edits\nThe title of the cancel action in an action sheet",
       "localizations" : {
@@ -11288,6 +11353,9 @@
         }
       }
     },
+    "Carbs" : {
+
+    },
     "Carbs Absorbed (g) ÷ Carb Ratio (g/U) × Insulin Sensitivity (%1$@/U)" : {
       "comment" : "Description of the prediction input effect for carbohydrates. (1: The glucose unit string)",
       "localizations" : {
@@ -11744,7 +11812,7 @@
     "Chat history, rules and preferences are stored on this device and excluded from backups. Notification previews may show glucose information; control previews in iOS Settings." : {
 
     },
-    "Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; energy, mood, sleep and cravings are not tracked unless you describe them in chat. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent." : {
+    "Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; Cycle journal notes and retained daily records require separate journal access, controlled on the cycle page. Notes can be saved only when you ask and enable saving permission. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent." : {
 
     },
     "Check settings" : {
@@ -12308,6 +12376,9 @@
         }
       }
     },
+    "Choose an end date for this earlier period." : {
+
+    },
     "Choose Favorite:" : {
       "comment" : "The label for the row where you choose saved Favorite Food",
       "extractionState" : "stale",
@@ -12368,7 +12439,16 @@
     "Choose model" : {
 
     },
+    "Clear" : {
+
+    },
     "Clear conversation" : {
+
+    },
+    "Clear daily records?" : {
+
+    },
+    "Clear retained daily records" : {
 
     },
     "Clear selection" : {
@@ -13227,6 +13307,15 @@
         }
       }
     },
+    "Compare" : {
+
+    },
+    "Compare cycles" : {
+
+    },
+    "Comparisons use completed days with at least 70% glucose coverage. A glucose observation needs at least 3 matched days and 7 other days in each of at least 2 completed cycles, with a consistent difference of at least 10 mg/dL. These are product rules, not clinical confidence. Sleep, meals, illness and other factors can contribute. No dose changes are inferred." : {
+
+    },
     "Complete Setup" : {
       "comment" : "Title text for button to complete setup",
       "localizations" : {
@@ -13883,9 +13972,6 @@
           }
         }
       }
-    },
-    "Correct the start and end dates for previously logged periods. Cycle phases and predictions update when you save." : {
-      "comment" : "Instructions for editing cycle period history"
     },
     "Correction Range" : {
       "comment" : "The title of the glucose target range schedule screen\n   The title text for the glucose target range schedule",
@@ -14892,8 +14978,42 @@
     "Cycle" : {
       "comment" : "Cycle summary card title\nCycle tracker navigation title"
     },
+    "Cycle comparisons will update without this note." : {
+
+    },
+    "Cycle context" : {
+
+    },
+    "Cycle day (unknown if blank)" : {
+
+    },
+    "Cycle day %lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle day %1$lld · %2$@"
+          }
+        }
+      }
+    },
+    "Cycle journal" : {
+
+    },
+    "Cycle journal settings" : {
+
+    },
     "Cycle length" : {
       "comment" : "Cycle tracker cycle length title"
+    },
+    "Cycle note" : {
+
+    },
+    "Cycle note removed" : {
+
+    },
+    "Cycle starting %@" : {
+
     },
     "Cycle tracking" : {
       "comment" : "Cycle summary phase before a period is logged"
@@ -15025,6 +15145,9 @@
           }
         }
       }
+    },
+    "Day within phase (unknown if blank)" : {
+
     },
     "dB" : {
       "comment" : "The short unit display string for decibles",
@@ -15746,6 +15869,9 @@
         }
       }
     },
+    "Delete note" : {
+
+    },
     "Delete period" : {
       "comment" : "Delete a saved period entry"
     },
@@ -16159,6 +16285,9 @@
           }
         }
       }
+    },
+    "Delete this note?" : {
+
     },
     "Delete this rule?" : {
 
@@ -16809,6 +16938,9 @@
         }
       }
     },
+    "Dismiss conflict notice" : {
+
+    },
     "Display" : {
       "comment" : "Display preferences section in settings"
     },
@@ -16949,6 +17081,9 @@
           }
         }
       }
+    },
+    "Doesn’t fit this cycle" : {
+
     },
     "Done" : {
       "localizations" : {
@@ -17311,11 +17446,11 @@
         }
       }
     },
-    "Edit period days" : {
-      "comment" : "Period history editor title"
+    "Edit" : {
+
     },
-    "Edit previous period days" : {
-      "comment" : "Button to edit saved period history"
+    "Edit cycle note" : {
+
     },
     "Enable\nBluetooth" : {
       "comment" : "Message to the user to enable bluetooth",
@@ -20260,6 +20395,9 @@
         }
       }
     },
+    "From Nightscout" : {
+
+    },
     "g" : {
       "comment" : "The short unit display string for grams",
       "localizations" : {
@@ -21240,6 +21378,9 @@
         }
       }
     },
+    "Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Display settings. Missing means unknown. The trace retains one reading per 15 minutes." : {
+
+    },
     "Glucose Target Range Schedule" : {
       "comment" : "Details for configuration error when glucose target range schedule is missing",
       "localizations" : {
@@ -21316,6 +21457,9 @@
           }
         }
       }
+    },
+    "Glucose: daily mean in mg/dL. Insulin: recorded units, potentially incomplete. Carbs: logged grams only. Gray bars indicate insufficient glucose coverage or an unfinished day. Missing days are unknown, not zero. Notes: entry count. Tap a day for its records." : {
+
     },
     "HARDWARE SOUNDS" : {
       "localizations" : {
@@ -22422,6 +22566,9 @@
           }
         }
       }
+    },
+    "Insulin and carb records may be incomplete." : {
+
     },
     "Insulin Delivered" : {
       "comment" : "The title of the insulin delivery summary card"
@@ -24296,6 +24443,9 @@
         }
       }
     },
+    "Keep up to 400 compact daily glucose, insulin and carb summaries for comparisons. Available Nightscout history is imported automatically using your existing connection, with local records as a fallback. Notes remain until you delete them; clearing Mochi chats does not remove this journal." : {
+
+    },
     "Key connected" : {
 
     },
@@ -24381,6 +24531,9 @@
           }
         }
       }
+    },
+    "Last synced: %@" : {
+
     },
     "Launches CGM app" : {
       "comment" : "Glucose HUD accessibility hint",
@@ -24698,6 +24851,12 @@
         }
       }
     },
+    "Let Mochi read my cycle journal" : {
+
+    },
+    "Let Mochi save notes when I ask" : {
+
+    },
     "Live activity" : {
       "comment" : "Alert Permissions live activity\nLive activity screen title",
       "localizations" : {
@@ -24893,6 +25052,9 @@
           }
         }
       }
+    },
+    "Log a period start to place this day in your cycle." : {
+
     },
     "Log Dose" : {
       "comment" : "Button text to log a dose\nTitle for dose logging screen",
@@ -27228,6 +27390,9 @@
     "Mochi · Cycle" : {
 
     },
+    "Mochi access" : {
+
+    },
     "Mochi is looking…" : {
 
     },
@@ -27235,6 +27400,9 @@
 
     },
     "Mochi model and connection settings" : {
+
+    },
+    "Mochi noticed" : {
 
     },
     "Mochi settings" : {
@@ -27903,6 +28071,9 @@
         }
       }
     },
+    "Negative days count back from the next logged period start. Only completed cycles can be aligned this way." : {
+
+    },
     "Negative duration not allowed" : {
       "comment" : "Override error description: negative duration error.",
       "localizations" : {
@@ -28158,6 +28329,12 @@
           }
         }
       }
+    },
+    "Nightscout insulin shows logged boluses only. Basal delivery is not included." : {
+
+    },
+    "Nightscout notes" : {
+
     },
     "No alerts or alarms will sound while muted. Select how long you would you like to mute for." : {
       "comment" : "Message for mute alert duration selection action sheet",
@@ -28904,6 +29081,15 @@
         }
       }
     },
+    "No records for this day yet. Available Nightscout history will be included when connected." : {
+
+    },
+    "No retained records or notes." : {
+
+    },
+    "No supported observations around now. Add previous periods and notes, and let recorded history build. If period timing is uncertain, update your period dates." : {
+
+    },
     "No, edit amount" : {
       "comment" : "The title of the action used when rejecting the the amount of carbohydrates entered.",
       "localizations" : {
@@ -29120,6 +29306,12 @@
       }
     },
     "Not connected" : {
+
+    },
+    "Notes" : {
+
+    },
+    "Notes changed in both places. Both versions were kept, including edits that conflicted with a deletion." : {
 
     },
     "Notification Delivery" : {
@@ -29620,6 +29812,12 @@
         }
       }
     },
+    "Observation feedback" : {
+
+    },
+    "Observations around your current cycle day, based on previous logged cycles. Missing notes and records mean unknown; a past observation may not repeat." : {
+
+    },
     "Off" : {
       "comment" : "Glucose graph range shading disabled\nNotification Setting Status is Off",
       "localizations" : {
@@ -30078,6 +30276,9 @@
     "On board (IOB)" : {
       "comment" : "The subtitle of the Insulin On-Board summary card"
     },
+    "On this device" : {
+
+    },
     "Only text models with tool calling are listed. Availability and billing depend on your OpenRouter account." : {
 
     },
@@ -30087,10 +30288,19 @@
     "Open Mochi to explore this message" : {
 
     },
+    "Open this day's cycle journal" : {
+
+    },
     "OpenRouter API key" : {
 
     },
     "OpenRouter connection" : {
+
+    },
+    "Optional tags" : {
+
+    },
+    "Original notes" : {
 
     },
     "Override Presets" : {
@@ -30234,8 +30444,14 @@
     "Period ended" : {
       "comment" : "Confirmation after recording the end of a period\nPeriod history ended toggle"
     },
+    "Period history" : {
+      "comment" : "Period history editor title"
+    },
     "Period started" : {
       "comment" : "Confirmation after recording the start of a period"
+    },
+    "Phase" : {
+
     },
     "Photo estimates are approximate. You can edit the form or ask Mochi to adjust it." : {
 
@@ -33714,6 +33930,15 @@
         }
       }
     },
+    "Recorded glucose" : {
+
+    },
+    "Recorded so far" : {
+
+    },
+    "Recorded that day" : {
+
+    },
     "Refresh model list" : {
 
     },
@@ -34074,6 +34299,15 @@
           }
         }
       }
+    },
+    "Retain daily records" : {
+
+    },
+    "Retained glucose trace in mg/dL. Gaps longer than 20 minutes are not connected." : {
+
+    },
+    "Retained glucose, insulin and carb summaries will be deleted from this journal." : {
+
     },
     "Retrospective Correction" : {
       "comment" : "Title of the prediction input effect for retrospective correction",
@@ -34600,6 +34834,12 @@
         }
       }
     },
+    "Saved cycle note · %@" : {
+
+    },
+    "Saved with Mochi" : {
+
+    },
     "Scan with Mochi" : {
 
     },
@@ -34687,6 +34927,12 @@
       }
     },
     "Search models, e.g. GPT‑6.1" : {
+
+    },
+    "See supporting records" : {
+
+    },
+    "Select a tag, write a note, or do both. Notes about insulin sensitivity reflect how you felt, not a measured diagnosis." : {
 
     },
     "Select Lock Screen Display Options" : {
@@ -35180,10 +35426,16 @@
         }
       }
     },
+    "Share all existing and new cycle notes, including text and tags, with your connected Nightscout site. People who can view its treatments may see them. Edits and deletions sync both ways while this app is active. To add a cycle note in Nightscout, start a Note with [Cycle]. Keep the note footer when editing; its cycle day, phase and phase day can be edited in either place. Turning sync off keeps existing copies in both places. Period history is not uploaded." : {
+
+    },
     "Show Cycle Tracking Details" : {
       "comment" : "Accessibility label for opening cycle details"
     },
     "Show in-range area" : {
+
+    },
+    "Show personal cycle reminders" : {
 
     },
     "Shows last loop error" : {
@@ -35752,6 +36004,9 @@
         }
       }
     },
+    "Snooze for 3 days" : {
+
+    },
     "Software Update" : {
       "comment" : "Software update button link text",
       "localizations" : {
@@ -35835,6 +36090,9 @@
         }
       }
     },
+    "Some notes changed in both places. Both versions were kept; review your journal." : {
+
+    },
     "Start time is out of range: %@" : {
       "comment" : "Carb error description: invalid start time is out of range.",
       "localizations" : {
@@ -35911,6 +36169,9 @@
           }
         }
       }
+    },
+    "Start with your cycle history" : {
+
     },
     "Started" : {
       "comment" : "Period history start date label"
@@ -36251,6 +36512,9 @@
         }
       }
     },
+    "Supporting records" : {
+
+    },
     "Suspend Threshold" : {
       "comment" : "The title text in settings",
       "extractionState" : "manual",
@@ -36474,7 +36738,19 @@
     "Switches glucose unit between US (mg/dL) and European (mmol/L) units" : {
       "comment" : "Accessibility hint for glucose unit toggle"
     },
+    "Sync cycle notes with Nightscout" : {
+
+    },
+    "Sync now" : {
+
+    },
+    "Syncing cycle notes…" : {
+
+    },
     "Take another photo" : {
+
+    },
+    "Talk to Mochi about this" : {
 
     },
     "Talk with Mochi about your cycle and T1D" : {
@@ -38416,6 +38692,12 @@
         }
       }
     },
+    "These permissions also require health sharing in Mochi settings. Relevant notes and recorded summaries are sent to OpenRouter and your selected model when requested in chat. Saving permission lets Mochi add notes only when you ask. Existing transmitted content cannot be recalled." : {
+
+    },
+    "These values stay with this note and sync both ways with Nightscout. Editing them does not change period history. Calendar phases are estimates, not confirmation of ovulation." : {
+
+    },
     "This is the development version of Loop, built from the dev branch. Any updates on this branch may contain new, untested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main." : {
       "comment" : "Body of the warning shown at launch on development builds",
       "localizations" : {
@@ -39570,6 +39852,9 @@
         }
       }
     },
+    "Undo save" : {
+
+    },
     "Unknown" : {
       "comment" : "Event title displayed when StoredPumpEvent.title is not set\nThe default description to use when an entry has no dose description\nlabel for when the alert mute end time is unknown\nresult when time cannot be formatted",
       "localizations" : {
@@ -40504,6 +40789,9 @@
         }
       }
     },
+    "Updating records…" : {
+
+    },
     "Upper boundary" : {
       "comment" : "Upper glucose graph range boundary"
     },
@@ -40600,6 +40888,9 @@
           }
         }
       }
+    },
+    "Use cycle tracker values" : {
+
     },
     "Use Pre-Meal Preset" : {
       "comment" : "The title of the alert controller used to select a duration for pre-meal targets",
@@ -40982,6 +41273,9 @@
     "Use your own OpenRouter key and credits. Your key stays in this device’s Keychain. Choose a model that supports tool calling." : {
 
     },
+    "View supporting records" : {
+
+    },
     "Walsh" : {
       "comment" : "Title of insulin model setting",
       "extractionState" : "manual",
@@ -41291,6 +41585,9 @@
       }
     },
     "What’s on your mind?" : {
+
+    },
+    "When" : {
 
     },
     "When current or forecasted glucose is below the glucose safety limit, Loop will not recommend a bolus, and will always recommend a temporary basal rate of 0 units per hour." : {
@@ -42262,6 +42559,9 @@
         }
       }
     },
+    "You can add more dates later. No history yet? Use ‘My period started’ when it begins." : {
+
+    },
     "You control what Mochi remembers and shares." : {
 
     },
@@ -42430,6 +42730,9 @@
           }
         }
       }
+    },
+    "Your cycle patterns" : {
+
     },
     "Your cycle, everyday wellbeing and T1D." : {
 
@@ -42959,6 +43262,12 @@
     "Your name" : {
 
     },
+    "Your note (optional)" : {
+
+    },
+    "Your notes and period dates are kept. Turn off retention first if you do not want available records collected again." : {
+
+    },
     "Your pump data is stale. %1$@ cannot recommend a bolus amount." : {
       "comment" : "Caption for bolus screen notice when pump data is missing or stale",
       "localizations" : {
@@ -43207,6 +43516,9 @@
           }
         }
       }
+    },
+    "Your reports" : {
+
     }
   },
   "version" : "1.1"

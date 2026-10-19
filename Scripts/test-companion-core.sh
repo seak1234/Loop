@@ -48,6 +48,9 @@ runner += f'print("Passed {len(tests)} companion core checks.")\n'
 PY
 xcrun swiftc -swift-version 5 -sdk "$task_sdk" \
     -module-cache-path "$task_cache" \
+    "$task_root/Loop/Companion/CycleNightscoutHistory.swift" \
+    "$task_root/Loop/Models/GlucoseGraphSettings.swift" \
+    "$task_root/Loop/Companion/CycleJournal.swift" \
     "$task_root/Loop/Companion/CompanionCore.swift" "$task_temp/main.swift" \
     "$task_root/Loop/Companion/CompanionProvider.swift" \
     -o "$task_temp/companion-tests"

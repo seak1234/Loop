@@ -29,6 +29,7 @@ import Combine
     var errorMessage: String?
     let store: CompanionStateStore
     let provider: CompanionProvider
+    let cycleJournal: CycleJournalStore
     let hasKey: Bool
     var storageFailure: String?
     var chatTask: Task<Void, Never>?
@@ -40,6 +41,7 @@ import Combine
     init(provider: CompanionProvider, stateStore: CompanionStateStore, keyReader: () throws -> String?) {
         self.provider = provider
         store = stateStore
+        cycleJournal = CycleJournalStore(url: stateStore.url.deletingLastPathComponent().appendingPathComponent("journal.json"))
         state = try! store.load()
         hasKey = (try? keyReader()) != nil
     }
@@ -78,6 +80,9 @@ runner += f'print("Passed {len(names)} UI regression checks.")\n}}\n}}\n'
 PY
 xcrun swiftc -swift-version 5 -sdk "$task_sdk" \
     -module-cache-path "$task_cache" \
+    "$task_root/Loop/Companion/CycleNightscoutHistory.swift" \
+    "$task_root/Loop/Models/GlucoseGraphSettings.swift" \
+    "$task_root/Loop/Companion/CycleJournal.swift" \
     "$task_root/Loop/Companion/CompanionCore.swift" \
     "$task_root/Loop/Companion/CompanionProvider.swift" \
     "$task_root/LoopCore/LiveActivitySettings.swift" \
