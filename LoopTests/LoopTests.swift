@@ -112,7 +112,47 @@ final class CycleTrackingStoreTests: XCTestCase {
         XCTAssertNil(tracker.phase(for: overdue))
         XCTAssertNil(tracker.marker(for: overdue))
         XCTAssertNil(tracker.nextPeriodDate(from: overdue))
-        XCTAssertEqual(tracker.summary(on: overdue).progress, 1)
+        XCTAssertEqual(tracker.summary(on: overdue).cycleDay, 1)
+        XCTAssertEqual(tracker.summary(on: overdue).progress, 1.0 / 28)
+    }
+
+    func testPendingPeriodSummaryKeepsEstimatedPhaseAndCycleDay() {
+        for endDate in [nil, day(2026, 1, 5)] {
+            let tracker = store([.init(startDate: day(2026, 1, 1), endDate: endDate)])
+            let recordedEntries = tracker.periodEntries
+
+            for cycle in [1, 2, 12] {
+                for (offset, cycleDay, phaseName) in [
+                    (0, 1, "Period"), (5, 6, "Follicular"),
+                    (13, 14, "Ovulation"), (15, 16, "Luteal"), (27, 28, "Luteal")
+                ] {
+                    let date = calendar.date(byAdding: .day, value: cycle * 28 + offset, to: day(2026, 1, 1))!
+                    let summary = tracker.summary(on: date)
+
+                    XCTAssertEqual(summary.cycleDay, cycleDay)
+                    XCTAssertEqual(summary.phaseName, phaseName)
+                    XCTAssertEqual(summary.detail, phaseName)
+                    XCTAssertEqual(summary.progress, Double(cycleDay) / 28)
+                    XCTAssertEqual(summary.phaseTransitions!, [5.0 / 28, 12.0 / 28, 15.0 / 28])
+                }
+            }
+
+            XCTAssertEqual(tracker.periodEntries, recordedEntries)
+            XCTAssertEqual(tracker.isPeriodInProgress, endDate == nil)
+        }
+    }
+
+    func testLoggingNewPeriodReanchorsEstimatedSummary() {
+        let tracker = store([.init(startDate: day(2026, 1, 1), endDate: day(2026, 1, 5))])
+        let date = day(2026, 2, 2)
+        XCTAssertEqual(tracker.summary(on: date).cycleDay, 5)
+
+        tracker.startPeriod(on: date)
+
+        XCTAssertEqual(tracker.summary(on: date).cycleDay, 1)
+        XCTAssertEqual(tracker.summary(on: date).phaseName, "Period")
+        XCTAssertEqual(tracker.summary(on: date).nextPhaseDetail, "Confirm period end")
+        XCTAssertEqual(tracker.periodEntries.last?.startDate, date)
     }
 
     func testCalendarRepeatsEstimatedCyclesBeyondTheFirstPrediction() {

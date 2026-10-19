@@ -1057,7 +1057,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
     override func reloadData(animated: Bool = false) {
         dispatchPrecondition(condition: .onQueue(.main))
 
-        guard view.window != nil else {
+        // Preference publishers can fire while launch dependencies are still being assigned.
+        guard isViewLoaded, view.window != nil else {
             return
         }
 

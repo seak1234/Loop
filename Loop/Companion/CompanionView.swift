@@ -23,12 +23,34 @@ private struct MochiEye: Shape {
     }
 }
 
+private struct MochiArmMask: Shape {
+    var cuttingOut = false
+
+    func path(in rect: CGRect) -> Path {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
+        var path = Path()
+        if cuttingOut { path.addRect(rect) }
+        // Follow the shoulder seam to animate the existing arm independently of the body.
+        path.move(to: point(0.844, 0.29))
+        path.addLine(to: point(1, 0.29))
+        path.addLine(to: point(1, 0.64))
+        path.addLine(to: point(0.844, 0.64))
+        path.addCurve(to: point(0.844, 0.29),
+                      control1: point(0.86, 0.53), control2: point(0.855, 0.38))
+        path.closeSubpath()
+        return path
+    }
+}
+
 struct MochiAvatar: View {
     var size: CGFloat = 80
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appActive = UIApplication.shared.applicationState == .active
     @State private var eyeOpenness: CGFloat = 1
     @State private var gaze = CGSize.zero
+    @State private var waveAngle = 0.0
 
     private var animated: Bool { !reduceMotion && appActive }
 
@@ -37,6 +59,10 @@ struct MochiAvatar: View {
         let artworkHeight = size * 1083 / 1452
         ZStack {
             Image("MochiAnimatedBase").resizable().scaledToFit()
+                .mask(MochiArmMask())
+                .rotationEffect(.degrees(waveAngle), anchor: UnitPoint(x: 0.848, y: 0.59))
+            Image("MochiAnimatedBase").resizable().scaledToFit()
+                .mask(MochiArmMask(cuttingOut: true).fill(style: FillStyle(eoFill: true)))
             eye(x: 0.396, y: 0.400, artworkHeight: artworkHeight)
             eye(x: 0.664, y: 0.373, artworkHeight: artworkHeight)
         }
@@ -70,6 +96,22 @@ struct MochiAvatar: View {
                     withAnimation(.easeInOut(duration: 0.45)) { gaze = .zero }
                 }
             } catch { /* SwiftUI cancels the task when hidden, inactive, or Reduce Motion changes. */ }
+        }
+        .task(id: animated) {
+            var reset = Transaction()
+            reset.disablesAnimations = true
+            withTransaction(reset) { waveAngle = 0 }
+            guard animated else { return }
+            do {
+                try await pause(0.35)
+                while !Task.isCancelled {
+                    for angle in [-18.0, 24, -18, 24, 0] {
+                        withAnimation(.easeInOut(duration: 0.18)) { waveAngle = angle }
+                        try await pause(0.20)
+                    }
+                    try await pause(Double.random(in: 14...20))
+                }
+            } catch { /* The greeting follows the same visibility and motion settings as the eyes. */ }
         }
     }
 
@@ -113,19 +155,22 @@ struct CompanionDashboardCard: View {
             controller.prepareDashboardDiscussion(now: dashboardNow)
             open()
         } label: {
-            HStack(spacing: 14) {
-                MochiAvatar(size: 64)
+            HStack(spacing: 10) {
+                MochiAvatar(size: 44)
                 Text(controller.dashboardText(now: dashboardNow))
-                    .font(.subheadline).foregroundColor(.primary)
+                    .font(.footnote).foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").foregroundColor(MochiStyle.blue)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(MochiStyle.blue)
             }
-            .padding(14)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(Color(UIColor.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(MochiStyle.blue.opacity(0.18)))
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(MochiStyle.blue.opacity(0.18)))
+            .padding(.horizontal, 16).padding(.vertical, 4)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(controller.dashboardText(now: dashboardNow))

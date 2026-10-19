@@ -143,7 +143,8 @@ final class CycleTrackingStore: ObservableObject {
     }
 
     func summary(on date: Date = Date()) -> Summary {
-        guard let context = cycleContext(on: date) else {
+        // Continue the calendar's estimates while the next period is awaiting a log.
+        guard let context = projectedCycleContext(on: date) ?? cycleContext(on: date) else {
             return Summary(
                 cycleDay: nil,
                 cycleLength: cycleLength,
@@ -266,13 +267,13 @@ final class CycleTrackingStore: ObservableObject {
     }
 
     func calendarPhase(for date: Date) -> Phase? {
-        guard let context = projectedCalendarContext(on: date) ?? cycleContext(on: date) else { return nil }
+        guard let context = projectedCycleContext(on: date) ?? cycleContext(on: date) else { return nil }
         return phase(for: context, on: date)
     }
 
     func calendarMarker(for date: Date) -> Marker? {
         if isRecordedPeriodDay(date) { return .period }
-        guard let context = projectedCalendarContext(on: date) ?? cycleContext(on: date) else { return nil }
+        guard let context = projectedCycleContext(on: date) ?? cycleContext(on: date) else { return nil }
         return marker(for: context, on: date)
     }
 
@@ -367,7 +368,7 @@ final class CycleTrackingStore: ObservableObject {
         )
     }
 
-    private func projectedCalendarContext(on date: Date) -> CycleContext? {
+    private func projectedCycleContext(on date: Date) -> CycleContext? {
         guard let context = cycleContext(on: date),
               periodEntries.last?.id == context.anchor.id,
               context.day > context.length
@@ -547,7 +548,7 @@ struct CycleTrackingView: View {
                         }
                         .frame(width: availableWidth * 0.55, alignment: .leading)
 
-                        if let phase = store.phase(for: Date()) {
+                        if let phase = store.calendarPhase(for: Date()) {
                             insulinSensitivityCallout(for: phase)
                                 .frame(width: availableWidth * 0.45, alignment: .leading)
                         }

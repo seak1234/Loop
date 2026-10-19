@@ -196,6 +196,15 @@ final class UIRegressionTests: XCTestCase {
     }
 
     #if canImport(UIKit)
+    func testDashboardReloadBeforeSetupDoesNotLoadView() {
+        let controller = StatusTableViewController(style: .plain)
+        XCTAssertFalse(controller.isViewLoaded)
+
+        controller.reloadData()
+
+        XCTAssertFalse(controller.isViewLoaded)
+    }
+
     func testPhotoProcessingBoundsImageAndRemovesSourceMetadata() async throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

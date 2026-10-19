@@ -638,7 +638,7 @@ final class CompanionController: ObservableObject {
             case .luteal?: phase = .luteal
             case nil: phase = .unknown
             }
-            let context = CompanionCycleContext(asOf: now, cycleDay: summary.cycleDay, phase: phase,
+            let context = CompanionCycleContext(asOf: now, cycleDay: tracker.cycleDay(on: now), phase: phase,
                 cycleLength: summary.cycleLength, nextPeriodStart: tracker.nextPeriodDate(from: now),
                 periods: tracker.periodEntries.map { .init(startDate: $0.startDate, endDate: $0.endDate) })
             return try json(try object(context))
