@@ -352,17 +352,16 @@ struct CompanionDashboardIcon: View {
 
 private struct MochiDashboardSpeechBubble: Shape {
     func path(in rect: CGRect) -> Path {
-        let body = CGRect(x: rect.minX, y: rect.minY + 22, width: rect.width, height: max(0, rect.height - 22))
+        let body = CGRect(x: rect.minX, y: rect.minY + 10, width: rect.width, height: max(0, rect.height - 10))
         var path = Path(roundedRect: body, cornerRadius: 18)
-        // The tip aligns with Mochi's center in the banner row (64 points from the screen edge).
-        // Sweep the wider base to the right so the tail curves back toward Mochi's face.
-        path.move(to: CGPoint(x: rect.minX + 58, y: body.minY + 1))
+        // Keep the pointer inside this row, aligned with Mochi in the banner above.
+        path.move(to: CGPoint(x: rect.minX + 42, y: body.minY + 1))
         path.addCurve(to: CGPoint(x: rect.minX + 48, y: rect.minY),
-                      control1: CGPoint(x: rect.minX + 49, y: rect.minY + 17),
-                      control2: CGPoint(x: rect.minX + 47, y: rect.minY + 8))
-        path.addCurve(to: CGPoint(x: rect.minX + 82, y: body.minY + 1),
-                      control1: CGPoint(x: rect.minX + 55, y: rect.minY + 12),
-                      control2: CGPoint(x: rect.minX + 65, y: rect.minY + 18))
+                      control1: CGPoint(x: rect.minX + 44, y: rect.minY + 8),
+                      control2: CGPoint(x: rect.minX + 46, y: rect.minY + 3))
+        path.addCurve(to: CGPoint(x: rect.minX + 60, y: body.minY + 1),
+                      control1: CGPoint(x: rect.minX + 50, y: rect.minY + 3),
+                      control2: CGPoint(x: rect.minX + 58, y: rect.minY + 8))
         path.closeSubpath()
         return path
     }
@@ -375,8 +374,6 @@ struct CompanionDashboardCard: View {
     var onMessageChanged: () -> Void = {}
 
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var bubbleAppeared = false
     @State private var dashboardNow = Date()
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -443,27 +440,13 @@ struct CompanionDashboardCard: View {
             .accessibilityLabel("Close Mochi message")
             .accessibilityHint("Hide dashboard messages for \(controller.state.dashboardSnoozeDuration) minutes")
         }
-        .padding(.top, 22)
+        .padding(.top, 10)
         .background {
             MochiDashboardSpeechBubble()
                 .fill(Color(UIColor.secondarySystemGroupedBackground))
                 .shadow(color: MochiStyle.blue.opacity(0.08), radius: 5, y: 2)
         }
-        .scaleEffect(reduceMotion || bubbleAppeared ? 1 : 0.94, anchor: UnitPoint(x: 0.12, y: 0))
-        .opacity(reduceMotion || bubbleAppeared ? 1 : 0)
-        .task(id: controller.dashboardText(now: dashboardNow)) {
-            // Replay for a new displayed message, not for each timer tick or layout update.
-            var reset = Transaction()
-            reset.disablesAnimations = true
-            withTransaction(reset) { bubbleAppeared = false }
-            guard !reduceMotion else { bubbleAppeared = true; return }
-            do { try await Task.sleep(nanoseconds: 20_000_000) }
-            catch { return }
-            withAnimation(.easeOut(duration: 0.28)) { bubbleAppeared = true }
-        }
         .padding(.horizontal, 16)
-        // Tuck the tail into the space beneath Mochi without moving the banner.
-        .padding(.top, -20)
         .padding(.bottom, 10)
     }
 }
