@@ -369,9 +369,15 @@ private struct MochiDashboardSpeechBubble: Shape {
 
 @MainActor
 struct CompanionDashboardCard: View {
-    @ObservedObject private var controller = CompanionController.shared
+    @ObservedObject private var controller: CompanionController
     var open: () -> Void
     var onMessageChanged: () -> Void = {}
+
+    init(controller: CompanionController? = nil, open: @escaping () -> Void, onMessageChanged: @escaping () -> Void = {}) {
+        self.controller = controller ?? .shared
+        self.open = open
+        self.onMessageChanged = onMessageChanged
+    }
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var dashboardNow = Date()

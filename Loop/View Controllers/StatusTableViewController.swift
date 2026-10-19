@@ -78,9 +78,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
             DispatchQueue.main.asyncAfter(deadline: .now() + until.timeIntervalSinceNow, execute: wakeup)
         }
         guard viewIfLoaded?.window != nil, shouldShowHUD else { return }
-        let indexPath = IndexPath(row: 0, section: Section.companion.rawValue)
         UIView.performWithoutAnimation {
-            tableView.reloadRows(at: [indexPath], with: .none)
+            for case let cell as DashboardGraphicTableViewCell in tableView.visibleCells {
+                cell.refreshBubbleLayout()
+            }
+            tableView.performBatchUpdates(nil)
             tableView.layoutIfNeeded()
         }
     }
@@ -97,7 +99,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
         tableView.register(MuteAlertsWarningCell.self, forCellReuseIdentifier: MuteAlertsWarningCell.className)
         tableView.register(DashboardGraphicTableViewCell.self, forCellReuseIdentifier: DashboardGraphicTableViewCell.className)
         tableView.register(CycleSummaryTableViewCell.self, forCellReuseIdentifier: CycleSummaryTableViewCell.className)
-        tableView.register(CompanionTableViewCell.self, forCellReuseIdentifier: "CompanionCell")
 
         notificationObservers.append(NotificationCenter.default.addObserver(forName: .companionOpenRequested, object: nil, queue: .main) { [weak self] _ in
             self?.presentCompanion()
@@ -106,6 +107,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
         CompanionController.shared.$state
             .map(\.dashboardHiddenUntil)
             .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshMochiBubbleVisibility() }
             .store(in: &cancellables)
@@ -1365,7 +1367,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private enum Section: Int, CaseIterable {
         case alertWarning
         case branding
-        case companion
         case hud
         case status
         case charts
@@ -1670,11 +1671,9 @@ final class StatusTableViewController: LoopChartsTableViewController {
         case (false, true):
             tableView.insertRows(at: [IndexPath(row: 0, section: Section.branding.rawValue)], with: animated ? .top : .none)
             tableView.insertRows(at: [IndexPath(row: 0, section: Section.hud.rawValue)], with: animated ? .top : .none)
-            tableView.insertRows(at: [IndexPath(row: 0, section: Section.companion.rawValue)], with: animated ? .top : .none)
         case (true, false):
             tableView.deleteRows(at: [IndexPath(row: 0, section: Section.branding.rawValue)], with: animated ? .top : .none)
             tableView.deleteRows(at: [IndexPath(row: 0, section: Section.hud.rawValue)], with: animated ? .top : .none)
-            tableView.deleteRows(at: [IndexPath(row: 0, section: Section.companion.rawValue)], with: animated ? .top : .none)
         default:
             break
         }
@@ -1777,8 +1776,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             return shouldShowBannerWarning ? 1 : 0
         case .branding:
             return shouldShowHUD ? 1 : 0
-        case .companion:
-            return shouldShowHUD ? 1 : 0
         case .hud:
             return shouldShowHUD ? 1 : 0
         case .charts:
@@ -1788,30 +1785,87 @@ final class StatusTableViewController: LoopChartsTableViewController {
         }
     }
 
-    private final class DashboardGraphicTableViewCell: UITableViewCell {
+    final class DashboardGraphicTableViewCell: UITableViewCell {
         var onSensorTap: (() -> Void)?
         private var mochiController: UIHostingController<CompanionDashboardIcon>?
         private let mochiContainer = UIView()
+        private let bannerContainer = UIView()
+        private var bubbleController: UIHostingController<CompanionDashboardCard>?
+        private weak var companion: CompanionController?
+        private var bubbleTopConstraint: NSLayoutConstraint?
+        private var hiddenBubbleHeightConstraint: NSLayoutConstraint?
+        private var bannerOnlyBottomConstraint: NSLayoutConstraint!
 
-        func configureMochi(owner: UIViewController, open: @escaping () -> Void) {
+        func configureMochi(owner: UIViewController, controller companion: CompanionController? = nil, open: @escaping () -> Void) {
+            let companion = companion ?? .shared
+            self.companion = companion
             let icon = CompanionDashboardIcon(open: open)
             if let mochiController {
                 mochiController.rootView = icon
+            } else {
+                let controller = UIHostingController(rootView: icon)
+                owner.addChild(controller)
+                controller.view.backgroundColor = .clear
+                controller.view.translatesAutoresizingMaskIntoConstraints = false
+                mochiContainer.addSubview(controller.view)
+                NSLayoutConstraint.activate([
+                    controller.view.topAnchor.constraint(equalTo: mochiContainer.topAnchor),
+                    controller.view.bottomAnchor.constraint(equalTo: mochiContainer.bottomAnchor),
+                    controller.view.leadingAnchor.constraint(equalTo: mochiContainer.leadingAnchor),
+                    controller.view.trailingAnchor.constraint(equalTo: mochiContainer.trailingAnchor)
+                ])
+                controller.didMove(toParent: owner)
+                mochiController = controller
+            }
+
+            let card = CompanionDashboardCard(controller: companion, open: open, onMessageChanged: { [weak self, weak owner] in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    UIView.performWithoutAnimation {
+                        self.refreshBubbleLayout()
+                        guard self.window != nil, let tableView = (owner as? UITableViewController)?.tableView else { return }
+                        tableView.performBatchUpdates(nil)
+                        tableView.layoutIfNeeded()
+                    }
+                }
+            })
+            if let bubbleController {
+                bubbleController.rootView = card
+                refreshBubbleLayout()
                 return
             }
-            let controller = UIHostingController(rootView: icon)
+            let controller = UIHostingController(rootView: card)
+            if #available(iOS 16.0, *) { controller.sizingOptions = .intrinsicContentSize }
             owner.addChild(controller)
             controller.view.backgroundColor = .clear
             controller.view.translatesAutoresizingMaskIntoConstraints = false
-            mochiContainer.addSubview(controller.view)
+            controller.view.accessibilityIdentifier = "MochiDashboardBubble"
+            contentView.addSubview(controller.view)
+            // Both pieces now live inside one cell. No table-row clipping or z-order handoff.
+            controller.view.layer.zPosition = 1
+            bannerOnlyBottomConstraint.isActive = false
+            let top = controller.view.topAnchor.constraint(equalTo: bannerContainer.bottomAnchor, constant: -12)
+            bubbleTopConstraint = top
+            hiddenBubbleHeightConstraint = controller.view.heightAnchor.constraint(equalToConstant: 0)
             NSLayoutConstraint.activate([
-                controller.view.topAnchor.constraint(equalTo: mochiContainer.topAnchor),
-                controller.view.bottomAnchor.constraint(equalTo: mochiContainer.bottomAnchor),
-                controller.view.leadingAnchor.constraint(equalTo: mochiContainer.leadingAnchor),
-                controller.view.trailingAnchor.constraint(equalTo: mochiContainer.trailingAnchor)
+                top,
+                controller.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+                controller.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                controller.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
             ])
             controller.didMove(toParent: owner)
-            mochiController = controller
+            bubbleController = controller
+            refreshBubbleLayout()
+        }
+
+        func refreshBubbleLayout(now: Date = Date()) {
+            guard let companion, let bubbleController else { return }
+            let hidden = companion.state.isDashboardDismissed(at: now)
+            bubbleController.view.isHidden = hidden
+            bubbleTopConstraint?.constant = hidden ? 0 : -12
+            hiddenBubbleHeightConstraint?.isActive = hidden
+            bubbleController.view.invalidateIntrinsicContentSize()
+            setNeedsLayout()
         }
 
         private let graphicImageView: UIImageView = {
@@ -1847,21 +1901,35 @@ final class StatusTableViewController: LoopChartsTableViewController {
             backgroundColor = .clear
             contentView.backgroundColor = .clear
             selectionStyle = .none
+            bannerContainer.accessibilityIdentifier = "MochiDashboardBanner"
+            bannerContainer.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(bannerContainer)
             mochiContainer.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview(mochiContainer)
-            contentView.addSubview(graphicImageView)
-            contentView.addSubview(sensorButton)
+            bannerContainer.addSubview(mochiContainer)
+            bannerContainer.addSubview(graphicImageView)
+            bannerContainer.addSubview(sensorButton)
+
+            let graphicScale: CGFloat = 342.0 / 1024.0 * 0.64
+            let preferredBannerHeight = bannerContainer.heightAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: graphicScale, constant: -20 * graphicScale)
+            preferredBannerHeight.priority = .defaultHigh
+            bannerOnlyBottomConstraint = bannerContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
 
             NSLayoutConstraint.activate([
-                mochiContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
-                mochiContainer.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+                bannerContainer.topAnchor.constraint(equalTo: contentView.topAnchor),
+                bannerContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                bannerContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                bannerContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 72),
+                preferredBannerHeight,
+                bannerOnlyBottomConstraint,
+                mochiContainer.leadingAnchor.constraint(equalTo: bannerContainer.leadingAnchor, constant: 32),
+                mochiContainer.centerYAnchor.constraint(equalTo: bannerContainer.centerYAnchor),
                 mochiContainer.widthAnchor.constraint(equalToConstant: 64),
                 mochiContainer.heightAnchor.constraint(equalToConstant: 64),
-                graphicImageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+                graphicImageView.topAnchor.constraint(equalTo: bannerContainer.topAnchor),
                 // Keep the banner at its existing position, independently of Mochi.
-                graphicImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 88),
-                graphicImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
-                graphicImageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+                graphicImageView.leadingAnchor.constraint(equalTo: bannerContainer.leadingAnchor, constant: 88),
+                graphicImageView.trailingAnchor.constraint(equalTo: bannerContainer.trailingAnchor, constant: -10),
+                graphicImageView.bottomAnchor.constraint(equalTo: bannerContainer.bottomAnchor)
             ])
         }
 
@@ -1884,16 +1952,16 @@ final class StatusTableViewController: LoopChartsTableViewController {
             let renderedBounds = CGRect(x: imageBounds.midX - renderedSize.width / 2,
                                         y: imageBounds.midY - renderedSize.height / 2,
                                         width: renderedSize.width, height: renderedSize.height)
-            let imageFrame = graphicImageView.convert(renderedBounds, to: contentView)
+            let imageFrame = graphicImageView.convert(renderedBounds, to: bannerContainer)
             // The Dexcom G7 sensor center is located at 66.0% width and 61.5% height in the banner
             let centerX = imageFrame.minX + imageFrame.width * 0.660
             let centerY = imageFrame.minY + imageFrame.height * 0.615
-            let verticalHitSpace = 2 * max(0, min(centerY - contentView.bounds.minY, contentView.bounds.maxY - centerY))
+            let verticalHitSpace = 2 * max(0, min(centerY - bannerContainer.bounds.minY, bannerContainer.bounds.maxY - centerY))
             let buttonSize = min(max(52, imageFrame.height * 0.52), verticalHitSpace)
             sensorButton.bounds.size = CGSize(width: buttonSize, height: buttonSize)
             sensorButton.center = CGPoint(x: centerX, y: centerY)
             sensorButton.layer.cornerRadius = buttonSize / 2
-            contentView.bringSubviewToFront(sensorButton)
+            bannerContainer.bringSubviewToFront(sensorButton)
         }
 
         @objc private func sensorButtonTapped() {
@@ -2547,10 +2615,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             }
             cell.configureMochi(owner: self) { [weak self] in self?.presentCompanion() }
             return cell
-        case .companion:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "CompanionCell", for: indexPath) as! CompanionTableViewCell
-            cell.configure(owner: self) { [weak self] in self?.presentCompanion() }
-            return cell
         case .hud:
             let cell = tableView.dequeueReusableCell(withIdentifier: HUDViewTableViewCell.className, for: indexPath) as! HUDViewTableViewCell
             hudView = cell.hudView
@@ -2849,9 +2913,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
 
     override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         super.tableView(tableView, willDisplay: cell, forRowAt: indexPath)
-        if cell is CompanionTableViewCell {
-            cell.layer.zPosition = 1
-        }
         if let cell = cell as? CycleSummaryTableViewCell {
             cell.configure(with: CycleTrackingStore.shared.summary(), isCollapsed: isCollapsedChartRow(.cycle))
         }
@@ -2945,7 +3006,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .cycle:
                 break
             }
-        case .branding, .hud, .status, .alertWarning, .companion:
+        case .branding, .hud, .status, .alertWarning:
             break
         }
     }
@@ -2963,10 +3024,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         switch Section(rawValue: indexPath.section)! {
         case .branding:
-            let availableWidth = max(0, tableView.bounds.width - 20)
-            let graphicAspectRatio: CGFloat = 342.0 / 1024.0
-            let graphicScale: CGFloat = 0.64
-            return max(72, ceil(availableWidth * graphicAspectRatio * graphicScale))
+            return UITableView.automaticDimension
         case .charts:
             if isCollapsedChartRow(chartRow(at: indexPath)) {
                 return 74
@@ -2985,8 +3043,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
             case .cycle:
                 return 134
             }
-        case .companion:
-            return CompanionController.shared.state.isDashboardDismissed(at: Date()) ? 0 : UITableView.automaticDimension
         case .hud, .status, .alertWarning:
             return UITableView.automaticDimension
         }
@@ -3002,7 +3058,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                 tableView.deselectRow(at: indexPath, animated: true)
                 presentUnmuteAlertConfirmation()
             }
-        case .branding, .hud, .companion:
+        case .branding, .hud:
             break
         case .status:
             switch StatusRow(rawValue: indexPath.row)! {
@@ -3155,50 +3211,6 @@ final class StatusTableViewController: LoopChartsTableViewController {
         guard viewIfLoaded?.window != nil, presentedViewController == nil else { return }
         let controller = UIHostingController(rootView: CompanionView(deviceManager: deviceManager))
         present(controller, animated: true)
-    }
-
-    private final class CompanionTableViewCell: UITableViewCell {
-        private var hostingController: UIHostingController<CompanionDashboardCard>?
-
-        func configure(owner: UIViewController, open: @escaping () -> Void) {
-            // The bubble overlaps the banner, including on its first display and after reuse.
-            layer.zPosition = 1
-            backgroundColor = .clear
-            clipsToBounds = false
-            contentView.clipsToBounds = false
-            selectionStyle = .none
-            let card = CompanionDashboardCard(open: open, onMessageChanged: { [weak self, weak owner] in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    UIView.performWithoutAnimation {
-                        self.hostingController?.view.invalidateIntrinsicContentSize()
-                        guard self.window != nil, let tableView = (owner as? UITableViewController)?.tableView else { return }
-                        tableView.performBatchUpdates(nil)
-                        tableView.layoutIfNeeded()
-                    }
-                }
-            })
-            if let hostingController {
-                hostingController.rootView = card
-                return
-            }
-            let controller = UIHostingController(rootView: card)
-            if #available(iOS 16.0, *) { controller.sizingOptions = .intrinsicContentSize }
-            owner.addChild(controller)
-            controller.view.backgroundColor = .clear
-            controller.view.clipsToBounds = false
-            controller.view.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview(controller.view)
-            NSLayoutConstraint.activate([
-                // Give SwiftUI its full bounds; position the entire hosting view above this row.
-                controller.view.topAnchor.constraint(equalTo: contentView.topAnchor, constant: -12),
-                controller.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-                controller.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-                controller.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
-            ])
-            controller.didMove(toParent: owner)
-            hostingController = controller
-        }
     }
 
     func presentCarbEntryScreen(_ activity: NSUserActivity?) {

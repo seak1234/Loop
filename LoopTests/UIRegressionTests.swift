@@ -196,6 +196,68 @@ final class UIRegressionTests: XCTestCase {
     }
 
     #if canImport(UIKit)
+    func testDashboardHeaderContainsBubbleBeforeAndAfterRefreshAndReuse() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let controller = CompanionController(provider: UIRegressionProvider(),
+            stateStore: CompanionStateStore(url: directory.appendingPathComponent("state.json")),
+            keyReader: { nil }, applicationIsActive: { false })
+        let owner = UIViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = owner
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        let cell = StatusTableViewController.DashboardGraphicTableViewCell(style: .default, reuseIdentifier: nil)
+        cell.frame = CGRect(x: 0, y: 0, width: 390, height: 160)
+        owner.view.addSubview(cell)
+        cell.configureMochi(owner: owner, controller: controller, open: {})
+        let banner = try XCTUnwrap(cell.contentView.subviews.first { $0.accessibilityIdentifier == "MochiDashboardBanner" })
+        let bubble = try XCTUnwrap(cell.contentView.subviews.first { $0.accessibilityIdentifier == "MochiDashboardBubble" })
+
+        func layoutHeader() {
+            cell.layoutIfNeeded()
+            let size = cell.contentView.systemLayoutSizeFitting(CGSize(width: 390, height: 0),
+                withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+            cell.frame.size.height = ceil(size.height)
+            cell.setNeedsLayout()
+            cell.layoutIfNeeded()
+        }
+
+        func layoutAndCheckBubble() {
+            layoutHeader()
+            XCTAssertGreaterThan(bubble.frame.height, 0)
+            XCTAssertGreaterThanOrEqual(bubble.frame.minY, 0)
+            XCTAssertLessThanOrEqual(bubble.frame.maxY, cell.contentView.bounds.maxY + 0.5)
+            XCTAssertEqual(bubble.frame.minY, banner.frame.maxY - 12, accuracy: 0.5)
+            XCTAssertTrue(cell.contentView.subviews.last === bubble)
+            XCTAssertGreaterThan(bubble.layer.zPosition, banner.layer.zPosition)
+            XCTAssertEqual(owner.children.count, 2)
+        }
+
+        // Check the first layout, then the same persistent views across later layout passes.
+        layoutAndCheckBubble()
+        for _ in 0..<3 {
+            await Task.yield()
+            cell.refreshBubbleLayout()
+            layoutAndCheckBubble()
+        }
+        cell.prepareForReuse()
+        cell.configureMochi(owner: owner, controller: controller, open: {})
+        layoutAndCheckBubble()
+        XCTAssertTrue(cell.contentView.subviews.first { $0.accessibilityIdentifier == "MochiDashboardBubble" } === bubble)
+
+        let bannerHeight = banner.frame.height
+        await controller.dismissDashboard()
+        cell.refreshBubbleLayout()
+        layoutHeader()
+        XCTAssertTrue(bubble.isHidden)
+        XCTAssertEqual(bubble.frame.height, 0, accuracy: 0.5)
+        XCTAssertEqual(banner.frame.maxY, cell.contentView.bounds.maxY, accuracy: 0.5)
+        XCTAssertEqual(banner.frame.height, bannerHeight, accuracy: 0.5)
+        XCTAssertEqual(owner.children.count, 2)
+    }
+
     func testDashboardReloadBeforeSetupDoesNotLoadView() {
         let controller = StatusTableViewController(style: .plain)
         XCTAssertFalse(controller.isViewLoaded)
