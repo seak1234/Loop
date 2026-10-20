@@ -98,6 +98,26 @@ final class CompanionCoreTests: XCTestCase {
         }
     }
 
+    func testJokeWithMissingSetupIsRetriedWithASelfContainedMessage() async throws {
+        let confusing = "You're worth every bit of this enthusiasm. Both paws up! Balance briefly unavailable."
+        let clear = "You're amazing! I cheered so hard I landed on my bottom. Still cheering!"
+        let provider = DashboardVoiceProvider([
+            .success(try dashboardDraft(confusing)),
+            .success(try voiceReview(impact: "affirmation", encouragement: "You're worth every bit of this enthusiasm.", natural: false)),
+            .success(try dashboardDraft(clear)),
+            .success(try voiceReview(impact: "affirmation", encouragement: "You're amazing!"))
+        ])
+        let result = try await reviewedSuggestion(provider, subject: .smallDelight)
+        XCTAssertEqual(result?.text, clear)
+        XCTAssertEqual(provider.requests.count, 4)
+        let repair = provider.requests[2].last?["content"] as? String ?? ""
+        XCTAssertTrue(repair.contains("include the action that caused the mishap"))
+        for index in 0..<24 {
+            let fallback = CompanionMessageVariety.dashboardFallback(index: index, name: "Michelle", morning: false)
+            XCTAssertFalse(fallback.text.contains("Balance briefly unavailable"))
+        }
+    }
+
     func testVoiceReviewFailureNeverDisplaysAnUnreviewedDraft() async throws {
         let draft = try dashboardDraft("A little company for whatever comes next. Scooting over. Scooting too far. Back again.")
         let invalidReviews: [Result<CompanionCompletion, Error>] = [
@@ -287,7 +307,7 @@ final class CompanionCoreTests: XCTestCase {
             "A single reading is only part of your life."
         ]
         let accepted = [
-            "Your next goal has my full support. My balance is less reliable, but the support is excellent.",
+            "You've got this! I jumped up to cheer and landed on my bottom. Still cheering!",
             "One tiny heart for you. Slightly squished from all the hugs.",
             "Recent readings are in target. A little happy dance is definitely happening.",
             "The sensor isn't sending readings. Let's check its reported status together."
@@ -310,9 +330,9 @@ final class CompanionCoreTests: XCTestCase {
     }
 
     func testEarlierDashboardVoiceIsInvalidatedAfterUpdate() {
-        var message = CompanionDashboardMessage(text: "A screen only catches tiny glimpses of real life, never the whole picture.",
-            generatedAt: now, includesHealthData: false, kind: .motivation, subject: .perspective)
-        message.styleVersion = 20
+        var message = CompanionDashboardMessage(text: "You're worth every bit of this enthusiasm. Both paws up! Balance briefly unavailable.",
+            generatedAt: now, includesHealthData: false, kind: .motivation, subject: .smallDelight)
+        message.styleVersion = 21
         XCTAssertFalse(CompanionDashboardRefresh.isDisplayable(message, now: now))
         XCTAssertTrue(CompanionDashboardRefresh.isDue(message: message, lastAttempt: nil, dataChanged: false, now: now))
     }
