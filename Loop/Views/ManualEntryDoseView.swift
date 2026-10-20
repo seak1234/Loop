@@ -158,17 +158,13 @@ struct ManualEntryDoseView: View {
     }
     private var datePicker: some View {
         // Allow 6 hours before & after due to longest DIA
-        ZStack(alignment: .topLeading) {
-            DatePicker(
-                String(""),
-                selection: $viewModel.selectedDoseDate,
-                in: Date().addingTimeInterval(-.hours(6))...Date().addingTimeInterval(.hours(6)),
-                displayedComponents: [.date, .hourAndMinute]
-            )
-            .pickerStyle(WheelPickerStyle())
-            
-            Text(NSLocalizedString("Date", comment: "Date picker label"))
-        }
+        DatePicker(
+            selection: $viewModel.selectedDoseDate,
+            in: Date().addingTimeInterval(-.hours(6))...Date().addingTimeInterval(.hours(6)),
+            displayedComponents: [.date, .hourAndMinute],
+            label: { Text("Date", comment: "Date picker label") }
+        )
+        .datePickerStyle(.compact)
     }
     
 
