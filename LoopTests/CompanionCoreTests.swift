@@ -6,6 +6,168 @@ import XCTest
 #endif
 
 final class CompanionCoreTests: XCTestCase {
+    private var reactionCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+    private var reactionNow: Date { ISO8601DateFormatter().date(from: "2026-10-20T18:00:00Z")! }
+    private func reactionContext() -> [String: Any] {
+        ["get_glucose_summary": ["encouragement": ["canCelebrateRecentTarget": true]],
+         "today_and_recent_patterns": ["glucose": ["coverage": 0.95, "mean_mgdl": 110.0, "in_range": 0.98, "below_70": 0.0,
+            "cv_percent": 12.0, "usual_cv_percent": 25.0, "lower_mgdl": 80.0, "upper_mgdl": 145.0,
+            "latest_sample": CompanionDataContext.stamp(reactionNow.addingTimeInterval(-300))]]]
+    }
+    private func reactions(_ context: [String: Any], at date: Date? = nil) -> [CompanionDashboardDataEvent] {
+        CompanionDashboardDataEvent.candidates(context: context, now: date ?? reactionNow, calendar: reactionCalendar)
+    }
+
+    func testDashboardRecordsAloneDoNotCreateADataReaction() {
+        let context: [String: Any] = ["get_glucose_summary": ["sample_count": 72], "cycle": ["recordedPeriodCount": 3]]
+        XCTAssertTrue(reactions(context).isEmpty)
+        let plan = CompanionDashboardPlan.next(state: CompanionState(), history: [], allowed: [.motivation, .insight], canCelebrate: false, now: reactionNow)
+        XCTAssertEqual(plan.kinds, [.motivation])
+        XCTAssertEqual(plan.subject, .anticipation)
+    }
+
+    func testTodayGlucoseReactionsNeedCoverageFreshnessNoLowsAndRecentTargetEvidence() {
+        let context = reactionContext()
+        XCTAssertTrue(reactions(context).contains { $0.kind == .todayGlucose })
+        XCTAssertTrue(reactions(context).contains { $0.kind == .steadierGlucose })
+        let patterns = context["today_and_recent_patterns"] as! [String: Any]
+        let glucose = patterns["glucose"] as! [String: Any]
+        let invalid: [(String, Any)] = [("coverage", 0.2), ("below_70", 0.01), ("mean_mgdl", 55.0), ("lower_mgdl", 60.0),
+            ("latest_sample", CompanionDataContext.stamp(reactionNow.addingTimeInterval(-3600))), ("mean_mgdl", Double.nan)]
+        for (key, value) in invalid {
+            var modified = context, updated = glucose
+            updated[key] = value
+            modified["today_and_recent_patterns"] = ["glucose": updated]
+            XCTAssertFalse(reactions(modified).contains { $0.kind == .todayGlucose || $0.kind == .steadierGlucose })
+        }
+        var unsupported = context
+        unsupported["get_glucose_summary"] = ["encouragement": ["canCelebrateRecentTarget": false]]
+        XCTAssertTrue(reactions(unsupported).isEmpty)
+    }
+
+    func testHistoricalGlucoseReactionNeverCelebratesLowGMIAlone() {
+        var context: [String: Any] = ["get_glucose_summary": ["encouragement": ["canCelebrateRecentTarget": true]]]
+        var stats: [String: Any] = ["coverage_fraction": 0.95, "in_range_fraction": 0.95, "below_70_fraction": 0.0, "mean_mgdl": 120.0, "gmi_percent": 6.1804]
+        var historical: [String: Any] = ["start": CompanionDataContext.stamp(reactionNow.addingTimeInterval(-14 * 86400)),
+            "end": CompanionDataContext.stamp(reactionNow), "is_loading": false, "glucose": stats]
+        context["glucose_statistics"] = historical
+        XCTAssertTrue(reactions(context).contains { $0.kind == .longTermGlucose })
+        stats["below_70_fraction"] = 0.03; stats["gmi_percent"] = 5.0
+        historical["glucose"] = stats; context["glucose_statistics"] = historical
+        XCTAssertFalse(reactions(context).contains { $0.kind == .longTermGlucose })
+        stats["below_70_fraction"] = 0.0; historical["glucose"] = stats
+        historical["start"] = CompanionDataContext.stamp(reactionNow.addingTimeInterval(-3 * 86400))
+        context["glucose_statistics"] = historical
+        XCTAssertTrue(reactions(context).contains { $0.kind == .longTermGlucose })
+        stats["coverage_fraction"] = 0.75
+        historical["glucose"] = stats; context["glucose_statistics"] = historical
+        XCTAssertFalse(reactions(context).contains { $0.kind == .longTermGlucose })
+    }
+
+    func testCarbReactionsDescribeLogsAndDoNotCallAnEmptyMorningLowIntake() {
+        var carbs: [String: Any] = ["today_grams": 10.0, "usual_same_time_grams": 60.0, "comparison_days": 4, "covers_today": true]
+        var context: [String: Any] = ["today_and_recent_patterns": ["carbs": carbs]]
+        let event = reactions(context).first { $0.kind == .carbsChanged }
+        XCTAssertTrue(event?.observation.contains("logged") == true)
+        XCTAssertTrue(event?.guidance.contains("not actual food intake") == true)
+        let morning = ISO8601DateFormatter().date(from: "2026-10-20T08:00:00Z")!
+        XCTAssertTrue(reactions(context, at: morning).isEmpty)
+        carbs["today_grams"] = 100.0
+        context["today_and_recent_patterns"] = ["carbs": carbs]
+        XCTAssertTrue(reactions(context, at: morning).contains { $0.kind == .carbsChanged })
+        carbs["covers_today"] = false
+        context["today_and_recent_patterns"] = ["carbs": carbs]
+        XCTAssertTrue(reactions(context).isEmpty)
+        context["today_and_recent_patterns"] = ["carbs": ["latest_entry_grams": 45.0, "latest_entry_date": CompanionDataContext.stamp(reactionNow)]]
+        XCTAssertTrue(reactions(context).contains { $0.kind == .carbEntry })
+    }
+
+    func testInsulinReactionsRequireComparableCoverageAndNeverCelebrateLessDelivery() {
+        var insulin: [String: Any] = ["today_units": 8.0, "usual_same_time_units": 16.0, "coverage": 0.95, "comparison_days": 4]
+        var context: [String: Any] = ["today_and_recent_patterns": ["insulin": insulin]]
+        let event = reactions(context).first { $0.kind == .insulinChanged }
+        XCTAssertTrue(event != nil)
+        XCTAssertTrue(event?.guidance.contains("Neither less nor more insulin is a win") == true)
+        insulin["coverage"] = 0.5
+        context["today_and_recent_patterns"] = ["insulin": insulin]
+        XCTAssertTrue(reactions(context).isEmpty)
+    }
+
+    func testPeriodReactionUsesLoggedStartWithoutInventingSymptomsOrOngoingBleeding() {
+        let start = reactionNow.addingTimeInterval(-86400)
+        let context: [String: Any] = ["cycle": ["recentPeriods": [["startDate": CompanionDataContext.stamp(start)]]]]
+        let event = reactions(context).first { $0.kind == .periodDay }
+        XCTAssertTrue(event?.observation.contains("Day 2 since") == true)
+        XCTAssertTrue(event?.guidance.contains("not confirmed ongoing bleeding") == true)
+        let future: [String: Any] = ["cycle": ["recentPeriods": [["startDate": CompanionDataContext.stamp(reactionNow.addingTimeInterval(3600))]]]]
+        XCTAssertTrue(reactions(future).isEmpty)
+    }
+
+    func testDataReactionCadenceAndDeduplicationSurviveRelaunch() throws {
+        let event = reactions(reactionContext()).first!
+        var state = CompanionState()
+        XCTAssertEqual(CompanionDashboardDataEvent.next([event], state: state, history: [], now: reactionNow), event)
+        state.dashboardDataReactionAt = reactionNow
+        state.dashboardDataEvents = [event.id: reactionNow, "kind:" + event.kind.rawValue: reactionNow]
+        state = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
+        XCTAssertNil(CompanionDashboardDataEvent.next([event], state: state, history: [], now: reactionNow.addingTimeInterval(2 * 3600)))
+        XCTAssertNil(CompanionDashboardDataEvent.next([event], state: state, history: [], now: reactionNow.addingTimeInterval(2 * 86400)))
+        let next = CompanionDashboardDataEvent(id: "new", kind: .carbEntry, observation: "New recorded entry", guidance: "Describe logs")
+        let previous = CompanionDashboardMessage(text: "An observed window", generatedAt: reactionNow, includesHealthData: true, kind: .insight, subject: .dailyLife)
+        let ordinary = (1...3).map { CompanionDashboardMessage(text: "You've got this!", generatedAt: reactionNow.addingTimeInterval(Double($0) * 3600), includesHealthData: false, kind: .motivation, subject: .pepTalk) }
+        XCTAssertNil(CompanionDashboardDataEvent.next([next], state: state, history: [previous] + ordinary.prefix(2), now: reactionNow.addingTimeInterval(4 * 3600)))
+        XCTAssertEqual(CompanionDashboardDataEvent.next([next], state: state, history: [previous] + ordinary, now: reactionNow.addingTimeInterval(4 * 3600)), next)
+        let plan = CompanionDashboardPlan.next(state: state, history: [previous] + ordinary, allowed: [.motivation, .insight], canCelebrate: false, now: reactionNow.addingTimeInterval(4 * 3600), dataEvent: next)
+        XCTAssertEqual(plan.subject, .dailyLife)
+        XCTAssertEqual(plan.kinds, [.insight])
+    }
+
+    func testSameTimeCarbComparisonsIgnoreExpiredCachesAndUnloggedDays() {
+        let periods = CompanionDashboardObservations.windows(now: reactionNow, calendar: reactionCalendar)
+        let entries = periods.dropFirst().map { CompanionDashboardObservations.Carb(date: $0.0.addingTimeInterval(3600), grams: 60) }
+            + [.init(date: reactionNow, grams: 10)]
+        let full = CompanionDashboardObservations.carbs(entries, availableFrom: periods.last!.0, now: reactionNow, calendar: reactionCalendar)
+        XCTAssertEqual(full["today_grams"] as? Double, 10)
+        XCTAssertEqual(full["usual_same_time_grams"] as? Double, 60)
+        XCTAssertEqual(full["comparison_days"] as? Int, 6)
+        let expired = CompanionDashboardObservations.carbs(entries, availableFrom: periods[1].0, now: reactionNow, calendar: reactionCalendar)
+        XCTAssertNil(expired["usual_same_time_grams"])
+        let empty = CompanionDashboardObservations.carbs([], availableFrom: periods.last!.0, now: reactionNow, calendar: reactionCalendar)
+        XCTAssertNil(empty["usual_same_time_grams"])
+    }
+
+    func testDailyGlucoseObservationsAreTimeWeightedAndJSONSafeWithMissingData() throws {
+        let start = reactionCalendar.startOfDay(for: reactionNow)
+        let points = stride(from: 0.0, to: reactionNow.timeIntervalSince(start), by: 300).map {
+            GlucoseStatisticsReading(date: start.addingTimeInterval($0), mgdl: 110)
+        }
+        let data = CompanionDashboardObservations.glucose(points, now: reactionNow, calendar: reactionCalendar, lower: 80, upper: 145)
+        XCTAssertEqual(data["mean_mgdl"] as? Double, 110)
+        XCTAssertEqual(data["coverage"] as? Double, 1)
+        XCTAssertEqual(data["below_70"] as? Double, 0)
+        XCTAssertTrue(JSONSerialization.isValidJSONObject(data))
+        let missing = CompanionDashboardObservations.glucose([], now: reactionNow, calendar: reactionCalendar, lower: 80, upper: 145)
+        XCTAssertTrue(JSONSerialization.isValidJSONObject(missing))
+        XCTAssertTrue(missing["mean_mgdl"] is NSNull)
+    }
+
+    func testSameClockComparisonsRespectLocalDaysAcrossDST() {
+        var calendar = reactionCalendar
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = ISO8601DateFormatter().date(from: "2026-11-02T17:00:00Z")!
+        let windows = CompanionDashboardObservations.windows(now: now, calendar: calendar)
+        XCTAssertEqual(windows.count, 7)
+        for (start, end) in windows {
+            XCTAssertEqual(calendar.component(.hour, from: start), 0)
+            XCTAssertEqual(calendar.component(.hour, from: end), 12)
+        }
+        XCTAssertEqual(windows[1].1.timeIntervalSince(windows[1].0), 13 * 3600)
+    }
+
     private final class DashboardVoiceProvider: CompanionProvider {
         var replies: [Result<CompanionCompletion, Error>]
         var requests: [[[String: Any]]] = []
@@ -700,9 +862,9 @@ final class CompanionCoreTests: XCTestCase {
         state.dashboardDiscoveries = [discovery("study-one"), discovery("device-two", subject: .devices)]
         state = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
         let personal = CompanionDashboardPlan.next(state: state, history: [], allowed: [.motivation, .insight], canCelebrate: false, now: now)
-        XCTAssertEqual(personal.kinds, [.motivation, .insight])
+        XCTAssertEqual(personal.kinds, [.motivation])
         XCTAssertNil(personal.fact)
-        XCTAssertEqual(personal.subject, .dailyLife)
+        XCTAssertEqual(personal.subject, .anticipation)
         let welcome = CompanionDashboardPlan.next(state: state, history: [], allowed: [.motivation], canCelebrate: false, now: now)
         XCTAssertEqual(welcome.kinds, [.motivation])
         XCTAssertEqual(welcome.subject, .anticipation)

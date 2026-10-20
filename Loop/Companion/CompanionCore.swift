@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 enum CompanionCycleIntent {
     static func matches(_ text: String) -> Bool {
@@ -638,6 +639,7 @@ struct CompanionDashboardMessage: Codable {
     var conversationDate: Date?
     var subject: CompanionDashboardSubject?
     var sourceFact: CompanionDashboardFact?
+    var dataEventID: String?
 }
 
 /// Conservative permission to celebrate recent readings, not a clinical assessment or alert.
@@ -974,7 +976,7 @@ enum CompanionDashboardSubject: String, Codable, CaseIterable {
         case .devices: return "A sourced development in pumps, CGMs or automated insulin delivery, with region and availability clearly qualified."
         case .globalAccess: return "A sourced international development in access, affordability or policy, with the country specified."
         case .research: return "A surprising sourced research question, technique or finding; explain its stage without hype."
-        case .dailyLife: return "Choose a supported observation from the supplied recent personal snapshot, distinct from recent messages, with kind insight. If evidence is insufficient, use ordinary hopeful encouragement with kind motivation, without inventing a finding. Passive company or a generic conversation invitation is insufficient."
+        case .dailyLife: return "React warmly to selected_data_event only, preserving its exact period, source and limits. It supplies the meaningful observation; do not choose another record or infer a cause. Without an event, use ordinary upbeat encouragement without a personal data claim."
         case .foodScience: return "A fresh question about meal composition and predictability, consistent with the Bernstein framework; no unsupported claims."
         case .technology: return "A sourced discovery about the engineering or open research behind diabetes technology."
         case .recentQuestion: return "Pick up an actual earlier user question; don't repeat a generic offer to review glucose."
@@ -986,6 +988,180 @@ enum CompanionDashboardFeedback: String, Codable {
     case more, less, alreadyKnow
 }
 
+/// Comparable local-day observations. Entries describe records, never inferred intake.
+enum CompanionDashboardObservations {
+    struct Carb { let date: Date; let grams: Double }
+
+    static func windows(now: Date, calendar: Calendar) -> [(Date, Date)] {
+        let today = calendar.startOfDay(for: now)
+        let clock = calendar.dateComponents([.hour, .minute, .second], from: now)
+        return (0..<7).compactMap { offset in
+            guard let start = calendar.date(byAdding: .day, value: -offset, to: today),
+                  let end = calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0,
+                    second: clock.second ?? 0, of: start) else { return nil }
+            return (start, offset == 0 ? now : end)
+        }
+    }
+
+    static func glucose(_ readings: [GlucoseStatisticsReading], now: Date, calendar: Calendar,
+                        lower: Double, upper: Double) -> [String: Any] {
+        let periods = windows(now: now, calendar: calendar)
+        guard let window = periods.first else { return [:] }
+        let stats = periods.map { GlucoseStatistics.calculate(readings: readings, start: $0.0, end: $0.1, lower: lower, upper: upper) }
+        let today = stats[0]
+        let lows = GlucoseStatistics.calculate(readings: readings, start: window.0, end: window.1, lower: 70, upper: 250)
+        let previous = stats.dropFirst().filter { $0.coverage >= 0.7 && $0.meanMGDL != nil }
+        var result: [String: Any] = ["coverage": today.coverage, "mean_mgdl": CompanionDataContext.finite(today.meanMGDL),
+            "in_range": CompanionDataContext.finite(today.inRange), "below_70": CompanionDataContext.finite(lows.belowRange),
+            "cv_percent": CompanionDataContext.finite(today.coefficientOfVariation), "comparison_days": previous.count,
+            "lower_mgdl": lower, "upper_mgdl": upper,
+            "latest_sample": readings.filter { $0.date >= window.0 && $0.date <= now && $0.mgdl.isFinite && $0.mgdl >= 39 }.map(\.date).max().map { CompanionDataContext.stamp($0) as Any } ?? NSNull()]
+        let cvs = previous.compactMap(\.coefficientOfVariation)
+        if cvs.count >= 3 { result["usual_cv_percent"] = cvs.reduce(0, +) / Double(cvs.count) }
+        return result
+    }
+
+    static func carbs(_ entries: [Carb], availableFrom: Date, now: Date, calendar: Calendar) -> [String: Any] {
+        let entries = entries.filter { $0.grams.isFinite && $0.grams >= 0 && $0.date <= now }
+        let periods = windows(now: now, calendar: calendar)
+        guard let first = periods.first else { return [:] }
+        func inWindow(_ window: (Date, Date)) -> [Carb] { entries.filter { $0.date >= window.0 && $0.date <= window.1 } }
+        let today = inWindow(first)
+        // A zero from an empty or expired cache is not a personal baseline.
+        let previous = periods.dropFirst().filter { $0.0 >= availableFrom }.map(inWindow).filter { !$0.isEmpty }
+        var result: [String: Any] = ["today_grams": today.map(\.grams).reduce(0, +), "comparison_days": previous.count,
+            "covers_today": first.0 >= availableFrom]
+        if previous.count >= 3 {
+            result["usual_same_time_grams"] = previous.map { $0.map(\.grams).reduce(0, +) }.reduce(0, +) / Double(previous.count)
+        }
+        if let latest = today.max(by: { $0.date < $1.date }) {
+            result["latest_entry_date"] = CompanionDataContext.stamp(latest.date)
+            result["latest_entry_grams"] = latest.grams
+        }
+        return result
+    }
+
+    static func insulin(_ entries: [GlucoseStatisticsInsulin], now: Date, calendar: Calendar) -> [String: Any] {
+        let periods = windows(now: now, calendar: calendar)
+        let stats = periods.map { GlucoseInsulinStatistics.calculate(local: entries, remoteBoluses: [], start: $0.0, end: $0.1) }
+        guard let today = stats.first else { return [:] }
+        let previous = stats.dropFirst().filter { $0.coverage >= 0.9 && $0.total != nil }
+        var result: [String: Any] = ["today_units": CompanionDataContext.finite(today.total), "coverage": today.coverage, "comparison_days": previous.count]
+        if previous.count >= 3 {
+            result["usual_same_time_units"] = previous.compactMap(\.total).reduce(0, +) / Double(previous.count)
+        }
+        return result
+    }
+}
+
+/// A reason to react, selected before generation. No arbitrary record/topic rotation.
+struct CompanionDashboardDataEvent: Encodable, Equatable {
+    enum Kind: String, Codable { case recentGlucose, todayGlucose, steadierGlucose, longTermGlucose, carbsChanged, carbEntry, insulinChanged, periodDay, deviceStatus }
+    let id: String
+    let kind: Kind
+    let observation: String
+    let guidance: String
+    var subject: CompanionDashboardSubject {
+        kind == .deviceStatus ? .deviceStatus : (kind == .recentGlucose ? .glucoseWins : .dailyLife)
+    }
+    var cooldown: TimeInterval {
+        switch kind {
+        case .longTermGlucose, .periodDay: return 24 * 3600
+        case .todayGlucose, .steadierGlucose, .carbsChanged, .insulinChanged: return 12 * 3600
+        default: return 6 * 3600
+        }
+    }
+
+    static func permitsReaction(state: CompanionState, history: [CompanionDashboardMessage], now: Date) -> Bool {
+        let history = history.filter { $0.generatedAt <= now }
+        let last = history.last { !CompanionDashboardRefresh.isOrdinaryMessage($0) }
+        let persisted = state.dashboardDataReactionAt.flatMap { $0 <= now ? $0 : nil }
+        let lastDate = max(last?.generatedAt ?? .distantPast, persisted ?? .distantPast)
+        guard now.timeIntervalSince(lastDate) >= 3 * 3600 else { return false }
+        // At least three ordinary messages between reactions, including after relaunch.
+        return last == nil || history.suffix(3).filter { CompanionDashboardRefresh.isOrdinaryMessage($0) }.count == 3
+    }
+
+    static func next(_ events: [Self], state: CompanionState, history: [CompanionDashboardMessage], now: Date) -> Self? {
+        guard permitsReaction(state: state, history: history, now: now) else { return nil }
+        return events.first { event in
+            let seen = (state.dashboardDataEvents ?? [:]).filter { $0.value <= now }
+            return seen[event.id] == nil && now.timeIntervalSince(seen["kind:" + event.kind.rawValue] ?? .distantPast) >= event.cooldown
+        }
+    }
+
+    static func candidates(context: [String: Any], now: Date, calendar: Calendar = .current) -> [Self] {
+        func object(_ raw: Any?) -> [String: Any] { raw as? [String: Any] ?? [:] }
+        func number(_ raw: Any?) -> Double? {
+            guard let value = raw as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite else { return nil }
+            return value.doubleValue
+        }
+        func date(_ raw: Any?) -> Date? { (raw as? String).flatMap { ISO8601DateFormatter().date(from: $0) } }
+        func value(_ value: Double, _ decimals: Int = 0) -> String { String(format: "%.*f", decimals, value) }
+        let day = CompanionDataContext.stamp(calendar.startOfDay(for: now))
+        let hours = now.timeIntervalSince(calendar.startOfDay(for: now)) / 3600
+        let observed = object(context["today_and_recent_patterns"])
+        let glucose = object(observed["glucose"]), carbs = object(observed["carbs"]), insulin = object(observed["insulin"])
+        let recent = object(context["get_glucose_summary"])
+        let canCelebrate = object(recent["encouragement"])["canCelebrateRecentTarget"] as? Bool == true
+        var result: [Self] = []
+        func add(_ kind: Kind, _ key: String, _ observation: String, _ guidance: String) {
+            result.append(Self(id: kind.rawValue + ":" + key, kind: kind, observation: observation, guidance: guidance))
+        }
+        if CompanionDataContext.deviceNeedsAttention(object(context["devices"]), now: now) {
+            add(.deviceStatus, day, "The supplied CGM/pump snapshot reports a warning or a nearing reported/expected session end.", "Use only the actual device fields and original date meanings. This is a heads-up, not an alert or treatment instruction. No invented outage, reassurance about delivery, or joke about device care.")
+        }
+        let cycle = object(context["cycle"])
+        if let latest = (cycle["recentPeriods"] as? [[String: Any]])?.last, let start = date(latest["startDate"]), start <= now {
+            let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: start), to: calendar.startOfDay(for: now)).day ?? -1
+            if (0...4).contains(days) {
+                add(.periodDay, CompanionDataContext.stamp(start), "Day \(days + 1) since the user's logged period start.", "Refer to their period log, not confirmed ongoing bleeding. Offer warmth without assuming pain, mood, cravings, hormones or insulin resistance. No prediction about glucose or symptoms.")
+            }
+        }
+        if canCelebrate, hours >= 6, number(glucose["coverage"]) ?? 0 >= 0.7, number(glucose["below_70"]) == 0,
+           let mean = number(glucose["mean_mgdl"]), let inRange = number(glucose["in_range"]), inRange >= 0.9,
+           let latest = date(glucose["latest_sample"]), now.timeIntervalSince(latest) >= 0, now.timeIntervalSince(latest) <= 600,
+           let lower = number(glucose["lower_mgdl"]), lower >= 70, let upper = number(glucose["upper_mgdl"]), mean >= lower, mean <= upper {
+            if let cv = number(glucose["cv_percent"]), let usual = number(glucose["usual_cv_percent"]), usual - cv >= 5, cv <= usual * 0.8 {
+                add(.steadierGlucose, day, "Today's observed glucose is steadier so far: CV \(value(cv, 1))%, versus \(value(usual, 1))% across at least 3 recent days at this time.", "Celebrate the supported steadier window. Say today so far; no claim about causes, effort or future readings.")
+            }
+            add(.todayGlucose, day, "Today's observed average is \(value(mean)) mg/dL, with \(value(inRange * 100))% in your selected range so far.", "Warmly recognize today's glucose so far. Do not call it a complete day or perfect control; do not invent user actions or causes.")
+        }
+        let historical = object(context["glucose_statistics"]), stats = object(historical["glucose"])
+        if canCelebrate, historical["is_loading"] as? Bool == false,
+           let end = date(historical["end"]), let start = date(historical["start"]),
+           now.timeIntervalSince(end) >= 0, now.timeIntervalSince(end) <= 3600, end.timeIntervalSince(start) >= 3 * 86400 - 1,
+           number(stats["coverage_fraction"]) ?? 0 >= (end.timeIntervalSince(start) < 14 * 86400 - 1 ? 0.9 : 0.7), number(stats["in_range_fraction"]) ?? 0 >= 0.9,
+           number(stats["below_70_fraction"]) == 0, let gmi = number(stats["gmi_percent"]),
+           let mean = number(stats["mean_mgdl"]), mean >= 70, gmi > 0 {
+            let days = Int(round(end.timeIntervalSince(start) / 86400))
+            let a1c = number(stats["estimated_hba1c_percent"]).map { ", estimated HbA1c \(value($0, 1))%" } ?? ""
+            add(.longTermGlucose, "\(days):" + day, "The loaded \(days)-day CGM summary has GMI \(value(gmi, 1))%\(a1c), average \(value(mean)) mg/dL, and at least 90% of observed time in your selected range, without recorded time below 70 mg/dL.", "Celebrate the supported recent summary. GMI and estimated HbA1c are estimates, never a lab result. State the period; no guarantee or claim about the user's effort. Do not treat a low mean or low GMI alone as success.")
+        }
+        if hours >= 6, carbs["covers_today"] as? Bool == true, number(carbs["comparison_days"]) ?? 0 >= 3,
+           let today = number(carbs["today_grams"]), today >= 0, let usual = number(carbs["usual_same_time_grams"]), usual >= 20,
+           abs(today - usual) >= 20, (today <= usual * 0.5 || today >= usual * 1.5) {
+            // Do not call a still-empty morning a low-carb day.
+            if today > usual || calendar.component(.hour, from: now) >= 12 {
+                add(.carbsChanged, day, "\(value(today)) g carbs logged today so far, versus about \(value(usual)) g by this time across at least 3 recent logged days.", "A friendly, neutral observation about logged carbs, not actual food intake. No good/bad judgment, congratulating restriction, blame, missed-meal assumption or instruction to eat less/more. Do not infer glucose or insulin effects.")
+            }
+        }
+        if let date = date(carbs["latest_entry_date"]), date <= now, now.timeIntervalSince(date) <= 1800,
+           let grams = number(carbs["latest_entry_grams"]), grams >= 30 {
+            add(.carbEntry, CompanionDataContext.stamp(date), "A recent carb entry records \(value(grams)) g.", "Acknowledge a newly logged entry naturally, without calling it excessive, assuming it was eaten, guessing the meal or suggesting insulin. Not a reward for eating or restricting food.")
+        }
+        if hours >= 6, number(insulin["coverage"]) ?? 0 >= 0.9, number(insulin["comparison_days"]) ?? 0 >= 3,
+           let today = number(insulin["today_units"]), today >= 0, let usual = number(insulin["usual_same_time_units"]), usual > 0,
+           abs(today - usual) >= 2, (today <= usual * 0.7 || today >= usual * 1.3) {
+            add(.insulinChanged, day, "Recorded insulin today so far is \(value(today, 1)) U, versus about \(value(usual, 1)) U at this time across at least 3 recent sufficiently covered days.", "A neutral observation about recorded delivery, not insulin on board, treatment need or a recommended dose. Neither less nor more insulin is a win. No causal claim about meals, cycle, illness or insulin resistance; no dosing directions.")
+        }
+        if canCelebrate {
+            add(.recentGlucose, day, "The existing CGM check supports a fresh, covered, in-target stretch over the last 30 minutes, without a rapid fall.", "A brief warm cheer for that observed window only. No perfect-day claim, cause, or promise that future glucose will stay in range.")
+        }
+        return result
+    }
+}
+
 struct CompanionDashboardPlan {
     let subject: CompanionDashboardSubject
     let kinds: [CompanionDashboardKind]
@@ -993,15 +1169,17 @@ struct CompanionDashboardPlan {
     let callbackStory: CompanionDashboardMessage?
 
     static func next(state: CompanionState, history: [CompanionDashboardMessage], allowed: [CompanionDashboardKind],
-                     canCelebrate: Bool, now: Date, calendar: Calendar = .current, deviceAttention: Bool = false) -> Self {
+                     canCelebrate: Bool, now: Date, calendar: Calendar = .current, deviceAttention: Bool = false, dataEvent: CompanionDashboardDataEvent? = nil) -> Self {
         // Rotate distinct purposes, using persisted exposure as well as recent copy.
         // Character details support optimism without adding a care task or lesson.
         // Public discoveries and learning topics are never selected for this bubble.
         var subjects: [CompanionDashboardSubject] = [.anticipation, .littleAdventure, .companionship, .smallDelight,
             .agency, .pepTalk, .kindness, .determination]
-        if allowed.contains(.insight) { subjects.insert(.dailyLife, at: 0) }
-        if allowed.contains(.insight) && canCelebrate { subjects.insert(.glucoseWins, at: 0) }
-        if allowed.contains(.insight) && deviceAttention { subjects.insert(.deviceStatus, at: 0) }
+        if allowed.contains(.insight), CompanionDashboardDataEvent.permitsReaction(state: state, history: history, now: now) {
+            if let event = dataEvent { return Self(subject: event.subject, kinds: [.insight], fact: nil, callbackStory: nil) }
+            if deviceAttention { subjects.insert(.deviceStatus, at: 0) }
+            if canCelebrate && !deviceAttention { subjects.insert(.glucoseWins, at: 0) }
+        }
         let exposure = state.dashboardExposure(history: history.filter { $0.generatedAt <= now }).subjects
         let recent = Set(history.suffix(4).compactMap(\.subject))
         let candidates = subjects.filter { !recent.contains($0) }
@@ -1092,7 +1270,7 @@ enum CompanionDashboardGreeting {
 }
 
 enum CompanionDashboardRefresh {
-    static let styleVersion = 22
+    static let styleVersion = 23
     static let maximumCharacters = 140
     static let maximumWords = 24
 
@@ -1134,6 +1312,8 @@ struct CompanionState: Codable {
     var model = "openai/gpt-6.1-sol"
     var preferredName: String? = "Michelle"
     var useRecentChatsForDashboard: Bool? = true
+    var dashboardDataReactionAt: Date?
+    var dashboardDataEvents: [String: Date]?
     var dashboardRecentMessages: [CompanionDashboardMessage]?
     var dashboardCharacterMessages: [CompanionDashboardMessage]?
     var dashboardAdventureCount: Int?

@@ -56,6 +56,7 @@ xcrun swiftc -sdk "$task_sdk" -target "$(uname -m)-apple-ios15.1-macabi" \
     -F "$task_sdk/System/iOSSupport/System/Library/Frameworks" \
     -typecheck -swift-version 5 -module-cache-path "${MOCHI_MODULE_CACHE_PATH:-${TMPDIR:-/tmp}/mochi-swift-module-cache}" \
     "$task_root/Loop/Models/GlucoseGraphSettings.swift" \
+    "$task_root/Loop/Models/GlucoseStatistics.swift" \
     "$task_root/Loop/Companion/CompanionCore.swift" "$task_root/Loop/Companion/CycleJournal.swift" \
     "$task_temp/Interfaces.swift" "$task_temp/CycleTrackingView.swift" "$task_temp/CycleChat.swift" \
     "$task_root/Loop/Views/CycleJournalView.swift"

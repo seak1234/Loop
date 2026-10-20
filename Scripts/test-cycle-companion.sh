@@ -45,7 +45,7 @@ import Combine
     var storageFailure: String?
     var errorMessage: String?
     let applicationIsActive: () -> Bool = { true }
-    let dashboardHealthReader: ((String, Date, Date) async throws -> [String: Any])? = nil
+    let dashboardHealthReader: ((String, Date, Date) async throws -> [String: Any])?
     var chatVisible = false
     var suggestedTopics: [CompanionTopic] = []
     var topicRevision = UUID()
@@ -55,7 +55,7 @@ import Combine
     func beginChatSession() { chatVisible = true; refreshSuggestedTopics() }
     func endChatSession() { chatVisible = false; cancelTopicGeneration() }
     func refreshConnectionStatus() {}
-    func healthData(tool: String, start: Date, end: Date) async throws -> [String: Any] { [:] }
+    func healthData(tool: String, start: Date, end: Date, includeDashboardObservations: Bool = false) async throws -> [String: Any] { [:] }
     let companionDataReader: ((String, [String: Any]) async throws -> [String: Any])?
     func readCompanionData(tool: String, args: [String: Any]) async throws -> [String: Any] {
         if let reader = companionDataReader { return try await reader(tool, args) }
@@ -63,8 +63,10 @@ import Combine
     }
     init(provider: CompanionProvider, stateStore: CompanionStateStore,
          cycleStore: CycleTrackingStore, cycleJournal: CycleJournalStore? = nil, keyReader: () throws -> String?,
+         dashboardHealthReader: ((String, Date, Date) async throws -> [String: Any])? = nil,
          companionDataReader: ((String, [String: Any]) async throws -> [String: Any])? = nil) {
         self.provider = provider
+        self.dashboardHealthReader = dashboardHealthReader
         store = stateStore
         self.cycleStore = cycleStore
         self.cycleJournal = cycleJournal ?? CycleJournalStore(url: stateStore.url.deletingLastPathComponent().appendingPathComponent("journal.json"))
@@ -110,6 +112,7 @@ xcrun swiftc -swift-version 5 -sdk "$task_sdk" \
     "$task_root/Loop/Companion/CycleNightscoutHistory.swift" \
     "$task_root/Loop/Models/GlucoseGraphSettings.swift" \
     "$task_root/Loop/Companion/CycleJournal.swift" \
+    "$task_root/Loop/Models/GlucoseStatistics.swift" \
     "$task_root/Loop/Companion/CompanionCore.swift" \
     "$task_root/Loop/Companion/CompanionProvider.swift" \
     "$task_temp/Tracker.swift" "$task_temp/Controller.swift" "$task_temp/Tests.swift" \

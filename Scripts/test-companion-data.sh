@@ -290,8 +290,16 @@ import Foundation
         let missingStatistics = try await controller.read("get_glucose_statistics")
         check(missingStatistics["status"] as? String == "not_loaded", "Missing long-term cache must stay unknown")
         GlucoseStatisticsLoader.shared.updatedAt = now
+        let previousDays = GlucoseStatisticsSettingsStore.shared.days
+        GlucoseStatisticsSettingsStore.shared.days = 3
+        defer { GlucoseStatisticsSettingsStore.shared.days = previousDays }
         let statistics = try await controller.read("get_glucose_statistics")
-        check((statistics["glucose"] as! [String: Any])["gmi_percent"] is NSNull, "Unavailable GMI must not become zero")
+        let expectedStart = GlucoseStatisticsLoader.shared.end.addingTimeInterval(-3 * 86400)
+        check(statistics["start"] as? String == CompanionDataContext.stamp(expectedStart), "Mochi statistics must match the selected Glucose-page period")
+        let metrics = statistics["glucose"] as! [String: Any]
+        check(metrics["gmi_percent"] is NSNull, "Unavailable GMI must not become zero")
+        check(metrics["estimated_hba1c_percent"] is NSNull, "Unavailable estimated HbA1c must not become zero")
+        check(metrics["below_70_fraction"] is NSNull, "Missing low-glucose history cannot authorize praise")
         print("PASS device access and in-flight consent revocation")
         print("PASS current CGM/pump lifecycle, reservoir and secret filtering")
         print("PASS production G6/G7 lifecycle adapters and grace-period distinction")
@@ -308,6 +316,7 @@ xcrun swiftc -swift-version 5 -sdk "$task_sdk" \
     "$task_root/Loop/Companion/CycleNightscoutHistory.swift" \
     "$task_root/Loop/Models/GlucoseGraphSettings.swift" \
     "$task_root/Loop/Models/GlucoseStatistics.swift" \
+    "$task_root/Loop/Models/GlucoseStatisticsSettings.swift" \
     "$task_root/Loop/Companion/CycleJournal.swift" \
     "$task_root/Loop/Companion/CompanionCore.swift" \
     "$task_root/Loop/Companion/CompanionProvider.swift" \

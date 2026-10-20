@@ -51,6 +51,7 @@ xcrun swiftc -swift-version 5 -sdk "$task_sdk" \
     "$task_root/Loop/Companion/CycleNightscoutHistory.swift" \
     "$task_root/Loop/Models/GlucoseGraphSettings.swift" \
     "$task_root/Loop/Companion/CycleJournal.swift" \
+    "$task_root/Loop/Models/GlucoseStatistics.swift" \
     "$task_root/Loop/Companion/CompanionCore.swift" "$task_temp/main.swift" \
     "$task_root/Loop/Companion/CompanionProvider.swift" \
     -o "$task_temp/companion-tests"
