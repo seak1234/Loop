@@ -272,7 +272,7 @@ struct CycleDailySummaryView: View {
             }
             DisclosureGroup("About these records") {
                 Text(sources)
-                Text("Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Predicted Glucose statistics settings. Missing means unknown. The trace retains one reading per 15 minutes.")
+                Text("Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Glucose → Settings. Missing means unknown. The trace retains one reading per 15 minutes.")
                 if summary.insulinIsPartial == true {
                     Text("Nightscout insulin shows logged boluses only. Basal delivery is not included.")
                 } else {

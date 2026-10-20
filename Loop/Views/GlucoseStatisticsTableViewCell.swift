@@ -20,7 +20,6 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
     }
 
     var onSelectDays: ((Int) -> Void)?
-    var onSettings: (() -> Void)?
     private let stack = UIStackView()
     private let card = UIView()
     private var dayButtons: [UIButton] = []
@@ -131,16 +130,6 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
         stack.addArrangedSubview(insulinLegend)
         reserveTwoLines(insulinNote)
         stack.addArrangedSubview(insulinNote)
-
-        let settings = UIButton(type: .system)
-        settings.setTitle("Range & data settings", for: .normal)
-        settings.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
-        settings.titleLabel?.adjustsFontForContentSizeCategory = true
-        settings.contentHorizontalAlignment = .leading
-        settings.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-        settings.accessibilityIdentifier = "glucoseStatisticsSettings"
-        settings.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
-        stack.addArrangedSubview(settings)
     }
 
     func configure(_ summary: Summary) {
@@ -191,8 +180,6 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
         updateSelectedDays(sender.tag)
         onSelectDays?(sender.tag)
     }
-
-    @objc private func openSettings() { onSettings?() }
 
     private func updateSelectedDays(_ days: Int) {
         for button in dayButtons {

@@ -86,7 +86,14 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         tableView.contentInset = UIEdgeInsets(top: 6, left: 0, bottom: 12, right: 0)
         updateDashboardBackgroundAppearance()
         tableView.register(GlucoseStatisticsTableViewCell.self, forCellReuseIdentifier: "GlucoseStatistics")
-        navigationItem.rightBarButtonItem = nil
+        title = NSLocalizedString("Glucose", comment: "Title of the glucose page")
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: NSLocalizedString("Settings", comment: "Button opening glucose range and data settings"),
+            style: .plain,
+            target: self,
+            action: #selector(showStatisticsSettings)
+        )
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "glucoseStatisticsSettings"
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(self, action: #selector(refreshStatistics), for: .valueChanged)
         statistics.objectWillChange
@@ -380,7 +387,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
 
             // Apply this after the supporting copy so the graph heading keeps
             // the stronger dashboard hierarchy.
-            cell.setTitleLabelText(label: NSLocalizedString("Glucose", comment: "The title of the glucose and prediction graph"))
+            cell.setTitleLabelText(label: NSLocalizedString("Predicted Glucose", comment: "The title of the glucose prediction graph"))
 
             cell.addGestureRecognizer(charts.gestureRecognizer!)
 
@@ -527,7 +534,6 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
             self.statistics.refresh(manager: self.deviceManager)
             self.refreshStatisticsDisplay()
         }
-        cell.onSettings = { [weak self] in self?.showStatisticsSettings() }
         return cell
     }
 

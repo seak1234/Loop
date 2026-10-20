@@ -2354,133 +2354,139 @@
       }
     },
     "PA3-sP-cWY.title" : {
-      "comment" : "Class = \"UITableViewController\"; title = \"Predicted Glucose\"; ObjectID = \"PA3-sP-cWY\";",
+      "comment" : "Class = \"UITableViewController\"; title = \"Glucose\"; ObjectID = \"PA3-sP-cWY\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "سكر الدم المتوقع"
+            "value" : "قراءات السكر"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glukóza"
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Forventet blodsukker"
+            "value" : "Glukose"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vorhergesagter Blutzucker"
+            "value" : "Blutzucker"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Predicted Glucose"
+            "value" : "Glucose"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Glucosa Proyectada"
+            "value" : "Glucosa"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ennustettu glukoosi"
+            "value" : "Glukoosi"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prédiction de glycémie"
+            "value" : "Glycémie"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Predicted Glucose"
+            "value" : "Glucose"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Glicemia prevista"
+            "value" : "Glicemia"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "予想グルコース"
+            "value" : "血糖値"
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Forventet Blodsukker"
+            "value" : "Blodsukker"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voorspelde bloedsuiker"
+            "value" : "Glucose"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Przewidywany poziom cukru"
+            "value" : "Glukoza"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Glicose Prevista"
+            "value" : "Glicose"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Glicemie prognozată"
+            "value" : "Glicemia"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Предсказываемый СК"
+            "value" : "Глюкоза"
           }
         },
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Predpokladaná glykémia"
+            "value" : "Glykémia"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Förväntat glukosvärde"
+            "value" : "Glukos"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tahmini KŞ"
+            "value" : "Kan şekeri"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đường huyết được dự đoán"
+            "value" : "Đường huyết"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "预测的血糖"
+            "value" : "血糖"
           }
         }
       }

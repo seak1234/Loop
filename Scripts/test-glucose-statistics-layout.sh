@@ -71,22 +71,17 @@ for width: CGFloat in [320, 390, 430] {
     }
     checkCount += 1
     print("PASS persistent hierarchy and stable \(initialHeight)-point height at width \(width)")
-    var selected: Int?, openedSettings = false
+    var selected: Int?
     cell.onSelectDays = { selected = $0 }
-    cell.onSettings = { openedSettings = true }
     for days in [3, 7, 14, 30, 90] {
         let button = descendants(cell).first { $0.accessibilityIdentifier == "glucoseStatisticsPeriod\(days)" } as! UIButton
         // Exercise the registered UIKit target/actions without an app event loop.
         let actions = button.actions(forTarget: cell, forControlEvent: .touchUpInside) ?? []
         precondition(!actions.isEmpty)
         actions.forEach { _ = cell.perform(NSSelectorFromString($0), with: button) }
-        precondition(selected == days && button.isSelected && !openedSettings)
+        precondition(selected == days && button.isSelected)
     }
-    let settings = descendants(cell).first { $0.accessibilityIdentifier == "glucoseStatisticsSettings" } as! UIButton
-    let settingsActions = settings.actions(forTarget: cell, forControlEvent: .touchUpInside) ?? []
-    precondition(!settingsActions.isEmpty)
-    settingsActions.forEach { _ = cell.perform(NSSelectorFromString($0), with: settings) }
-    precondition(openedSettings)
+    precondition(!descendants(cell).contains { $0.accessibilityIdentifier == "glucoseStatisticsSettings" })
     checkCount += 1
     print("PASS day buttons select periods without opening settings at width \(width)")
     for loading in [true, false] {
