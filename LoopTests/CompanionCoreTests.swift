@@ -75,7 +75,7 @@ final class CompanionCoreTests: XCTestCase {
         var state = CompanionState()
         var history: [CompanionDashboardMessage] = []
         var subjects: [CompanionDashboardSubject] = []
-        for index in 0..<14 {
+        for index in 0..<8 {
             let date = now.addingTimeInterval(Double(index))
             let plan = CompanionDashboardPlan.next(state: state, history: history, allowed: [.motivation], canCelebrate: false, now: date)
             XCTAssertFalse(subjects.contains(plan.subject))
@@ -85,15 +85,58 @@ final class CompanionCoreTests: XCTestCase {
             state.dashboardRecentMessages = history
             state = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
         }
-        XCTAssertEqual(subjects.count, 14)
+        XCTAssertEqual(subjects.count, 8)
         XCTAssertTrue(subjects.contains(.littleAdventure))
         XCTAssertTrue(subjects.contains(.smallDelight))
         XCTAssertTrue(subjects.contains(.sharedT1D))
+        XCTAssertTrue(subjects.contains(.anticipation))
+        XCTAssertTrue(subjects.contains(.determination))
+        let retired: Set<CompanionDashboardSubject> = [.questions, .records, .perspective, .preferences, .routines, .privacy, .clarity, .effort]
+        XCTAssertTrue(retired.isDisjoint(with: subjects))
         let plan = CompanionDashboardPlan.next(state: state, history: state.dashboardRecentMessages ?? [], allowed: [.motivation], canCelebrate: false, now: now.addingTimeInterval(15))
         XCTAssertEqual(plan.subject, subjects.first)
         state.dashboardSubjectLastShown = [plan.subject.rawValue: now.addingTimeInterval(16)]
         let next = CompanionDashboardPlan.next(state: state, history: history, allowed: [.motivation], canCelebrate: false, now: now.addingTimeInterval(17))
         XCTAssertFalse(next.subject == plan.subject)
+    }
+
+    func testDashboardRejectsDetachedScreenReflections() throws {
+        let rejected = [
+            "A screen only catches tiny glimpses of real life, never the whole picture.",
+            "Good morning! A single reading is one moment, not the whole picture.",
+            "Your graph only shows glimpses of your life, Michelle.",
+            "Numbers can't tell the whole story.",
+            "A single reading is only part of your life."
+        ]
+        let accepted = [
+            "Your next goal has my full support. My balance is less reliable, but the support is excellent.",
+            "One tiny heart for you. Slightly squished from all the hugs.",
+            "Recent readings are in target. A little happy dance is definitely happening.",
+            "The sensor isn't sending readings. Let's check its reported status together."
+        ]
+        for text in rejected + accepted {
+            let raw = String(decoding: try JSONEncoder().encode(["text": text, "kind": "motivation", "question": "Can we talk about this?"]), as: UTF8.self)
+            if rejected.contains(text) {
+                XCTAssertTrue(CompanionDashboardVoice.isDetachedReflection(text))
+                XCTAssertThrowsError(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.motivation], factID: "", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
+            } else {
+                XCTAssertNoThrow(try CompanionDashboardSuggestion.decode(raw, allowedKinds: [.motivation], factID: "", topicIDs: [], recentTexts: [], name: "Michelle", useName: true))
+            }
+        }
+    }
+
+    func testCheeringPropsDoNotReplaceOneRepeatedMessageWithAnother() {
+        let recent = ["Absolutely rooting for you. Made a whole banner. Briefly got trapped in it."]
+        XCTAssertTrue(CompanionMessageVariety.isDashboardRepeat("Today's cheering section is tiny but wildly enthusiastic. The pom-poms are bigger than me.", recent: recent, name: ""))
+        XCTAssertFalse(CompanionMessageVariety.isDashboardRepeat("I saved you the comfy spot. Testing it took most of my afternoon.", recent: recent, name: ""))
+    }
+
+    func testEarlierDashboardVoiceIsInvalidatedAfterUpdate() {
+        var message = CompanionDashboardMessage(text: "A screen only catches tiny glimpses of real life, never the whole picture.",
+            generatedAt: now, includesHealthData: false, kind: .motivation, subject: .perspective)
+        message.styleVersion = 18
+        XCTAssertFalse(CompanionDashboardRefresh.isDisplayable(message, now: now))
+        XCTAssertTrue(CompanionDashboardRefresh.isDue(message: message, lastAttempt: nil, dataChanged: false, now: now))
     }
 
     func testGlucosePraiseHasACooldownAndRequiresEvidence() {
@@ -128,7 +171,7 @@ final class CompanionCoreTests: XCTestCase {
 
     func testStoryCallbacksAreOccasionalAndUseAnActualEarlierDay() {
         var state = CompanionState()
-        state.dashboardSubjectLastShown = [CompanionDashboardSubject.questions.rawValue: now]
+        state.dashboardSubjectLastShown = [CompanionDashboardSubject.anticipation.rawValue: now]
         let story = CompanionDashboardMessage(text: "My tiny sign fell over.", generatedAt: now.addingTimeInterval(-86400),
             includesHealthData: false, kind: .motivation, subject: .littleAdventure)
         state.rememberCharacterStory(story)
@@ -167,6 +210,9 @@ final class CompanionCoreTests: XCTestCase {
                 let message = CompanionMessageVariety.dashboardFallback(index: index, name: "Michelle", morning: morning)
                 XCTAssertTrue(message.text.components(separatedBy: "Michelle").count <= 2)
                 XCTAssertTrue(CompanionDashboardRefresh.isConcise(message.text))
+                XCTAssertFalse(CompanionDashboardVoice.isDetachedReflection(message.text))
+                let retired: Set<CompanionDashboardSubject> = [.questions, .records, .perspective, .preferences, .routines, .privacy, .clarity, .effort]
+                XCTAssertFalse(message.subject.map { retired.contains($0) } ?? true)
                 XCTAssertTrue(message.subject != nil)
                 if morning { XCTAssertTrue(message.text.hasPrefix("Good morning, Michelle!")) }
                 else {
@@ -461,7 +507,7 @@ final class CompanionCoreTests: XCTestCase {
         XCTAssertEqual(personal.subject, .dailyLife)
         let welcome = CompanionDashboardPlan.next(state: state, history: [], allowed: [.motivation], canCelebrate: false, now: now)
         XCTAssertEqual(welcome.kinds, [.motivation])
-        XCTAssertEqual(welcome.subject, .questions)
+        XCTAssertEqual(welcome.subject, .anticipation)
         XCTAssertNil(welcome.fact)
         let win = CompanionDashboardPlan.next(state: state, history: [], allowed: [.motivation, .insight], canCelebrate: true, now: now)
         XCTAssertEqual(win.subject, .glucoseWins)

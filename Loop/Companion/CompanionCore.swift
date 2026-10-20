@@ -440,6 +440,7 @@ enum CompanionMessageVariety {
         if contains(["leave a note", "jot", "write it", "journal", "capture a detail", "saved note"]) { themes.insert("notes") }
         if contains(["too technical", "too long", "short answer", "explanations", "explanation style"]) { themes.insert("preferences") }
         if contains(["share", "private", "privacy"]) && contains(["details", "choose", "decide", "control"]) { themes.insert("privacy") }
+        if contains(["banner", "pom pom", "pompom"]) { themes.insert("cheering-props") }
         return themes
     }
 
@@ -452,30 +453,30 @@ enum CompanionMessageVariety {
     static func dashboardFallback(index: Int, name: String, morning: Bool, recent: [String] = []) -> CompanionDashboardSuggestion {
         let useName = CompanionDashboardNaming.canUseName(name, index: index, morning: morning, recent: recent)
         let options: [(String, String, CompanionDashboardSubject)] = [
-            ("Your questions belong here, even before you've found all the words.", "Can you help me put a question into words?", .questions),
+            ("A little curiosity and a very enthusiastic teammate. Let's see what we can make of today.", "Can we find something to look forward to?", .anticipation),
             ("I built a blanket fort. The roof is now a blanket floor.", "What happened to your blanket fort?", .littleAdventure),
             ("Today's cheering section is tiny but wildly enthusiastic. The pom-poms are bigger than me.", "Can we share a little bright moment?", .smallDelight),
-            ("A single reading is one moment, not the whole picture.", "Can we put a reading in context?", .perspective),
-            ("Tell me when my explanations are too long or too technical.", "Can we adjust how you explain things?", .preferences),
+            ("Your next goal has my full support. My balance is less reliable, but the support is excellent.", "Can we talk about a goal that matters to me?", .agency),
+            ("Learning takes practice, not perfection. You get encouragement for the wobbly bits, too.", "Can you encourage me while I learn?", .kindness),
             ("I saved you the comfy spot. Testing it took most of my afternoon.", "Can we have a quiet moment in the comfy spot?", .companionship),
-            ("Care can have a place in your day alongside the things you look forward to.", "Can we talk about fitting care into everyday life?", .routines),
+            ("Let's give the next try a chance. We can adjust the plan as we learn.", "Can we think through a fresh approach?", .determination),
             ("You deserve kindness at every step. Yes, even the wobbly ones. Especially those.", "How can I speak to myself more kindly?", .kindness),
-            ("The details you share here are your choice.", "Which details can I choose to share?", .privacy),
-            ("T1D is part of my little story, too. There's room here for the rest of yours.", "Can we talk about something besides diabetes?", .sharedT1D),
-            ("We can put a confusing detail into plain words.", "Can you explain something I find confusing?", .clarity),
-            ("Your own observations can be worth capturing, even before they make sense.", "Can I describe something I've noticed?", .records),
+            ("T1D in my little world, too. Big plans beyond it. Yours are very welcome here.", "Can we talk about my hopes beyond diabetes?", .sharedT1D),
+            ("Hoping something makes you grin today. Until then, please enjoy this deeply uncoordinated wave.", "How did your enthusiastic wave go?", .anticipation),
+            ("Pick something that matters to you. I'll supply the enthusiasm. No assembly required.", "Can we talk about something I want to do?", .agency),
+            ("You don't have to impress me. I'm already in your corner, taking up almost no space.", "Can we have a little encouragement?", .kindness),
             ("I made a tiny flag. It fell over. The expedition remains optimistic.", "Where is your tiny expedition going?", .littleAdventure),
-            ("Your goals are worth rooting for. Let's give the next small step a very big cheer.", "Can we start with my priorities?", .agency),
-            ("There's a person beyond what this screen can describe.", "Can we put these numbers in everyday context?", .perspective),
+            ("Big things can start with a very ordinary first try. Let's see what we can figure out.", "Can we find a place to start?", .determination),
+            ("A little company for whatever comes next. Scooting over. Scooting too far. Back again.", "Can we sit together for a moment?", .companionship),
             ("Your tiny cheerleader made a banner. It's mostly hearts and a very enthusiastic spelling mistake.", "What's on your little banner?", .smallDelight),
             ("Absolutely rooting for you. Made a whole banner. Briefly got trapped in it.", "Can I just talk for a moment?", .companionship),
-            ("Everyday life deserves a place in the conversation about care.", "Can we talk about everyday life with diabetes?", .routines),
-            ("Small steps count. They don't have to look impressive to deserve a very enthusiastic little cheer.", "Can we talk about self-kindness?", .kindness),
-            ("You control how much personal detail you bring into a conversation.", "Can we talk about my sharing settings?", .privacy),
+            ("Something to look forward to counts, too. What's one thing you'd love to make time for?", "Can we talk about something I'm looking forward to?", .anticipation),
+            ("You deserve encouragement before the finish line, too. Cheering section officially open.", "Can I have some encouragement before I start?", .kindness),
+            ("Your plans don't have to be grand to matter. Mine involves a cushion. Deeply invested.", "Can we talk about my plans?", .agency),
             ("One tiny heart for you. Slightly squished from all the hugs.", "Tell me about your squished little heart?", .smallDelight),
-            ("We can untangle a puzzling term without making it a whole lesson.", "Can you explain a term I don't understand?", .clarity),
-            ("A note can hold a detail you'd rather not have to remember.", "Can I save a detail for later?", .records),
-            ("There's room here for the question that never fits into a quick appointment.", "Can I ask something I haven't had time to discuss?", .questions)
+            ("We can ask, learn, and try a different approach. Plenty of ways to move forward together.", "Can we explore a different approach together?", .determination),
+            ("On your side, with a pocketful of affection. Had to leave the pockets at home. Brought the affection.", "Can we share a little company?", .companionship),
+            ("My little story has T1D in it. Also adventures, big hopes, and a suspiciously ambitious blanket fort.", "What are your big blanket-fort plans?", .sharedT1D)
         ]
         func message(_ offset: Int) -> CompanionDashboardSuggestion {
             let position = offset % options.count
@@ -857,6 +858,25 @@ enum CompanionPersona {
     """
 }
 
+/// Dashboard voice is more specific than the shared conversational persona.
+enum CompanionDashboardVoice {
+    static let instructions = """
+    This bubble is a little message from Mochi to someone it is excited to support. Give it an emotional purpose: spark a smile, make starting feel possible, offer affectionate company or celebrate a supported positive. Speak directly and warmly, with a concrete gesture, playful detail or useful encouragement. Quiet affection is welcome; detached reflections and app-help notices are not the default. Do not spend the whole message explaining that screens, graphs or numbers cannot describe a person's life. Do not turn the bubble into privacy reminders, invitations to choose an explanation style or generic offers to ask a question; those belong in settings or requested conversation.
+    Voice calibration: "A screen only catches tiny glimpses of real life, never the whole picture" is too detached. "Your priorities can lead this conversation" is too administrative. "Every little step matters" alone is a stock slogan. Bring Mochi's affection and personality into the actual words instead. Examples of the desired energy: "Your next goal has my full support. My balance is less reliable, but the support is excellent."; "A whole new day! So many possibilities. First challenge: getting out from under this very persuasive blanket."; "You deserve encouragement before the finish line, too. Cheering section officially open."; "One tiny heart for you. Slightly squished from all the hugs." These are tone references, not a script. Invent fresh moments and vary the imagery; do not keep returning to banners, pom-poms, tiny steps or the same joke. For a real health or device concern, be useful, clear and supportive rather than adding a joke.
+    """
+
+    /// Reject the specific family of detached screen/whole-picture reflections
+    /// reported by the user. This is not a general measure of tone quality.
+    static func isDetachedReflection(_ text: String) -> Bool {
+        let normalized = text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        let words = Set(normalized.split(separator: " ").map(String.init))
+        let hasDisplaySubject = !words.isDisjoint(with: ["screen", "screens", "graph", "graphs", "chart", "charts", "reading", "readings", "number", "numbers"])
+        return hasDisplaySubject && ["whole picture", "whole story", "glimpse", "part of your life", "more than your", "beyond what this screen"]
+            .contains { normalized.contains($0) }
+    }
+}
+
 /// Stable subjects group paraphrases of the same idea; no health values are stored here.
 enum CompanionDashboardSubject: String, Codable, CaseIterable {
     case effort, learning, routines, mealPatterns, smallNumbers, records, sleep, movement, stress, cycle
@@ -865,13 +885,16 @@ enum CompanionDashboardSubject: String, Codable, CaseIterable {
     case questions, perspective, kindness, agency, companionship, preferences, privacy, clarity
     case littleAdventure, smallDelight, sharedT1D
     case deviceStatus
+    case anticipation, determination
 
     var isCharacterStory: Bool { self == .littleAdventure || self == .smallDelight }
 
     var guidance: String {
         switch self {
         case .questions: return "Make space for a question the user wants to ask, even if it isn't fully formed. No care-work praise, lesson or generic welcome."
-        case .perspective: return "Offer perspective on a screen showing only part of someone's life. No claims about today's readings or effort."
+        case .perspective: return "Express direct encouragement about possibilities beyond a difficult moment. No abstract reflections about screens, numbers or the whole picture; no claims about today's readings or effort."
+        case .anticipation: return "Bring cheerful anticipation: something to look forward to, curiosity about a new day or affectionate excitement for the user's hopes. Use a concrete playful detail or direct personal encouragement, not a vague quote about life. Do not promise an outcome or invent the user's plans."
+        case .determination: return "Help starting or trying again feel possible, with warm confidence in learning and trying approaches together. Speak directly to the user. No assumed setback, invented achievement, treatment instruction or pressure to be productive. Avoid stock small-steps slogans."
         case .kindness: return "Offer confident, warm encouragement: the user deserves kindness while learning and taking steps toward what matters. Bring hope without requiring perfection or a cheerful mood. Do not assume distress or praise unseen achievements."
         case .agency: return "Help the user feel capable of choosing what matters next. Root wholeheartedly for their goals and make a small next step feel worth taking. Avoid assigning homework or repeating an offer to review readings."
         case .companionship: return "Offer affectionate company that shows Mochi is wholeheartedly rooting for the user, perhaps through an enthusiastic or quietly thoughtful imaginary gesture. Let it stand without a lesson, problem to solve or demand for a reply."
@@ -926,8 +949,8 @@ struct CompanionDashboardPlan {
         // Rotate distinct purposes, using persisted exposure as well as recent copy.
         // Character moments can stand on their own, without a care task or lesson.
         // Public discoveries and learning topics are never selected for this bubble.
-        var subjects: [CompanionDashboardSubject] = [.questions, .littleAdventure, .companionship, .smallDelight,
-            .records, .agency, .sharedT1D, .perspective, .preferences, .routines, .kindness, .privacy, .clarity, .effort]
+        var subjects: [CompanionDashboardSubject] = [.anticipation, .littleAdventure, .companionship, .smallDelight,
+            .agency, .sharedT1D, .kindness, .determination]
         if allowed.contains(.insight) { subjects.insert(.dailyLife, at: 0) }
         if allowed.contains(.insight) && canCelebrate { subjects.insert(.glucoseWins, at: 0) }
         if allowed.contains(.insight) && deviceAttention { subjects.insert(.deviceStatus, at: 0) }
@@ -968,6 +991,7 @@ struct CompanionDashboardSuggestion: Decodable {
         guard raw.utf8.count <= 8000, let data = raw.data(using: .utf8),
               let value = try? JSONDecoder().decode(Self.self, from: data),
               allowedKinds.contains(value.kind), CompanionDashboardRefresh.isConcise(value.text),
+              (value.kind != .motivation || !CompanionDashboardVoice.isDetachedReflection(value.text)),
               !value.text.contains("\n"), !value.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               value.question.count <= 180, value.question.split(whereSeparator: \.isWhitespace).count <= 30,
               !value.question.contains("\n"),
@@ -1020,7 +1044,7 @@ enum CompanionDashboardGreeting {
 }
 
 enum CompanionDashboardRefresh {
-    static let styleVersion = 18
+    static let styleVersion = 19
     static let maximumCharacters = 140
     static let maximumWords = 24
 
