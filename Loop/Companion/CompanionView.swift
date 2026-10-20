@@ -204,7 +204,7 @@ struct CompanionCycleCard: View {
     @State private var phaseCards: [CompanionCycleCardPhase: CompanionCycleCardMessage] = [:]
     @State private var now = Date()
     @State private var fallbackIndex = Int.random(in: 0..<8)
-    @State private var discussion: CompanionCycleCardMessage?
+    @State private var showsChat = false
     private let dayTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var phase: CompanionCycleCardPhase { controller.cycleCardPhase(on: now) }
@@ -219,7 +219,7 @@ struct CompanionCycleCard: View {
     }
 
     var body: some View {
-        Button { discussion = message } label: {
+        Button { showsChat = true } label: {
             MochiCycleSpeechBubbleLabel(text: message.text)
         }
         .buttonStyle(.plain)
@@ -233,15 +233,15 @@ struct CompanionCycleCard: View {
         .onReceive(dayTimer) { now = $0 }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in now = Date() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in now = Date() }
-        .sheet(item: $discussion) { topic in
-            CompanionCycleChat(openingQuestion: topic.question)
+        .sheet(isPresented: $showsChat) {
+            CompanionCycleChat()
         }
     }
 }
 
 @MainActor
 struct CompanionCycleChat: View {
-    let openingQuestion: String
+    let openingQuestion: String?
     @ObservedObject private var controller: CompanionController
     @StateObject private var conversation: CompanionCycleConversation
     @ObservedObject private var journal = CycleJournalStore.shared
@@ -249,7 +249,7 @@ struct CompanionCycleChat: View {
     @State private var input = ""
     @State private var showsSettings = false
 
-    init(openingQuestion: String, controller: CompanionController? = nil) {
+    init(openingQuestion: String? = nil, controller: CompanionController? = nil) {
         let controller = controller ?? .shared
         self.openingQuestion = openingQuestion
         self.controller = controller
@@ -335,8 +335,8 @@ struct CompanionCycleChat: View {
         .navigationViewStyle(.stack)
         .tint(MochiStyle.blue)
         .task(id: controller.hasKey) {
-            if controller.hasKey { conversation.start(openingQuestion) }
-            else { conversation.cancel() }
+            if !controller.hasKey { conversation.cancel() }
+            else if let openingQuestion { conversation.start(openingQuestion) }
         }
         .onDisappear { conversation.cancel() }
         .onChange(of: controller.state.allowHealthData) { allowed in
