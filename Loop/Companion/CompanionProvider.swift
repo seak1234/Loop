@@ -65,6 +65,41 @@ protocol CompanionProvider {
 
 extension CompanionProvider {
     func discover(model: String, reasoningEffort: CompanionReasoningEffort, now: Date, excluding: [String]) async throws -> [CompanionDashboardFact] { [] }
+
+    /// At most two drafts; ordinary drafts also need an independent voice review.
+    /// Review receives only the proposed visible text and subject, not health/chat context.
+    func dashboardSuggestion(model: String, reasoningEffort: CompanionReasoningEffort, messages initialMessages: [[String: Any]],
+                             plan: CompanionDashboardPlan, topicIDs: Set<UUID>, recentTexts: [String], recentQuestions: [String],
+                             name: String, useName: Bool, morningGreetingRequired: Bool) async throws -> CompanionDashboardSuggestion? {
+        var messages = initialMessages
+        for attempt in 0..<2 {
+            try Task.checkCancellation()
+            let draft = try await complete(model: model, reasoningEffort: reasoningEffort, messages: messages, tools: [])
+            try Task.checkCancellation()
+            guard draft.calls.isEmpty else { return nil }
+            if let candidate = try? CompanionDashboardSuggestion.decode(draft.text, allowedKinds: plan.kinds, factID: plan.fact?.id ?? "",
+                topicIDs: topicIDs, recentTexts: recentTexts, name: name, useName: useName, morningGreetingRequired: morningGreetingRequired),
+               !CompanionMessageVariety.isRepeat(candidate.question, recent: recentQuestions, name: name) {
+                // Clinical observations stay clear and supportive without a requirement for upbeat copy.
+                if !CompanionDashboardVoice.requiresReview(subject: plan.subject, kind: candidate.kind) { return candidate }
+                let quotedDraft = try JSONSerialization.data(withJSONObject: ["text": candidate.text, "subject": plan.subject.rawValue])
+                do {
+                    let review = try await complete(model: model, reasoningEffort: reasoningEffort, messages: [
+                        ["role": "system", "content": CompanionDashboardVoice.reviewInstructions],
+                        ["role": "user", "content": String(decoding: quotedDraft, as: UTF8.self)]
+                    ], tools: [])
+                    try Task.checkCancellation()
+                    if review.calls.isEmpty, CompanionDashboardVoice.Review.accepts(review.text, text: candidate.text) { return candidate }
+                } catch is CancellationError { throw CancellationError() }
+                catch { return nil } // No unreviewed draft on review/network failure; caller uses the local pool.
+            }
+            if attempt == 0 {
+                messages.append(["role": "assistant", "content": draft.text])
+                messages.append(["role": "user", "content": "The draft failed format, novelty or voice review. For an ordinary message, put substantive confidence, hope or anticipation directly into the words addressed to the user. A cute scene, affection or 'rooting for you' alone is insufficient. Change the underlying encouraging idea and imagery. Keep clinical observations clear and grounded. Follow subject_guidance, evidence, name-frequency and length rules; preserve the required morning greeting when applicable."])
+            }
+        }
+        return nil
+    }
 }
 
 struct OpenRouterCompanionProvider: CompanionProvider {

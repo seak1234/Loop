@@ -6,6 +6,143 @@ import XCTest
 #endif
 
 final class CompanionCoreTests: XCTestCase {
+    private final class DashboardVoiceProvider: CompanionProvider {
+        var replies: [Result<CompanionCompletion, Error>]
+        var requests: [[[String: Any]]] = []
+
+        init(_ replies: [Result<CompanionCompletion, Error>]) { self.replies = replies }
+
+        func complete(model: String, reasoningEffort: CompanionReasoningEffort, messages: [[String: Any]], tools: [[String: Any]]) async throws -> CompanionCompletion {
+            XCTAssertTrue(tools.isEmpty)
+            requests.append(messages)
+            guard !replies.isEmpty else { throw CompanionError.invalid("Unexpected extra model call.") }
+            return try replies.removeFirst().get()
+        }
+    }
+
+    private func dashboardDraft(_ text: String, kind: String = "motivation") throws -> CompanionCompletion {
+        let json = try JSONSerialization.data(withJSONObject: ["text": text, "kind": kind, "question": "Can we talk about this?"])
+        return CompanionCompletion(message: [:], text: String(decoding: json, as: UTF8.self), calls: [])
+    }
+
+    private func voiceReview(impact: String = "confidence", encouragement: String, energizing: Bool = true,
+                             grounded: Bool = true, natural: Bool = true) throws -> CompanionCompletion {
+        let json = try JSONSerialization.data(withJSONObject: ["impact": impact, "encouragement": encouragement,
+            "energizing": energizing, "grounded": grounded, "natural": natural])
+        return CompanionCompletion(message: [:], text: String(decoding: json, as: UTF8.self), calls: [])
+    }
+
+    private func reviewedSuggestion(_ provider: DashboardVoiceProvider, subject: CompanionDashboardSubject = .companionship) async throws -> CompanionDashboardSuggestion? {
+        try await provider.dashboardSuggestion(model: "test-model", reasoningEffort: .providerDefault,
+            messages: [["role": "user", "content": "synthetic private context, not for voice review"]],
+            plan: CompanionDashboardPlan(subject: subject, kinds: [.motivation, .insight], fact: nil, callbackStory: nil),
+            topicIDs: [], recentTexts: [], recentQuestions: [], name: "Michelle", useName: true, morningGreetingRequired: false)
+    }
+
+    func testPassiveDraftIsReplacedOnlyAfterSubstantiveVoiceReview() async throws {
+        let passive = "Hey Michelle, I smoothed out a tiny leaf blanket for us tonight. Just here rooting for you, very quietly."
+        let optimistic = "You can learn tricky things without getting them right first time. Tiny teammate, enormous enthusiasm."
+        let provider = DashboardVoiceProvider([
+            .success(try dashboardDraft(passive)),
+            .success(try voiceReview(impact: "none", encouragement: "", energizing: false)),
+            .success(try dashboardDraft(optimistic)),
+            .success(try voiceReview(encouragement: "You can learn tricky things without getting them right first time."))
+        ])
+        let result = try await reviewedSuggestion(provider)
+        XCTAssertEqual(result?.text, optimistic)
+        XCTAssertEqual(provider.requests.count, 4)
+        for request in [provider.requests[1], provider.requests[3]] {
+            XCTAssertEqual(request.first?["content"] as? String, CompanionDashboardVoice.reviewInstructions)
+            let quoted = try JSONSerialization.jsonObject(with: Data((request.last?["content"] as! String).utf8)) as! [String: String]
+            XCTAssertEqual(Set(quoted.keys), Set(["text", "subject"]))
+            XCTAssertFalse(quoted.values.contains { $0.contains("synthetic private context") })
+        }
+    }
+
+    func testVoiceReviewFailureNeverDisplaysAnUnreviewedDraft() async throws {
+        let draft = try dashboardDraft("A little company for whatever comes next. Scooting over. Scooting too far. Back again.")
+        let invalidReviews: [Result<CompanionCompletion, Error>] = [
+            .success(CompanionCompletion(message: [:], text: "not JSON", calls: [])),
+            .failure(CompanionError.invalid("Synthetic review failure"))
+        ]
+        for review in invalidReviews {
+            let provider = DashboardVoiceProvider([.success(draft), review,
+                .success(draft), .success(try voiceReview(impact: "none", encouragement: "", energizing: false))])
+            let result = try await reviewedSuggestion(provider)
+            XCTAssertNil(result)
+            let fallback = result ?? CompanionMessageVariety.dashboardFallback(index: 0, name: "", morning: false)
+            XCTAssertFalse(fallback.text == "A little company for whatever comes next. Scooting over. Scooting too far. Back again.")
+            XCTAssertTrue(CompanionDashboardRefresh.isConcise(fallback.text))
+            XCTAssertTrue(provider.requests.count <= 4)
+        }
+    }
+
+    func testVoiceReviewRetriesAreBoundedAndRequireAnActualEncouragingSpan() async throws {
+        let passive = try dashboardDraft("Just here rooting for you, very quietly.")
+        let fabricatedEvidence = try voiceReview(encouragement: "You can learn something new.")
+        let provider = DashboardVoiceProvider([.success(passive), .success(fabricatedEvidence), .success(passive), .success(fabricatedEvidence)])
+        let result = try await reviewedSuggestion(provider)
+        XCTAssertNil(result)
+        XCTAssertEqual(provider.requests.count, 4)
+        XCTAssertTrue(provider.replies.isEmpty)
+        for review in [
+            try voiceReview(impact: "none", encouragement: "You can learn.").text,
+            try voiceReview(encouragement: "You can learn.", energizing: false).text,
+            try voiceReview(encouragement: "You can learn.", grounded: false).text,
+            try voiceReview(encouragement: "You can learn.", natural: false).text,
+            try voiceReview(encouragement: "").text
+        ] {
+            XCTAssertFalse(CompanionDashboardVoice.Review.accepts(review, text: "You can learn."))
+        }
+    }
+
+    func testClinicalObservationsDoNotNeedToSoundEnergizing() async throws {
+        let text = "The sensor reports a warning. Its status needs attention."
+        for subject in [CompanionDashboardSubject.dailyLife, .deviceStatus, .glucoseWins] {
+            let provider = DashboardVoiceProvider([.success(try dashboardDraft(text, kind: "insight"))])
+            let result = try await reviewedSuggestion(provider, subject: subject)
+            XCTAssertEqual(result?.text, text)
+            XCTAssertEqual(provider.requests.count, 1)
+        }
+    }
+
+    func testOrdinaryCopyOnAHealthTopicStillNeedsVoiceReview() async throws {
+        let draft = try dashboardDraft("Just here rooting for you, very quietly.")
+        let review = try voiceReview(impact: "none", encouragement: "", energizing: false)
+        let provider = DashboardVoiceProvider([.success(draft), .success(review), .success(draft), .success(review)])
+        let result = try await reviewedSuggestion(provider, subject: .dailyLife)
+        XCTAssertNil(result)
+        XCTAssertEqual(provider.requests.count, 4)
+    }
+
+    func testVoiceReviewCancellationStopsRetries() async throws {
+        let provider = DashboardVoiceProvider([.success(try dashboardDraft("You can learn tricky things. Your tiny teammate is excited.")), .failure(CancellationError())])
+        do {
+            _ = try await reviewedSuggestion(provider)
+            XCTAssertTrue(false)
+        } catch is CancellationError { }
+        catch { XCTAssertTrue(false) }
+        XCTAssertEqual(provider.requests.count, 2)
+    }
+
+    func testOldBuiltInPersonalityMigratesWithoutReplacingCustomPreferences() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("state.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = CompanionStateStore(url: url)
+        let old = "Talk like a kind, down-to-earth friend. Use simple words, contractions and a little gentle humor when it fits. Help me make sense of diabetes without lecturing, canned pep talks or guilt."
+        for personality in [old, "Use short answers and no emojis. Give me quiet company when I request it."] {
+            var state = CompanionState()
+            state.personality = personality
+            state.preferredName = "A saved name"
+            state.allowHealthData = true
+            try store.save(state)
+            let loaded = try store.load()
+            XCTAssertEqual(loaded.personality, personality == old ? CompanionPersona.defaultPreferences : personality)
+            XCTAssertEqual(loaded.preferredName, "A saved name")
+            XCTAssertTrue(loaded.allowHealthData)
+        }
+    }
+
     func testDeviceFreshnessRejectsMissingFutureAndStaleDates() {
         XCTAssertEqual(CompanionDataContext.freshness(nil, now: now)["is_fresh"] as? Bool, false)
         XCTAssertEqual(CompanionDataContext.freshness(now.addingTimeInterval(1), now: now)["is_fresh"] as? Bool, false)
@@ -134,7 +271,7 @@ final class CompanionCoreTests: XCTestCase {
     func testEarlierDashboardVoiceIsInvalidatedAfterUpdate() {
         var message = CompanionDashboardMessage(text: "A screen only catches tiny glimpses of real life, never the whole picture.",
             generatedAt: now, includesHealthData: false, kind: .motivation, subject: .perspective)
-        message.styleVersion = 18
+        message.styleVersion = 19
         XCTAssertFalse(CompanionDashboardRefresh.isDisplayable(message, now: now))
         XCTAssertTrue(CompanionDashboardRefresh.isDue(message: message, lastAttempt: nil, dataChanged: false, now: now))
     }

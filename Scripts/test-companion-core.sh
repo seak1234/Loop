@@ -40,9 +40,9 @@ func XCTAssertThrowsError<T>(_ body: @autoclosure () throws -> T, file: StaticSt
 }
 '''
 runner = '\nlet suite = CompanionCoreTests()\n'
-tests = re.findall(r'func (test\w+)\(\)( throws)?', source)
-for name, throws in tests:
-    runner += ('try ' if throws else '') + 'suite.' + name + '()\nprint("PASS ' + name + '")\n'
+tests = re.findall(r'func (test\w+)\(\)( async)?( throws)?', source)
+for name, asynchronous, throws in tests:
+    runner += ('try ' if throws else '') + ('await ' if asynchronous else '') + 'suite.' + name + '()\nprint("PASS ' + name + '")\n'
 runner += f'print("Passed {len(tests)} companion core checks.")\n'
 (out / 'main.swift').write_text(harness + source + runner)
 PY
