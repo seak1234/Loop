@@ -95,7 +95,7 @@ extension CompanionProvider {
             }
             if attempt == 0 {
                 messages.append(["role": "assistant", "content": draft.text])
-                messages.append(["role": "user", "content": "The draft failed format, novelty or voice review. For an ordinary message, put substantive confidence, hope or anticipation directly into the words addressed to the user. A cute scene, affection or 'rooting for you' alone is insufficient. Change the underlying encouraging idea and imagery. Keep clinical observations clear and grounded. Follow subject_guidance, evidence, name-frequency and length rules; preserve the required morning greeting when applicable."])
+                messages.append(["role": "user", "content": "The draft failed format, novelty or voice review. For an ordinary message, give direct praise or a playful, confident cheer to the user. You're amazing, You've got this and Choo choo, you're unstoppable today are welcome; no achievement evidence, lesson or detailed justification is needed for broad affirmations. A passive scene alone is insufficient. Vary the cheer and imagery. Never claim that Mochi has T1D or a personal medical condition. Keep clinical observations clear and grounded. Follow subject_guidance, evidence, name-frequency and length rules; preserve the required morning greeting when applicable."])
             }
         }
         return nil

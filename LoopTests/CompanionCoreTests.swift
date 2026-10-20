@@ -39,6 +39,45 @@ final class CompanionCoreTests: XCTestCase {
             topicIDs: [], recentTexts: [], recentQuestions: [], name: "Michelle", useName: true, morningGreetingRequired: false)
     }
 
+    func testDirectAffirmationsAreAcceptedWithoutAnAchievementOrLesson() async throws {
+        for text in ["You are amazing!", "You're amazing!", "You got this!", "You've got this!", "Choo choo! You're unstoppable today!"] {
+            let provider = DashboardVoiceProvider([
+                .success(try dashboardDraft(text)),
+                .success(try voiceReview(impact: "affirmation", encouragement: text))
+            ])
+            let result = try await reviewedSuggestion(provider, subject: .pepTalk)
+            XCTAssertEqual(result?.text, text)
+            XCTAssertEqual(provider.requests.count, 2)
+        }
+    }
+
+    func testRetiredT1DIdentityLoadsButCannotReturnThroughRotationOrCallbacks() throws {
+        var legacy = CompanionDashboardMessage(text: "T1D is in my little story, too.", generatedAt: now,
+            includesHealthData: false, kind: .motivation, subject: .sharedT1D)
+        legacy.styleVersion = 20
+        var state = CompanionState()
+        state.dashboardRecentMessages = [legacy]
+        state = try JSONDecoder().decode(CompanionState.self, from: JSONEncoder().encode(state))
+        XCTAssertEqual(state.dashboardRecentMessages?.first?.subject, .sharedT1D)
+        XCTAssertFalse(CompanionDashboardRefresh.isDisplayable(state.dashboardRecentMessages!.first!, now: now))
+        state.dashboardSubjectLastShown = Dictionary(uniqueKeysWithValues: CompanionDashboardSubject.allCases
+            .filter { $0 != .littleAdventure }.map { ($0.rawValue, now) })
+        var story = CompanionDashboardMessage(text: "A retired imaginary T1D story.", generatedAt: now.addingTimeInterval(-86400),
+            includesHealthData: false, kind: .motivation, subject: .littleAdventure)
+        story.styleVersion = 20
+        state.rememberCharacterStory(story)
+        state.dashboardAdventureCount = 2
+        let plan = CompanionDashboardPlan.next(state: state, history: [], allowed: [.motivation], canCelebrate: false, now: now)
+        XCTAssertEqual(plan.subject, .littleAdventure)
+        XCTAssertNil(plan.callbackStory)
+        for index in 0..<24 {
+            let fallback = CompanionMessageVariety.dashboardFallback(index: index, name: "", morning: false)
+            XCTAssertFalse(fallback.text.localizedCaseInsensitiveContains("T1D"))
+            XCTAssertFalse(fallback.text.localizedCaseInsensitiveContains("diabetes"))
+            XCTAssertFalse(fallback.subject == .sharedT1D)
+        }
+    }
+
     func testPassiveDraftIsReplacedOnlyAfterSubstantiveVoiceReview() async throws {
         let passive = "Hey Michelle, I smoothed out a tiny leaf blanket for us tonight. Just here rooting for you, very quietly."
         let optimistic = "You can learn tricky things without getting them right first time. Tiny teammate, enormous enthusiasm."
@@ -130,14 +169,16 @@ final class CompanionCoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let store = CompanionStateStore(url: url)
         let old = "Talk like a kind, down-to-earth friend. Use simple words, contractions and a little gentle humor when it fits. Help me make sense of diabetes without lecturing, canned pep talks or guilt."
-        for personality in [old, "Use short answers and no emojis. Give me quiet company when I request it."] {
+        let previous = "Help me feel optimistic, capable and excited about possibilities. Make encouragement direct and personal, with affectionate humor and harmless clumsiness. Use simple words and contractions. Be honest about difficulties and health data. Match my actual question and mood; give comfort when I need it. Avoid passive reassurance, generic slogans, invented achievements and pressure to be productive."
+        let custom = "Use short answers and no emojis. Give me quiet company when I request it."
+        for personality in [old, previous, custom] {
             var state = CompanionState()
             state.personality = personality
             state.preferredName = "A saved name"
             state.allowHealthData = true
             try store.save(state)
             let loaded = try store.load()
-            XCTAssertEqual(loaded.personality, personality == old ? CompanionPersona.defaultPreferences : personality)
+            XCTAssertEqual(loaded.personality, personality == custom ? personality : CompanionPersona.defaultPreferences)
             XCTAssertEqual(loaded.preferredName, "A saved name")
             XCTAssertTrue(loaded.allowHealthData)
         }
@@ -225,10 +266,10 @@ final class CompanionCoreTests: XCTestCase {
         XCTAssertEqual(subjects.count, 8)
         XCTAssertTrue(subjects.contains(.littleAdventure))
         XCTAssertTrue(subjects.contains(.smallDelight))
-        XCTAssertTrue(subjects.contains(.sharedT1D))
+        XCTAssertTrue(subjects.contains(.pepTalk))
         XCTAssertTrue(subjects.contains(.anticipation))
         XCTAssertTrue(subjects.contains(.determination))
-        let retired: Set<CompanionDashboardSubject> = [.questions, .records, .perspective, .preferences, .routines, .privacy, .clarity, .effort]
+        let retired: Set<CompanionDashboardSubject> = [.questions, .records, .perspective, .preferences, .routines, .privacy, .clarity, .effort, .sharedT1D]
         XCTAssertTrue(retired.isDisjoint(with: subjects))
         let plan = CompanionDashboardPlan.next(state: state, history: state.dashboardRecentMessages ?? [], allowed: [.motivation], canCelebrate: false, now: now.addingTimeInterval(15))
         XCTAssertEqual(plan.subject, subjects.first)
@@ -271,7 +312,7 @@ final class CompanionCoreTests: XCTestCase {
     func testEarlierDashboardVoiceIsInvalidatedAfterUpdate() {
         var message = CompanionDashboardMessage(text: "A screen only catches tiny glimpses of real life, never the whole picture.",
             generatedAt: now, includesHealthData: false, kind: .motivation, subject: .perspective)
-        message.styleVersion = 19
+        message.styleVersion = 20
         XCTAssertFalse(CompanionDashboardRefresh.isDisplayable(message, now: now))
         XCTAssertTrue(CompanionDashboardRefresh.isDue(message: message, lastAttempt: nil, dataChanged: false, now: now))
     }
@@ -348,7 +389,7 @@ final class CompanionCoreTests: XCTestCase {
                 XCTAssertTrue(message.text.components(separatedBy: "Michelle").count <= 2)
                 XCTAssertTrue(CompanionDashboardRefresh.isConcise(message.text))
                 XCTAssertFalse(CompanionDashboardVoice.isDetachedReflection(message.text))
-                let retired: Set<CompanionDashboardSubject> = [.questions, .records, .perspective, .preferences, .routines, .privacy, .clarity, .effort]
+                let retired: Set<CompanionDashboardSubject> = [.questions, .records, .perspective, .preferences, .routines, .privacy, .clarity, .effort, .sharedT1D]
                 XCTAssertFalse(message.subject.map { retired.contains($0) } ?? true)
                 XCTAssertTrue(message.subject != nil)
                 if morning { XCTAssertTrue(message.text.hasPrefix("Good morning, Michelle!")) }
