@@ -179,7 +179,7 @@ struct CycleDailySummary: Codable, Identifiable, Equatable {
     var coveredSeconds: Double
     var daySeconds: Double
     var meanMGDL: Double?
-    /// Snapshot at collection; use timeInRange(using:) to apply current Display settings.
+    /// Snapshot at collection; use timeInRange(using:) to apply current glucose statistics settings.
     var timeInRange: Double?
     var insulinUnits: Double?
     var insulinRecordCount: Int

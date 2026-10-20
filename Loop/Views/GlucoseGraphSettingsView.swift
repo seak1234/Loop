@@ -6,6 +6,7 @@ import LoopKitUI
 struct GlucoseGraphSettingsView: View {
     @EnvironmentObject private var displayGlucosePreference: DisplayGlucosePreference
     @ObservedObject private var store = GlucoseGraphSettingsStore.shared
+    @ObservedObject private var statistics = GlucoseStatisticsSettingsStore.shared
     @State private var lowerText = ""
     @State private var upperText = ""
     @State private var lowerEdited = false
@@ -19,12 +20,17 @@ struct GlucoseGraphSettingsView: View {
 
     var body: some View {
         List {
-            Section(footer: Text("Display only. Does not affect insulin dosing or alerts.", comment: "Explanation for glucose graph display range")) {
-                Toggle("Show in-range area", isOn: Binding(get: { store.settings.isEnabled }, set: { store.setEnabled($0) }))
+            Section(header: Text("History"), footer: Text("Statistics use recorded glucose and insulin over the selected rolling period. Nightscout fills glucose gaps and supplies logged boluses on days without local insulin records.")) {
+                Toggle("Include Nightscout history", isOn: $statistics.useNightscout)
+            }
+            Section(header: Text("Glucose range"), footer: Text("These boundaries determine time below, in and above range, journal statistics, and graph shading. They do not change insulin dosing or alerts.")) {
                 boundaryRow(.lower, label: NSLocalizedString("Lower boundary", comment: "Lower glucose graph range boundary"))
                 boundaryRow(.upper, label: NSLocalizedString("Upper boundary", comment: "Upper glucose graph range boundary"))
             }
-            if hasInvalidBounds && store.settings.isEnabled {
+            Section(header: Text("Graph")) {
+                Toggle("Show in-range area", isOn: Binding(get: { store.settings.isEnabled }, set: { store.setEnabled($0) }))
+            }
+            if hasInvalidBounds {
                 Section {
                     Text("Enter positive values with the lower boundary below the upper boundary.", comment: "Invalid glucose graph display range")
                         .foregroundColor(.red)
@@ -33,7 +39,7 @@ struct GlucoseGraphSettingsView: View {
             }
         }
         .insetGroupedListStyle()
-        .navigationTitle(Text("Glucose Graph", comment: "Glucose graph display settings title"))
+        .navigationTitle(Text("Statistics Settings", comment: "Glucose statistics settings title"))
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -69,7 +75,6 @@ struct GlucoseGraphSettingsView: View {
             Text(displayGlucosePreference.formatter.localizedUnitStringWithPlurality())
                 .foregroundColor(.secondary)
         }
-        .disabled(!store.settings.isEnabled)
     }
 
     private func loadBoundaryText() {

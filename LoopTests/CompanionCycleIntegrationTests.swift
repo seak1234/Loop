@@ -122,6 +122,62 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         })
     }
 
+    func testCycleBubbleOpeningStartsOneOwnedRequestAndReceivesAReply() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let question = "What can I ask a doctor if cramps during my period phase disrupt daily life?"
+        provider.handler = { messages, _ in
+            XCTAssertEqual(messages.last?["content"] as? String, question)
+            try await Task.sleep(nanoseconds: 20_000_000)
+            return CompanionCompletion(message: [:], text: "An opening reply.", calls: [])
+        }
+        let conversation = CompanionCycleConversation(controller: controller)
+        conversation.start(question)
+        conversation.start(question)
+        XCTAssertTrue(conversation.isThinking)
+        XCTAssertEqual(conversation.turns.count, 1)
+        for _ in 0..<200 where conversation.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(conversation.isThinking)
+        XCTAssertEqual(provider.requestCount, 1)
+        XCTAssertEqual(conversation.turns.last?.role, "assistant")
+        XCTAssertEqual(conversation.turns.last?.text, "An opening reply.")
+        XCTAssertNil(conversation.error)
+        conversation.start(question)
+        XCTAssertEqual(conversation.turns.count, 2)
+    }
+
+    func testStoppedCycleReplyCannotClearOrReplaceTheNextRequest() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        provider.handler = { _, _ in
+            let request = provider.requestCount
+            if request == 1 { try? await Task.sleep(nanoseconds: 100_000_000) }
+            return CompanionCompletion(message: [:], text: "Reply \(request)", calls: [])
+        }
+        let conversation = CompanionCycleConversation(controller: controller)
+        conversation.start("Tell me about period phases")
+        for _ in 0..<100 where provider.requestCount == 0 { try await Task.sleep(nanoseconds: 1_000_000) }
+        conversation.cancel()
+        XCTAssertTrue(conversation.send("What about the follicular phase?"))
+        for _ in 0..<200 where conversation.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(conversation.isThinking)
+        XCTAssertEqual(provider.requestCount, 2)
+        XCTAssertEqual(conversation.turns.filter { $0.role == "assistant" }.map(\.text), ["Reply 2"])
+        XCTAssertNil(conversation.error)
+    }
+
+    func testUnexpectedCycleCancellationIsVisibleInsteadOfLeavingABlankChat() async throws {
+        let (controller, provider, _, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        provider.handler = { _, _ in throw CancellationError() }
+        let conversation = CompanionCycleConversation(controller: controller)
+        conversation.start("Tell me about period phases")
+        for _ in 0..<200 where conversation.isThinking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(conversation.isThinking)
+        XCTAssertTrue(conversation.error?.contains("interrupted") == true)
+        XCTAssertEqual(conversation.turns.count, 1)
+    }
+
     func testCycleCardIsScopedAndDoesNotSendPersonalHistoryOrPeriodDates() async throws {
         let (controller, provider, _, cleanup) = try fixture(sharing: true)
         defer { cleanup() }
@@ -183,6 +239,129 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         let restarted = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { nil })
         let next = try await restarted.makeCycleCards()
         XCTAssertFalse(next[.period]?.question == previous?.question)
+    }
+
+    func testDashboardDeviceContextRequiresSharingAndSelectsActualStatus() async throws {
+        for sharing in [false, true] {
+            let (original, provider, tracker, cleanup) = try fixture(sharing: sharing)
+            defer { cleanup() }
+            let store = CompanionStateStore(url: original.cycleJournal.url.deletingLastPathComponent().appendingPathComponent("state.json"))
+            var state = try store.load()
+            state.dashboardMorningGreetingDate = Date()
+            try store.save(state)
+            var reads = 0
+            let end = CompanionDataContext.stamp(Date().addingTimeInterval(3600))
+            provider.handler = { messages, _ in
+                let raw = messages.first(where: { $0["role"] as? String == "user" })?["content"] as! String
+                let context = try JSONSerialization.jsonObject(with: Data(raw.utf8)) as! [String: Any]
+                if sharing {
+                    XCTAssertEqual(context["subject"] as? String, "deviceStatus")
+                    let cgm = (context["devices"] as? [String: Any])?["cgm"] as? [String: Any]
+                    XCTAssertEqual((cgm?["lifecycle"] as? [String: Any])?["expected_session_end"] as? String, end)
+                } else { XCTAssertNil(context["devices"]) }
+                let text = sharing ? "Your sensor session is expected to end in about an hour." : "I made a small heart. It's been thoroughly hugged."
+                let value = ["text": text, "kind": sharing ? "insight" : "motivation", "question": "Can we talk about this message?"]
+                return CompanionCompletion(message: [:], text: String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self), calls: [])
+            }
+            let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" },
+                companionDataReader: { _, _ in
+                    reads += 1
+                    return ["cgm": ["configured": true, "lifecycle": ["expected_session_end": end]]]
+                })
+            controller.setDashboardVisible(true)
+            for _ in 0..<200 where controller.isRefreshingDashboard { try await Task.sleep(nanoseconds: 10_000_000) }
+            XCTAssertNil(controller.dashboardRefreshError)
+            XCTAssertEqual(reads, sharing ? 1 : 0)
+            XCTAssertEqual(controller.state.dashboardMessage?.includesHealthData, sharing)
+            controller.setDashboardVisible(false)
+        }
+    }
+
+    func testDashboardReopenPreservesFreshCachedTextWithoutAnotherRequest() async throws {
+        let (original, provider, tracker, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let store = CompanionStateStore(url: original.cycleJournal.url.deletingLastPathComponent().appendingPathComponent("state.json"))
+        var state = try store.load()
+        let previous = CompanionDashboardMessage(text: "Hi, Michelle! Keeping track of all the gear takes effort, and I see you showing up.", generatedAt: Date().addingTimeInterval(-30), includesHealthData: false, subject: .effort)
+        state.dashboardMessage = previous
+        state.dashboardRecentMessages = [previous]
+        state.dashboardMorningGreetingDate = Date()
+        try store.save(state)
+        provider.handler = { _, _ in throw CompanionError.invalid("Synthetic offline failure") }
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
+        controller.setDashboardVisible(true)
+        for _ in 0..<200 where controller.isRefreshingDashboard { try await Task.sleep(nanoseconds: 10_000_000) }
+        let first = controller.dashboardText()
+        XCTAssertEqual(first, previous.text)
+        XCTAssertTrue(first.contains("Michelle"))
+        controller.setDashboardVisible(false)
+        controller.setDashboardVisible(true)
+        let second = controller.dashboardText()
+        XCTAssertEqual(second, first)
+        XCTAssertTrue(second.contains("Michelle"))
+        XCTAssertEqual(provider.requestCount, 0)
+        controller.setDashboardVisible(false)
+    }
+
+    func testDashboardContinuesAPersistedStoryWithoutHealthSharing() async throws {
+        let (original, provider, tracker, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let store = CompanionStateStore(url: original.cycleJournal.url.deletingLastPathComponent().appendingPathComponent("state.json"))
+        var state = try store.load()
+        state.dashboardMorningGreetingDate = Date()
+        state.dashboardSubjectLastShown = [CompanionDashboardSubject.questions.rawValue: Date()]
+        let story = "I made a tiny welcome sign. It promptly fell over, Michelle."
+        state.rememberCharacterStory(CompanionDashboardMessage(text: story, generatedAt: Date().addingTimeInterval(-86400),
+            includesHealthData: false, kind: .motivation, subject: .littleAdventure))
+        state.dashboardAdventureCount = 2
+        try store.save(state)
+        provider.handler = { messages, _ in
+            let raw = try XCTUnwrap(messages.first(where: { $0["role"] as? String == "user" })?["content"] as? String)
+            let context = try JSONSerialization.jsonObject(with: Data(raw.utf8)) as! [String: Any]
+            XCTAssertEqual((context["mochi_story_callback"] as? [String: String])?["text"], story)
+            XCTAssertNil(context["get_glucose_summary"])
+            let reply = #"{"text":"The welcome sign now stands up, Michelle. I am leaning against it. Progress.","kind":"motivation","question":"How did you fix the welcome sign?"}"#
+            return CompanionCompletion(message: [:], text: reply, calls: [])
+        }
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
+        controller.setDashboardVisible(true)
+        for _ in 0..<200 where controller.isRefreshingDashboard { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertNil(controller.dashboardRefreshError)
+        let saved = try store.load()
+        XCTAssertEqual(saved.characterStories(now: Date()).count, 2)
+        XCTAssertEqual(saved.dashboardMessage?.subject, .littleAdventure)
+        XCTAssertFalse(saved.dashboardMessage?.includesHealthData ?? true)
+        controller.setDashboardVisible(false)
+    }
+
+    func testDashboardRetriesSemanticParaphraseAndOmitsARecentlyUsedName() async throws {
+        let (original, provider, tracker, cleanup) = try fixture(sharing: false)
+        defer { cleanup() }
+        let store = CompanionStateStore(url: original.cycleJournal.url.deletingLastPathComponent().appendingPathComponent("state.json"))
+        var state = try store.load()
+        let previous = CompanionDashboardMessage(text: "Hi, Michelle! Keeping track of all the gear takes effort, and I see you showing up.", generatedAt: Date().addingTimeInterval(-360), includesHealthData: false, subject: .effort)
+        state.dashboardMessage = previous
+        state.dashboardRecentMessages = [previous]
+        state.dashboardMorningGreetingDate = Date()
+        try store.save(state)
+        provider.handler = { messages, _ in
+            let context = try XCTUnwrap(messages.first(where: { $0["role"] as? String == "user" })?["content"] as? String)
+            XCTAssertTrue(context.contains("care-work"))
+            XCTAssertTrue(context.contains("opening_style"))
+            let text = provider.requestCount == 1
+                ? "The invisible work of caring for diabetes counts, Michelle, even when nobody notices it."
+                : "The question you haven't found words for is welcome here."
+            let value = ["text": text, "kind": "motivation", "question": "Can I ask something I'm unsure how to phrase?"]
+            return CompanionCompletion(message: [:], text: String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self), calls: [])
+        }
+        let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
+        controller.setDashboardVisible(true)
+        for _ in 0..<200 where controller.isRefreshingDashboard { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(provider.requestCount, 2)
+        XCTAssertEqual(controller.state.dashboardMessage?.subject, .questions)
+        XCTAssertEqual(controller.state.dashboardMessage?.text, "The question you haven't found words for is welcome here.")
+        XCTAssertEqual(try store.load().dashboardRecentMessages?.count, 2)
+        controller.setDashboardVisible(false)
     }
 
     func testRepeatedDashboardMessagesRetryThenUseFreshCopy() async throws {
@@ -1076,13 +1255,14 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
         controller.setDashboardVisible(false)
     }
 
-    func testEditableNamePersistsAndIsUsedInEveryDashboardMessage() async throws {
+    func testEditableNamePersistsAndIsUsedOnlyOccasionally() async throws {
         let (store, tracker, cleanup) = try fixture(shareHealth: false)
         defer { cleanup() }
         var state = try store.load()
         state.preferredName = "Michelle"
         try store.save(state)
         let provider = CycleProviderProbe()
+        var nameUses = 0
         for count in 0..<4 {
             state = try store.load()
             state.dashboardMessage?.generatedAt = Date().addingTimeInterval(-901)
@@ -1091,9 +1271,10 @@ final class CompanionDashboardIntegrationTests: XCTestCase {
             controller.setDashboardVisible(true)
             try await waitForDashboard(controller)
             XCTAssertNil(controller.dashboardRefreshError)
-            XCTAssertEqual(controller.state.dashboardMessage?.text.contains("Michelle"), true)
+            if controller.state.dashboardMessage?.text.contains("Michelle") == true { nameUses += 1 }
             controller.setDashboardVisible(false)
         }
+        XCTAssertTrue(nameUses < 4)
         let controller = CompanionController(provider: provider, stateStore: store, cycleStore: tracker, keyReader: { "test-only" })
         try await controller.saveSettings(model: controller.state.model, reasoningEffort: .medium, personality: "Be warm", allowHealthData: false, key: "", preferredName: "  River  ")
         XCTAssertEqual(try store.load().displayName, "River")

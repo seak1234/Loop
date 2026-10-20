@@ -15,7 +15,9 @@ out=Path(sys.argv[2])
 s=(root/'Loop/Views/CycleTrackingView.swift').read_text().replace('import LoopUI\n','')
 (out/'CycleTrackingView.swift').write_text(s)
 s=(root/'Loop/Companion/CompanionView.swift').read_text();a=s.index('private struct MochiCycleSpeechBubble: Shape');b=s.index('struct CompanionDashboardIcon',a)
-(out/'CycleChat.swift').write_text('import SwiftUI\n'+s[a:b])
+controller=(root/'Loop/Companion/CompanionController.swift').read_text()
+conversation=controller[controller.index('/// Own the request independently'):controller.index('@MainActor\nfinal class CompanionMealConversation')]
+(out/'CycleChat.swift').write_text('import SwiftUI\n'+conversation+s[a:b])
 (out/'Interfaces.swift').write_text('''
 import SwiftUI
 import UIKit

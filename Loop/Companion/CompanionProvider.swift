@@ -191,6 +191,7 @@ enum OpenRouterModelCatalog {
 }
 
 enum CompanionTools {
+    static let healthReadNames: Set<String> = ["get_glucose_summary", "get_insulin_summary", "get_carb_entries", "get_cycle_context", "get_cycle_journal", "get_data_catalog", "get_device_status", "get_loop_status", "get_therapy_settings", "get_health_records", "get_glucose_statistics"]
     private static func tool(_ name: String, _ description: String, properties: [String: Any], required: [String]) -> [String: Any] {
         ["type": "function", "function": ["name": name, "description": description,
             "parameters": ["type": "object", "properties": properties, "required": required, "additionalProperties": false]]]
@@ -199,7 +200,7 @@ enum CompanionTools {
     static var cycleDefinitions: [[String: Any]] {
         definitions.filter { definition in
             let name = (definition["function"] as? [String: Any])?["name"] as? String ?? ""
-            return ["get_cycle_context", "get_cycle_journal", "save_cycle_note", "get_glucose_summary", "get_insulin_summary", "get_carb_entries"].contains(name)
+            return healthReadNames.contains(name) || name == "save_cycle_note"
         }
     }
 
@@ -209,6 +210,9 @@ enum CompanionTools {
         let date: [String: Any] = ["type": "string", "description": "ISO 8601 date with explicit UTC offset, e.g. 2026-10-18T21:00:00-04:00"]
         let noteDate: [String: Any] = ["type": "string", "description": "Use the literal 'today' for a note about today; the app supplies the user's current local timestamp. For another explicitly requested date, use an ISO 8601 timestamp with explicit UTC offset."]
         let interval: [String: Any] = ["start": date, "end": date]
+        var records = interval
+        records["kind"] = ["type": "string", "enum": ["glucose", "insulin", "pump_events", "cgm_events", "sleep"]]
+        records["offset"] = ["type": "integer", "minimum": 0, "maximum": 100000, "description": "Omit for the first page. Use next_offset from the previous response; each page contains at most 200 records."]
         let rule: [String: Any] = ["type": "object", "additionalProperties": false, "properties": [
             "kind": ["type": "string", "enum": ["dailySummary", "fallingGlucose", "missedCarbs"]],
             "title": string, "enabled": ["type": "boolean"],
@@ -217,6 +221,12 @@ enum CompanionTools {
             "carbLookbackMinutes": number, "cooldownMinutes": number
         ], "required": ["kind", "title", "enabled"]]
         return [
+            tool("get_data_catalog", "Read the available app data sources and their access requirements. Includes CGM, pump, Loop estimates, therapy settings, detailed history, meals, sleep and cycle records. Requires health sharing; unavailable data stays unknown.", properties: [:], required: []),
+            tool("get_device_status", "Read current CGM and pump status: latest glucose/trend and freshness, valid sensor session, reported lifecycle dates/events, device warnings, pump battery, reservoir, last sync and delivery state. Reported or expected dates are not guarantees. Never infer an expiry from a progress percentage. Requires health sharing.", properties: [:], required: []),
+            tool("get_loop_status", "Read Loop's last completion, automation state, error, estimated insulin/carbs on board and glucose predictions with calculation timestamps. Estimates are not measurements or dose recommendations. Requires health sharing.", properties: [:], required: []),
+            tool("get_therapy_settings", "Read existing therapy schedules, active overrides, targets, limits and display settings. Read-only context; cannot change settings or recommend doses. Requires health sharing.", properties: [:], required: []),
+            tool("get_glucose_statistics", "Read the currently loaded long-term statistics from the app's Glucose Statistics screen: window, coverage, time in range, mean, variability, GMI when eligible and recorded insulin totals. Uses the existing local/Nightscout cache without a new network request. Returns not_loaded when unavailable; never imply complete or current history. Requires health sharing.", properties: [:], required: []),
+            tool("get_health_records", "Read paged detailed local records: glucose samples with trends/source flags, normalized insulin delivery, pump events, sensor/transmitter events or HealthKit sleep records. Choose a past interval up to seven days per request. Each page has at most 200 records; use next_offset while has_more. Missing records are unknown, not zero. No new permissions are requested. Requires health sharing.", properties: records, required: ["kind", "start", "end"]),
             tool("get_glucose_summary", "Read available recorded glucose statistics for up to 7 days. Requires health-data sharing permission.", properties: interval, required: ["start", "end"]),
             tool("get_insulin_summary", "Read recorded insulin delivery totals; not a dosing recommendation. Requires health-data sharing permission.", properties: interval, required: ["start", "end"]),
             tool("get_carb_entries", "Read logged carb entries for a date range. Requires health-data sharing permission.", properties: interval, required: ["start", "end"]),

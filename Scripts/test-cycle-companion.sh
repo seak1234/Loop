@@ -14,8 +14,8 @@ methods = controller[controller.index('    private var cycleConversationInstruct
 cycle_tool = controller[controller.index('        case "get_cycle_context":'):controller.index('        case "get_glucose_summary", "get_insulin_summary", "get_carb_entries":')]
 journal_tools = controller[controller.index('        case "get_cycle_journal":'):controller.index('        case "list_automations":')]
 journal_helpers = controller[controller.index('    private func cycleJournalInterval('):controller.index('    /// Builds local history')]
-parse_date = controller[controller.index('    private func parseDate('):controller.index('    private func number(')]
-display = controller[controller.index('    func dashboardText('):controller.index('    func dismissDashboard(')]
+parse_date = controller[controller.index('    private func interval('):controller.index('    private func json(')]
+display = controller[controller.index('    func dashboardText('):controller.index('    func requestDashboardRefresh(')]
 dashboard = controller[controller.index('    func requestDashboardRefresh('):controller.index('    func rateDashboardMessage(')]
 topics = controller[controller.index('    private func cancelTopicGeneration('):controller.index('    var dashboardFact:')]
 helpers = controller[controller.index('    private func json('):controller.index('    private func glucose(start:')]
@@ -23,6 +23,7 @@ helpers = controller[controller.index('    private func json('):controller.index
 # builders and the real cycle-context tool body unchanged.
 shell = '''
 import Foundation
+import CoreFoundation
 import Combine
 @MainActor final class CompanionController {
     private let provider: CompanionProvider
@@ -42,6 +43,7 @@ import Combine
     var dashboardRevision = UUID()
     var dashboardRefreshError: String?
     var storageFailure: String?
+    var errorMessage: String?
     let applicationIsActive: () -> Bool = { true }
     let dashboardHealthReader: ((String, Date, Date) async throws -> [String: Any])? = nil
     var chatVisible = false
@@ -52,14 +54,21 @@ import Combine
     var diabetesMindset: String { "Use general educational questions." }
     func beginChatSession() { chatVisible = true; refreshSuggestedTopics() }
     func endChatSession() { chatVisible = false; cancelTopicGeneration() }
-    func setDashboardVisible(_ value: Bool) { dashboardVisible = value; if value { requestDashboardRefresh() } }
+    func refreshConnectionStatus() {}
     func healthData(tool: String, start: Date, end: Date) async throws -> [String: Any] { [:] }
+    let companionDataReader: ((String, [String: Any]) async throws -> [String: Any])?
+    func readCompanionData(tool: String, args: [String: Any]) async throws -> [String: Any] {
+        if let reader = companionDataReader { return try await reader(tool, args) }
+        return ["status": "unavailable"]
+    }
     init(provider: CompanionProvider, stateStore: CompanionStateStore,
-         cycleStore: CycleTrackingStore, cycleJournal: CycleJournalStore? = nil, keyReader: () throws -> String?) {
+         cycleStore: CycleTrackingStore, cycleJournal: CycleJournalStore? = nil, keyReader: () throws -> String?,
+         companionDataReader: ((String, [String: Any]) async throws -> [String: Any])? = nil) {
         self.provider = provider
         store = stateStore
         self.cycleStore = cycleStore
         self.cycleJournal = cycleJournal ?? CycleJournalStore(url: stateStore.url.deletingLastPathComponent().appendingPathComponent("journal.json"))
+        self.companionDataReader = companionDataReader
         state = try! stateStore.load()
         hasKey = (try? keyReader()) != nil
     }
@@ -74,6 +83,7 @@ shell += '''
 '''
 shell += methods + display + dashboard + topics + helpers + journal_helpers + parse_date + '\nprivate func execute(_ call: CompanionToolCall) async throws -> String {\nguard let args = try JSONSerialization.jsonObject(with: call.arguments) as? [String: Any] else { throw CompanionError.invalid("Invalid arguments") }\nswitch call.name {\n'
 shell += cycle_tool + journal_tools + '\ndefault: throw CompanionError.invalid("Unexpected test tool")\n}\n}\n}\n'
+shell += controller[controller.index('/// Own the request independently'):controller.index('@MainActor\nfinal class CompanionMealConversation')]
 (out / 'Controller.swift').write_text(shell)
 tracker = (root / 'Loop/Views/CycleTrackingView.swift').read_text()
 tracker = tracker[tracker.index('final class CycleTrackingStore'):tracker.index('struct CycleTrackingView: View')]

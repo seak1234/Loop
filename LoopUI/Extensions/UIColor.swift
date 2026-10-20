@@ -47,6 +47,30 @@ extension UIColor {
             : UIColor(red: 0.46, green: 0.54, blue: 0.78, alpha: 1.0)
     }
 
+    @nonobjc public static let dashboardGlucoseInRange = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 101 / 255, green: 158 / 255, blue: 120 / 255, alpha: 1)
+            : UIColor(red: 168 / 255, green: 207 / 255, blue: 175 / 255, alpha: 1)
+    }
+
+    @nonobjc public static let dashboardGlucoseInRangeInk = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 168 / 255, green: 207 / 255, blue: 175 / 255, alpha: 1)
+            : UIColor(red: 95 / 255, green: 145 / 255, blue: 112 / 255, alpha: 1)
+    }
+
+    @nonobjc public static let dashboardGlucoseBelowRange = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 222 / 255, green: 138 / 255, blue: 138 / 255, alpha: 1)
+            : UIColor(red: 222 / 255, green: 119 / 255, blue: 119 / 255, alpha: 1)
+    }
+
+    @nonobjc public static let dashboardGlucoseAboveRange = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 213 / 255, green: 185 / 255, blue: 104 / 255, alpha: 1)
+            : UIColor(red: 234 / 255, green: 205 / 255, blue: 120 / 255, alpha: 1)
+    }
+
     @nonobjc public static let dashboardInsulinAccent = UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.98, green: 0.70, blue: 0.52, alpha: 1.0)

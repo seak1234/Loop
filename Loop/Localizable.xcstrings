@@ -11809,7 +11809,7 @@
     "Chat history, rules and preferences are stored on this device and excluded from backups. Notification previews may show glucose information; control previews in iOS Settings." : {
 
     },
-    "Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; Cycle journal notes and retained daily records require separate journal access, controlled on the cycle page. Notes can be saved only when you ask and enable saving permission. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent." : {
+    "Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits CGM and pump status, sensor lifecycle, glucose, insulin, meal, Loop estimate, therapy setting, loaded statistics and menstrual-cycle data to be sent when relevant. Available sleep records can be requested in chat using existing HealthKit access. Automatic dashboard messages use recent glucose, insulin, carbs, cycle and device status. Ordinary dashboard messages refresh every 15 minutes while visible. Health observations refresh after 5 minutes or fresh data, with at least 2 minutes between requests. Recent character moments can be reused for occasional story callbacks. Cycle phases are estimates from logged period dates; Cycle journal notes and retained daily records require separate journal access, controlled on the cycle page. Notes can be saved only when you ask and enable saving permission. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent." : {
 
     },
     "Check settings" : {
@@ -16929,9 +16929,6 @@
     "Dismiss conflict notice" : {
 
     },
-    "Display" : {
-      "comment" : "Display preferences section in settings"
-    },
     "Display colors for glucose" : {
       "comment" : "Title for glucose coloring",
       "localizations" : {
@@ -16996,9 +16993,6 @@
           }
         }
       }
-    },
-    "Display only. Does not affect insulin dosing or alerts." : {
-      "comment" : "Explanation for glucose graph display range"
     },
     "Display prediction in plot" : {
       "comment" : "Title for prediction line toggle",
@@ -21244,9 +21238,6 @@
         }
       }
     },
-    "Glucose Graph" : {
-      "comment" : "Glucose graph display settings title\nLink to glucose graph display settings"
-    },
     "Glucose Momentum" : {
       "comment" : "Title of the prediction input effect for glucose momentum",
       "localizations" : {
@@ -21366,7 +21357,10 @@
         }
       }
     },
-    "Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Display settings. Missing means unknown. The trace retains one reading per 15 minutes." : {
+    "Glucose range" : {
+
+    },
+    "Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Predicted Glucose statistics settings. Missing means unknown. The trace retains one reading per 15 minutes." : {
 
     },
     "Glucose Target Range Schedule" : {
@@ -21447,6 +21441,9 @@
       }
     },
     "Glucose: daily mean in mg/dL. Insulin: recorded units, potentially incomplete. Carbs: logged grams only. Gray bars indicate insufficient glucose coverage or an unfinished day. Missing days are unknown, not zero. Notes: entry count. Tap a day for its records." : {
+
+    },
+    "Graph" : {
 
     },
     "HARDWARE SOUNDS" : {
@@ -21569,6 +21566,9 @@
       }
     },
     "Higher effort can take longer and cost more. Model default lets the provider choose." : {
+
+    },
+    "History" : {
 
     },
     "Hours" : {
@@ -22085,6 +22085,9 @@
           }
         }
       }
+    },
+    "Include Nightscout history" : {
+
     },
     "Indefinitely" : {
       "comment" : "The title of a target alert action specifying an indefinitely long workout targets duration",
@@ -29813,7 +29816,7 @@
 
     },
     "Off" : {
-      "comment" : "Glucose graph range shading disabled\nNotification Setting Status is Off",
+      "comment" : "Notification Setting Status is Off",
       "localizations" : {
         "cs" : {
           "stringUnit" : {
@@ -36411,6 +36414,12 @@
         }
       }
     },
+    "Statistics Settings" : {
+      "comment" : "Glucose statistics settings title"
+    },
+    "Statistics use recorded glucose and insulin over the selected rolling period. Nightscout fills glucose gaps and supplies logged boluses on days without local insulin records." : {
+
+    },
     "Stop" : {
 
     },
@@ -38688,6 +38697,9 @@
           }
         }
       }
+    },
+    "These boundaries determine time below, in and above range, journal statistics, and graph shading. They do not change insulin dosing or alerts." : {
+
     },
     "These permissions also require health sharing in Mochi settings. Relevant notes and recorded summaries are sent to OpenRouter and your selected model when requested in chat. Saving permission lets Mochi add notes only when you ask. Existing transmitted content cannot be recalled." : {
 

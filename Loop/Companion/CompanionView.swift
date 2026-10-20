@@ -173,7 +173,7 @@ private struct MochiCycleSpeechBubbleLabel: View {
             MochiAvatar(size: 64)
             HStack(spacing: 10) {
                 Text(text)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(Color(uiColor: .dashboardInk))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -242,14 +242,21 @@ struct CompanionCycleCard: View {
 @MainActor
 struct CompanionCycleChat: View {
     let openingQuestion: String
-    @ObservedObject private var controller = CompanionController.shared
+    @ObservedObject private var controller: CompanionController
+    @StateObject private var conversation: CompanionCycleConversation
     @ObservedObject private var journal = CycleJournalStore.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var turns: [CompanionMessage] = []
     @State private var input = ""
-    @State private var requestID: UUID?
-    @State private var error: String?
     @State private var showsSettings = false
+
+    init(openingQuestion: String, controller: CompanionController? = nil) {
+        let controller = controller ?? .shared
+        self.openingQuestion = openingQuestion
+        self.controller = controller
+        _conversation = StateObject(wrappedValue: CompanionCycleConversation(controller: controller))
+    }
+
+    private var turns: [CompanionMessage] { conversation.turns }
 
     var body: some View {
         NavigationView {
@@ -276,14 +283,14 @@ struct CompanionCycleChat: View {
                             }
                             CycleUnlinkedSavedNotes(since: turns.last(where: { $0.role == "user" })?.date,
                                 linkedIDs: turns.flatMap { $0.cycleNoteIDs ?? [] }, journal: controller.cycleJournal)
-                            if requestID != nil {
+                            if conversation.isThinking {
                                 HStack {
                                     ProgressView("Mochi is thinking…")
                                     Spacer()
-                                    Button("Stop") { requestID = nil }
+                                    Button("Stop") { conversation.cancel(message: "Reply stopped.") }
                                 }.font(.footnote)
                             }
-                            if let error { Text(error).font(.footnote).foregroundColor(.secondary) }
+                            if let error = conversation.error { Text(error).font(.footnote).foregroundColor(.secondary) }
                             Color.clear.frame(height: 1).id("bottom")
                         }.padding()
                     }
@@ -307,7 +314,7 @@ struct CompanionCycleChat: View {
                         .submitLabel(.send)
                         .onSubmit(sendInput)
                     Button(action: sendInput) { Image(systemName: "paperplane.fill").padding(10) }
-                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || requestID != nil || !controller.hasKey)
+                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || conversation.isThinking || !controller.hasKey)
                         .accessibilityLabel("Send cycle question")
                 }.padding()
             }
@@ -328,29 +335,17 @@ struct CompanionCycleChat: View {
         .navigationViewStyle(.stack)
         .tint(MochiStyle.blue)
         .task(id: controller.hasKey) {
-            if controller.hasKey, turns.isEmpty { _ = send(openingQuestion) }
+            if controller.hasKey { conversation.start(openingQuestion) }
+            else { conversation.cancel() }
         }
-        .task(id: requestID) {
-            guard let pendingID = requestID else { return }
-            defer { if requestID == pendingID { requestID = nil } }
-            do {
-                let reply = try await controller.replyToCycleConversation(turns)
-                try Task.checkCancellation()
-                guard requestID == pendingID else { return }
-                turns.append(reply)
-            } catch is CancellationError { }
-            catch { if !Task.isCancelled { self.error = error.localizedDescription } }
-        }
-        .onDisappear { requestID = nil }
+        .onDisappear { conversation.cancel() }
         .onChange(of: controller.state.allowHealthData) { allowed in
-            requestID = nil
-            if !allowed { turns.removeAll { $0.includesHealthData == true } }
+            conversation.sharingChanged(healthData: allowed, journalRead: journal.state.allowMochiRead)
         }
         .onChange(of: journal.state.allowMochiRead) { allowed in
-            requestID = nil
-            if !allowed { turns.removeAll { $0.includesCycleJournal == true } }
+            conversation.sharingChanged(healthData: controller.state.allowHealthData, journalRead: allowed)
         }
-        .onChange(of: journal.state.allowMochiWrite) { _ in requestID = nil }
+        .onChange(of: journal.state.allowMochiWrite) { _ in conversation.cancel(message: "Note-saving settings changed. Please send your question again.") }
         .sheet(isPresented: $showsSettings) { CompanionSettingsView(controller: controller) }
     }
 
@@ -359,7 +354,7 @@ struct CompanionCycleChat: View {
             .font(.footnote)
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(MochiStyle.blue.opacity(0.1), in: Capsule())
-            .disabled(requestID != nil || !controller.hasKey)
+            .disabled(conversation.isThinking || !controller.hasKey)
     }
 
     private func sendInput() {
@@ -367,16 +362,7 @@ struct CompanionCycleChat: View {
     }
 
     private func send(_ text: String) -> Bool {
-        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard requestID == nil, controller.hasKey, !text.isEmpty else { return false }
-        guard text.count <= 3000, turns.count < 40 else {
-            error = "Shorten your message or reopen Mochi to start a new cycle conversation."
-            return false
-        }
-        error = nil
-        turns.append(CompanionMessage(role: "user", text: text, includesHealthData: controller.state.allowHealthData))
-        requestID = UUID()
-        return true
+        conversation.send(text)
     }
 }
 
@@ -834,7 +820,7 @@ struct CompanionSettingsView: View {
                     TextEditor(text: $personality).frame(minHeight: 130)
                         .accessibilityLabel("Custom personality prompt")
                 }
-                Section(header: Text("Data & privacy"), footer: Text("Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits glucose, insulin, carb, and menstrual-cycle context to be sent for chat and automatic AI dashboard messages. Dashboard messages refresh every 15 minutes while visible, or after fresh data with at least 5 minutes between requests. Cycle phases are estimates from logged period dates; Cycle journal notes and retained daily records require separate journal access, controlled on the cycle page. Notes can be saved only when you ask and enable saving permission. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent.")) {
+                Section(header: Text("Data & privacy"), footer: Text("Chat messages, your personality prompt, and approved tool results are sent to OpenRouter and the selected model provider. Enabling health sharing permits CGM and pump status, sensor lifecycle, glucose, insulin, meal, Loop estimate, therapy setting, loaded statistics and menstrual-cycle data to be sent when relevant. Available sleep records can be requested in chat using existing HealthKit access. Automatic dashboard messages use recent glucose, insulin, carbs, cycle and device status. Ordinary dashboard messages refresh every 15 minutes while visible. Health observations refresh after 5 minutes or fresh data, with at least 2 minutes between requests. Recent character moments can be reused for occasional story callbacks. Cycle phases are estimates from logged period dates; Cycle journal notes and retained daily records require separate journal access, controlled on the cycle page. Notes can be saved only when you ask and enable saving permission. Local rules work without sharing health data with AI. Turning sharing off cannot recall data already sent.")) {
                     Toggle("Allow health data for Mochi", isOn: $allowHealthData)
                     Text("Chat history, rules and preferences are stored on this device and excluded from backups. Notification previews may show glucose information; control previews in iOS Settings.")
                         .font(.caption).foregroundColor(.secondary)

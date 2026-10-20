@@ -23,7 +23,6 @@ public struct SettingsView: View {
 
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var versionUpdateViewModel: VersionUpdateViewModel
-    @ObservedObject private var glucoseGraphSettings = GlucoseGraphSettingsStore.shared
 
     enum Destination {
         enum Alert: String, Identifiable {
@@ -81,7 +80,6 @@ public struct SettingsView: View {
                     if viewModel.pumpManagerSettingsViewModel.isSetUp() {
                         configurationSection
                     }
-                    displaySection
                 }
                 Group {
                     deviceSettingsSection
@@ -308,27 +306,6 @@ extension SettingsView {
         }
     }
 
-    private var displaySection: some View {
-        Section(header: SectionHeader(label: NSLocalizedString("Display", comment: "Display preferences section in settings"))) {
-            NavigationLink(destination: GlucoseGraphSettingsView().environmentObject(displayGlucosePreference)) {
-                HStack {
-                    Text("Glucose Graph", comment: "Link to glucose graph display settings")
-                    Spacer()
-                    Text(glucoseGraphRangeSummary)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-    }
-
-    private var glucoseGraphRangeSummary: String {
-        let settings = glucoseGraphSettings.settings
-        guard settings.isEnabled else { return NSLocalizedString("Off", comment: "Glucose graph range shading disabled") }
-        let lower = HKQuantity(unit: .milligramsPerDeciliter, doubleValue: settings.lowerBoundMGDL)
-        let upper = HKQuantity(unit: .milligramsPerDeciliter, doubleValue: settings.upperBoundMGDL)
-        return "\(displayGlucosePreference.format(lower, includeUnit: false))–\(displayGlucosePreference.format(upper))"
-    }
-    
     @ViewBuilder
     private var pumpSection: some View {
         if viewModel.pumpManagerSettingsViewModel.isSetUp() {

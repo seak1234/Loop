@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Presentation preferences only. These values are never used by the loop algorithm.
+/// Shared historical statistics range and optional graph shading. Never used by the loop algorithm.
 struct GlucoseGraphSettings: Equatable {
     static let `default` = GlucoseGraphSettings()
 
