@@ -56,7 +56,7 @@ final class GlucoseStatisticsLoader: ObservableObject {
 
     func refresh(manager: DeviceDataManager, force: Bool = false) {
         let settings = GlucoseStatisticsSettingsStore.shared
-        let days = settings.days, useNightscout = settings.useNightscout
+        let days = settings.historyDays, useNightscout = settings.useNightscout
         let configuration = useNightscout ? nightscoutConfiguration(manager: manager) : nil
         let sourceChanged = cacheManager !== manager || cacheUsesNightscout != useNightscout || cacheConfiguration != configuration
         if sourceChanged {

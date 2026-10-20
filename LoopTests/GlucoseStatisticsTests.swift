@@ -53,23 +53,46 @@ final class GlucoseStatisticsTests: XCTestCase {
         XCTAssertNil(insulin.recordedDailyAverage)
     }
 
-    func testGMINeedsFourteenDaysAndCoverage() {
+    func testGMIUsesObservedMeanForEveryReportingPeriod() {
         let seconds = 14.0 * 86400
         let readings = stride(from: 0.0, to: seconds, by: 300).map { reading($0, 150) }
-        XCTAssertTrue(close(calculate(readings, seconds: seconds).gmi, 3.31 + 0.02392 * 150))
-        XCTAssertNil(calculate(Array(readings.prefix(100)), seconds: seconds).gmi)
-        XCTAssertNil(calculate(readings, seconds: 86400).gmi)
+        for days in GlucoseStatisticsSettingsStore.periods {
+            XCTAssertTrue(close(calculate(readings, seconds: Double(days) * 86400).gmi, 3.31 + 0.02392 * 150))
+        }
     }
 
-    func testEstimatedA1cUsesADAGAndSharesGMICoverageRequirement() {
+    func testEstimatedA1cUsesADAGForEveryReportingPeriod() {
         let seconds = 14.0 * 86400
         let readings = stride(from: 0.0, to: seconds, by: 300).map { reading($0, 120) }
-        let result = calculate(readings, seconds: seconds)
-        XCTAssertTrue(close(result.gmi, 6.1804))
-        XCTAssertTrue(close(result.estimatedA1c, (120 + 46.7) / 28.7))
-        XCTAssertNil(calculate(readings, seconds: 86400).estimatedA1c)
-        XCTAssertNil(calculate(Array(readings.prefix(100)), seconds: seconds).estimatedA1c)
-        XCTAssertNil(calculate([]).estimatedA1c)
+        for days in GlucoseStatisticsSettingsStore.periods {
+            let result = calculate(readings, seconds: Double(days) * 86400)
+            XCTAssertTrue(close(result.gmi, 6.1804))
+            XCTAssertTrue(close(result.estimatedA1c, (120 + 46.7) / 28.7))
+        }
+    }
+
+    func testShortPeriodEstimatesFollowTheSelectedWindow() {
+        let readings = stride(from: 0.0, to: 7 * 86400, by: 300).map { reading($0, $0 < 3 * 86400 ? 100 : 170) }
+        let threeDays = calculate(readings, seconds: 3 * 86400)
+        let sevenDays = calculate(readings, seconds: 7 * 86400)
+        XCTAssertTrue(close(threeDays.gmi, 3.31 + 0.02392 * 100))
+        XCTAssertTrue(close(threeDays.estimatedA1c, (100 + 46.7) / 28.7))
+        XCTAssertTrue(close(sevenDays.gmi, 3.31 + 0.02392 * 140))
+        XCTAssertTrue(close(sevenDays.estimatedA1c, (140 + 46.7) / 28.7))
+    }
+
+    func testEstimatesUseSparseHistoryButNeverInventMissingData() {
+        for days in [3.0, 7.0, 14.0] {
+            let sparse = calculate([reading(0, 100), reading(600, 200)], seconds: days * 86400)
+            XCTAssertTrue(sparse.coverage < 0.7)
+            XCTAssertTrue(close(sparse.gmi, 3.31 + 0.02392 * 150))
+            XCTAssertTrue(close(sparse.estimatedA1c, (150 + 46.7) / 28.7))
+            for missing in [[], [reading(0, .nan), reading(300, 0)]] {
+                let result = calculate(missing, seconds: days * 86400)
+                XCTAssertNil(result.gmi)
+                XCTAssertNil(result.estimatedA1c)
+            }
+        }
     }
 
     private var profileCalendar: Calendar {
@@ -136,14 +159,15 @@ final class GlucoseStatisticsTests: XCTestCase {
     }
 
     func testAGPFollowsTheSelectedReportingWindow() {
-        let readings = (0..<14).map { profileReading($0, 480, $0 < 7 ? 100 : 200) }
-        let full = profile(readings)
-        let week = GlucoseAmbulatoryProfile.calculate(readings: readings,
-            start: profileStart.addingTimeInterval(7 * 86400), end: profileStart.addingTimeInterval(14 * 86400), calendar: profileCalendar)
-        XCTAssertEqual(full.points[0].days, 14)
-        XCTAssertTrue(close(full.points[0].median, 150))
-        XCTAssertEqual(week.points[0].days, 7)
-        XCTAssertTrue(close(week.points[0].median, 200))
+        let readings = (0..<30).map { profileReading($0, 480, 100 + Double($0) * 5) }
+        let end = profileStart.addingTimeInterval(30 * 86400)
+        for days in GlucoseStatisticsSettingsStore.agpPeriods {
+            let result = GlucoseAmbulatoryProfile.calculate(readings: readings,
+                start: end.addingTimeInterval(-Double(days) * 86400), end: end, calendar: profileCalendar)
+            XCTAssertEqual(result.points[0].days, days)
+            let medianDay = (Double(30 - days) + 29) / 2
+            XCTAssertTrue(close(result.points[0].median, 100 + medianDay * 5))
+        }
     }
 
     func testAGPRepeatedDSTHourDoesNotCountAsAnExtraDay() {
@@ -211,11 +235,14 @@ final class GlucoseStatisticsTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = GlucoseStatisticsSettingsStore(defaults: defaults)
         XCTAssertEqual(store.days, 14)
+        XCTAssertEqual(store.agpDays, 14)
         XCTAssertTrue(store.useNightscout)
         store.days = 30
+        store.agpDays = 7
         store.useNightscout = false
         let restored = GlucoseStatisticsSettingsStore(defaults: defaults)
         XCTAssertEqual(restored.days, 30)
+        XCTAssertEqual(restored.agpDays, 7)
         XCTAssertFalse(restored.useNightscout)
         let range = GlucoseGraphSettingsStore(defaults: defaults)
         XCTAssertTrue(range.updateBounds(lowerBoundMGDL: 80, upperBoundMGDL: 145))
@@ -245,5 +272,24 @@ final class GlucoseStatisticsTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(1, forKey: "com.loopkit.Loop.GlucoseStatistics.days")
         XCTAssertEqual(GlucoseStatisticsSettingsStore(defaults: defaults).days, 14)
+    }
+
+    func testAGPSelectionIsIndependentAndRequestsEnoughHistory() {
+        let suite = "GlucoseStatisticsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = GlucoseStatisticsSettingsStore(defaults: defaults)
+        XCTAssertEqual(GlucoseStatisticsSettingsStore.agpPeriods, [3, 7, 14, 30])
+        store.days = 3
+        for days in GlucoseStatisticsSettingsStore.agpPeriods {
+            store.agpDays = days
+            XCTAssertEqual(store.days, 3)
+            XCTAssertEqual(store.historyDays, days)
+        }
+        store.days = 90
+        XCTAssertEqual(store.agpDays, 30)
+        XCTAssertEqual(store.historyDays, 90)
+        defaults.set(90, forKey: "com.loopkit.Loop.GlucoseStatistics.agpDays")
+        XCTAssertEqual(GlucoseStatisticsSettingsStore(defaults: defaults).agpDays, 14)
     }
 }

@@ -100,9 +100,9 @@ import Foundation
     }
     @MainActor static func main() async throws {
         let settings = GlucoseStatisticsSettingsStore.shared
-        let previousDays = settings.days, previousRemote = settings.useNightscout
-        defer { settings.days = previousDays; settings.useNightscout = previousRemote }
-        settings.days = 14; settings.useNightscout = false
+        let previousDays = settings.days, previousAGPDays = settings.agpDays, previousRemote = settings.useNightscout
+        defer { settings.days = previousDays; settings.agpDays = previousAGPDays; settings.useNightscout = previousRemote }
+        settings.days = 14; settings.agpDays = 3; settings.useNightscout = false
         let manager = DeviceDataManager(), loader = GlucoseStatisticsLoader()
         loader.refresh(manager: manager)
         try await waitUntil { !loader.isLoading }
@@ -119,6 +119,14 @@ import Foundation
         precondition(manager.glucoseStore.reads == 2)
         precondition(abs(loader.end.timeIntervalSince(loader.start) - 30 * 86400) < 0.01)
         print("PASS larger day selections load the additional history")
+        settings.days = 3; settings.agpDays = 30; loader.refresh(manager: manager)
+        precondition(!loader.isLoading && manager.glucoseStore.reads == 2)
+        precondition(settings.days == 3 && abs(loader.end.timeIntervalSince(loader.start) - 30 * 86400) < 0.01)
+        settings.agpDays = 7; loader.refresh(manager: manager)
+        precondition(!loader.isLoading && manager.glucoseStore.reads == 2)
+        precondition(abs(loader.end.timeIntervalSince(loader.start) - 7 * 86400) < 0.01)
+        print("PASS independent AGP selection keeps enough cached history for both cards")
+        settings.agpDays = 3; settings.days = 30
         manager.glucoseStore.hold = true
         loader.refresh(manager: manager, force: true)
         try await waitUntil { !manager.glucoseStore.pending.isEmpty }
@@ -198,7 +206,7 @@ import Foundation
         try await waitUntil { !agingLoader.isLoading }
         precondition(replacementManager.glucoseStore.reads == 1)
         print("PASS a different device manager cannot reuse the previous source cache")
-        print("Passed 11 async statistics loader checks.")
+        print("Passed 12 async statistics loader checks.")
     }
 }
 ''')

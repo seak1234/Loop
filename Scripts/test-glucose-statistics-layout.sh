@@ -25,7 +25,7 @@ func summary(days: Int, loading: Bool, longest: Bool = false) -> GlucoseStatisti
           glucoseFractions: loading ? nil : (longest ? [0, 1, 0] : [0.06, 0.72, 0.22]),
           averageGlucose: loading ? "—" : (longest ? "7.2 mmol/L" : "132 mg/dL"),
           gmi: loading ? "—" : "6.5%", estimatedA1c: loading ? "—" : "6.2%",
-          estimatesNote: loading ? "Needs ≥14 days and ≥70% CGM coverage." : "CGM estimates; lab HbA1c can differ.",
+          estimatesNote: loading ? "CGM estimates appear when data is available." : (days < 14 ? "Short-period estimates; lab HbA1c can differ." : "CGM estimates; lab HbA1c can differ."),
           insulinDailyAverage: loading ? "—" : "36.7 U/day", basal: loading ? "—" : "258.4 U", bolus: loading ? "—" : "255.4 U",
           insulinFractions: loading ? nil : [0.503, 0.497],
           insulinNote: loading ? "Loading insulin history…" : "Partial history · Nightscout boluses only",
@@ -104,7 +104,7 @@ for width: CGFloat in [320, 390, 430] {
 var calendar = Calendar(identifier: .gregorian)
 calendar.timeZone = TimeZone(secondsFromGMT: 0)!
 let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 1))!
-let readings = (0..<14).flatMap { day in
+let readings = (0..<30).flatMap { day in
     stride(from: 0, to: 1440, by: 5).compactMap { minute -> GlucoseStatisticsReading? in
         if (300..<360).contains(minute) { return nil } // A genuine missing clock-time interval.
         let glucose = 120 + 30 * sin(Double(minute) / 1440 * 2 * .pi) + Double(day % 7 - 3) * 9
@@ -137,6 +137,32 @@ for width: CGFloat in [320, 390, 430] {
     }
     checkCount += 1
     print("PASS AGP loading/data/unit/appearance states and stable layout at width \(width)")
+    var selected: Int?
+    cell.onSelectDays = { selected = $0 }
+    cell.overrideUserInterfaceStyle = .light
+    for days in GlucoseStatisticsSettingsStore.agpPeriods {
+        let button = descendants(cell).first { $0.accessibilityIdentifier == "glucoseAGPPeriod\(days)" } as! UIButton
+        let actions = button.actions(forTarget: cell, forControlEvent: .touchUpInside) ?? []
+        precondition(!actions.isEmpty)
+        actions.forEach { _ = cell.perform(NSSelectorFromString($0), with: button) }
+        precondition(selected == days && button.isSelected)
+        precondition(button.accessibilityTraits.contains(.selected))
+        let end = start.addingTimeInterval(30 * 86400)
+        let selectedProfile = GlucoseAmbulatoryProfile.calculate(readings: readings,
+            start: end.addingTimeInterval(-Double(days) * 86400), end: end, calendar: calendar)
+        cell.configure(.init(profile: selectedProfile, days: days, coverage: "96%", lowerMGDL: 80, upperMGDL: 145,
+            showRange: true, unitMultiplier: 1, unitLabel: "mg/dL", isLoading: false))
+        precondition(abs(fit(cell, width: width) - height!) < 0.5)
+        precondition(Set(persistentViews(cell.contentView).map(ObjectIdentifier.init)) == originalIDs!)
+        let buttons = descendants(cell).compactMap { $0 as? UIButton }
+        precondition(buttons.count == 4 && buttons.filter(\.isSelected).map(\.tag) == [days])
+        let caption = descendants(cell).first { $0.accessibilityIdentifier == "glucoseAGPCoverage" } as! UILabel
+        precondition(caption.text!.hasPrefix("Last \(days)d"))
+        let image = UIGraphicsImageRenderer(size: cell.bounds.size).image { context in cell.layer.render(in: context.cgContext) }
+        try image.pngData()!.write(to: output.appendingPathComponent("agp-\(Int(width))-\(days)d.png"))
+    }
+    checkCount += 1
+    print("PASS AGP 3/7/14/30-day actions, selected state and stable geometry at width \(width)")
 }
 print("Passed \(checkCount) real UIKit layout/interaction checks; saved loading and loaded renders.")
 SWIFT

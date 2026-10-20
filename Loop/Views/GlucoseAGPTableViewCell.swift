@@ -14,6 +14,8 @@ final class GlucoseAGPTableViewCell: UITableViewCell {
         let isLoading: Bool
     }
 
+    var onSelectDays: ((Int) -> Void)?
+    private var dayButtons: [UIButton] = []
     private let card = UIView()
     private let stack = UIStackView()
     private let plot = GlucoseAGPPlotView()
@@ -47,6 +49,27 @@ final class GlucoseAGPTableViewCell: UITableViewCell {
         let title = label(NSLocalizedString("AGP · Typical day", comment: "Title of the observed 24-hour glucose profile"), style: .headline, color: .dashboardInk)
         title.accessibilityTraits = .header
         stack.addArrangedSubview(title)
+        let picker = UIStackView()
+        picker.axis = .horizontal
+        picker.spacing = 6
+        picker.distribution = .fillEqually
+        for days in GlucoseStatisticsSettingsStore.agpPeriods {
+            let button = UIButton(type: .custom)
+            button.setTitle("\(days)d", for: .normal)
+            button.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+            button.titleLabel?.adjustsFontForContentSizeCategory = true
+            button.titleLabel?.adjustsFontSizeToFitWidth = true
+            button.titleLabel?.minimumScaleFactor = 0.75
+            button.tag = days
+            button.layer.cornerRadius = 11
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+            button.accessibilityLabel = String(format: NSLocalizedString("AGP, last %d days", comment: "AGP period selector accessibility label"), days)
+            button.accessibilityIdentifier = "glucoseAGPPeriod\(days)"
+            button.addTarget(self, action: #selector(selectDays(_:)), for: .touchUpInside)
+            picker.addArrangedSubview(button)
+            dayButtons.append(button)
+        }
+        stack.addArrangedSubview(picker)
         plot.accessibilityIdentifier = "glucoseAGPGraph"
         plot.heightAnchor.constraint(equalToConstant: 230).isActive = true
         stack.addArrangedSubview(plot)
@@ -74,6 +97,7 @@ final class GlucoseAGPTableViewCell: UITableViewCell {
     func configure(_ summary: Summary) {
         guard summary != lastSummary else { return }
         lastSummary = summary
+        updateSelectedDays(summary.days)
         plot.summary = summary
         if summary.isLoading {
             caption.text = NSLocalizedString("Updating glucose profile…", comment: "AGP loading caption")
@@ -81,6 +105,20 @@ final class GlucoseAGPTableViewCell: UITableViewCell {
             caption.text = NSLocalizedString("Needs at least 3 days of readings per time slot.", comment: "AGP unavailable without several observed days")
         } else {
             caption.text = String(format: NSLocalizedString("Last %1$dd · %2$@ CGM coverage\nLocal time · 14+ days recommended", comment: "AGP reporting period, observed days and CGM coverage"), summary.days, summary.coverage)
+        }
+    }
+
+    @objc private func selectDays(_ sender: UIButton) {
+        updateSelectedDays(sender.tag)
+        onSelectDays?(sender.tag)
+    }
+
+    private func updateSelectedDays(_ days: Int) {
+        for button in dayButtons {
+            button.isSelected = button.tag == days
+            button.backgroundColor = button.isSelected ? .dashboardGlucoseAccent : UIColor.dashboardMutedInk.withAlphaComponent(0.08)
+            button.setTitleColor(button.isSelected ? .white : .dashboardInk, for: .normal)
+            button.accessibilityTraits = button.isSelected ? [.button, .selected] : [.button]
         }
     }
 

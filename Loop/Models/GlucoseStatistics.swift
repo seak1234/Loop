@@ -33,17 +33,18 @@ struct GlucoseStatistics {
         return sd / mean * 100
     }
     // GMI (%) = 3.31 + 0.02392 × mean sensor glucose (mg/dL).
-    // https://doi.org/10.2337/dc18-1581. Require 14 days and 70% coverage.
+    // https://doi.org/10.2337/dc18-1581. Use the selected period's observed mean;
+    // short periods and limited coverage are identified in the display.
     var gmi: Double? {
-        guard end.timeIntervalSince(start) >= 14 * 86400 - 1, coverage >= 0.7, let mean = meanMGDL else { return nil }
+        guard let mean = meanMGDL else { return nil }
         return 3.31 + 0.02392 * mean
     }
 
     // Inverse of the ADAG eAG relationship: eAG = 28.7 × HbA1c − 46.7.
     // https://doi.org/10.2337/dc08-0545. An estimate, not a lab measurement.
-    // Apply the same reporting eligibility as GMI so sparse/short data stay unknown.
+    // Like GMI, available for any selected period with observed glucose data.
     var estimatedA1c: Double? {
-        guard gmi != nil, let mean = meanMGDL else { return nil }
+        guard let mean = meanMGDL else { return nil }
         return (mean + 46.7) / 28.7
     }
 

@@ -369,6 +369,12 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         case .agp:
             let cell = tableView.dequeueReusableCell(withIdentifier: "GlucoseAGP", for: indexPath) as! GlucoseAGPTableViewCell
             cell.configure(agpSummary())
+            cell.onSelectDays = { [weak self] days in
+                guard let self, days != GlucoseStatisticsSettingsStore.shared.agpDays else { return }
+                GlucoseStatisticsSettingsStore.shared.agpDays = days
+                self.statistics.refresh(manager: self.deviceManager)
+                self.refreshStatisticsDisplay()
+            }
             return cell
         case .charts:
             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
@@ -504,11 +510,13 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         let end = statistics.end
         let range = GlucoseGraphSettingsStore.shared.settings
         let days = GlucoseStatisticsSettingsStore.shared.days
+        let agpDays = GlucoseStatisticsSettingsStore.shared.agpDays
         let sourceVersion = statistics.sourceVersion
         let calendar = Calendar.current
         // Precompute the other buttons after a load. Returning to a period then
         // uses its numbers immediately, without a dash/number flash.
-        let periods = statistics.isLoading ? [days] : [days] + GlucoseStatisticsSettingsStore.periods.filter { $0 != days }
+        let selectedPeriods = days == agpDays ? [days] : [days, agpDays]
+        let periods = statistics.isLoading ? selectedPeriods : selectedPeriods + GlucoseStatisticsSettingsStore.periods.filter { !selectedPeriods.contains($0) }
         let calculation = Task.detached(priority: .userInitiated) { () -> [Int: (GlucoseStatistics, GlucoseInsulinStatistics, GlucoseAmbulatoryProfile)] in
             var values: [Int: (GlucoseStatistics, GlucoseInsulinStatistics, GlucoseAmbulatoryProfile)] = [:]
             for period in periods {
@@ -586,6 +594,16 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         else if insulin.hasRemoteBolusOnlyDays { insulinNote = "Partial history · Nightscout boluses only" }
         else if insulinFractions == nil { insulinNote = "Partial basal history" }
         else { insulinNote = "Recorded totals for the selected days" }
+        let estimatesNote: String
+        if result.meanMGDL == nil {
+            estimatesNote = NSLocalizedString("CGM estimates appear when data is available.", comment: "GMI and HbA1c estimates need observed glucose data")
+        } else if result.coverage < 0.7 {
+            estimatesNote = NSLocalizedString("Limited CGM data; rough estimates only.", comment: "GMI and HbA1c estimates with low CGM coverage")
+        } else if GlucoseStatisticsSettingsStore.shared.days < 14 {
+            estimatesNote = NSLocalizedString("Short-period estimates; lab HbA1c can differ.", comment: "GMI and HbA1c estimates from a 3- or 7-day period")
+        } else {
+            estimatesNote = NSLocalizedString("CGM estimates; lab HbA1c can differ.", comment: "GMI and ADAG estimates are not laboratory measurements")
+        }
         return .init(
             days: GlucoseStatisticsSettingsStore.shared.days,
             inRange: number(result.inRange, suffix: "%", multiplier: 100),
@@ -597,9 +615,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
             averageGlucose: glucose(result.meanMGDL),
             gmi: number(result.gmi, suffix: "%", decimals: 1),
             estimatedA1c: number(result.estimatedA1c, suffix: "%", decimals: 1),
-            estimatesNote: result.gmi == nil
-                ? NSLocalizedString("Needs ≥14 days and ≥70% CGM coverage.", comment: "GMI and HbA1c estimate data requirement")
-                : NSLocalizedString("CGM estimates; lab HbA1c can differ.", comment: "GMI and ADAG estimates are not laboratory measurements"),
+            estimatesNote: estimatesNote,
             insulinDailyAverage: number(insulin.recordedDailyAverage, suffix: " U/day", decimals: 1),
             basal: number(insulin.basal, suffix: " U", decimals: 1),
             bolus: number(insulin.bolus, suffix: " U", decimals: 1),
@@ -608,7 +624,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
 
     private func agpSummary() -> GlucoseAGPTableViewCell.Summary {
         let settings = GlucoseGraphSettingsStore.shared.settings
-        let days = GlucoseStatisticsSettingsStore.shared.days
+        let days = GlucoseStatisticsSettingsStore.shared.agpDays
         let saved = statisticsValues[days]
         let current = saved.flatMap { $0.sourceVersion == statistics.sourceVersion && $0.lower == settings.lowerBoundMGDL && $0.upper == settings.upperBoundMGDL ? $0 : nil }
         let unit = glucoseChart.glucoseUnit
@@ -671,7 +687,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         case .statistics:
             return statisticsRowHeight()
         case .agp:
-            return 370
+            return 426
         case .charts:
             return 275
         case .inputs:
