@@ -52,6 +52,7 @@ public typealias PumpManagerViewModel = DeviceViewModel<PumpManagerDescriptor>
 public protocol SettingsViewModelDelegate: AnyObject {
     func dosingEnabledChanged(_: Bool)
     func dosingStrategyChanged(_: AutomaticDosingStrategy)
+    func automaticBolusScheduleChanged(_: AutomaticBolusSchedule)
     func didTapIssueReport()
     var closedLoopDescriptiveText: String? { get }
 }
@@ -93,6 +94,10 @@ public class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var automaticBolusSchedule: AutomaticBolusSchedule {
+        didSet { delegate?.automaticBolusScheduleChanged(automaticBolusSchedule) }
+    }
+
     var closedLoopPreference: Bool {
        didSet {
            delegate?.dosingEnabledChanged(closedLoopPreference)
@@ -117,6 +122,7 @@ public class SettingsViewModel: ObservableObject {
                 initialDosingEnabled: Bool,
                 isClosedLoopAllowed: Published<Bool>.Publisher,
                 automaticDosingStrategy: AutomaticDosingStrategy,
+                automaticBolusSchedule: AutomaticBolusSchedule = AutomaticBolusSchedule(),
                 availableSupports: [SupportUI],
                 isOnboardingComplete: Bool,
                 therapySettingsViewModelDelegate: TherapySettingsViewModelDelegate?,
@@ -134,6 +140,7 @@ public class SettingsViewModel: ObservableObject {
         self.closedLoopPreference = initialDosingEnabled
         self.isClosedLoopAllowed = false
         self.automaticDosingStrategy = automaticDosingStrategy
+        self.automaticBolusSchedule = automaticBolusSchedule
         self.availableSupports = availableSupports
         self.isOnboardingComplete = isOnboardingComplete
         self.therapySettingsViewModelDelegate = therapySettingsViewModelDelegate

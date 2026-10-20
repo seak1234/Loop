@@ -73,6 +73,13 @@ public struct LoopSettings: Equatable {
     
     public var automaticDosingStrategy: AutomaticDosingStrategy = .tempBasalOnly
 
+    public var automaticBolusSchedule = AutomaticBolusSchedule()
+
+    public func effectiveDosingStrategy(at date: Date = Date(), calendar: Calendar = .current) -> AutomaticDosingStrategy {
+        guard automaticDosingStrategy == .automaticBolus else { return .tempBasalOnly }
+        return automaticBolusSchedule.allowsAutomaticBolus(at: date, calendar: calendar) ? .automaticBolus : .tempBasalOnly
+    }
+
     public var defaultRapidActingModel: ExponentialInsulinModelPreset?
     
     public var glucoseUnit: HKUnit? {
@@ -94,6 +101,7 @@ public struct LoopSettings: Equatable {
         maximumBolus: Double? = nil,
         suspendThreshold: GlucoseThreshold? = nil,
         automaticDosingStrategy: AutomaticDosingStrategy = .tempBasalOnly,
+        automaticBolusSchedule: AutomaticBolusSchedule = AutomaticBolusSchedule(),
         defaultRapidActingModel: ExponentialInsulinModelPreset? = nil
     ) {
         self.dosingEnabled = dosingEnabled
@@ -110,6 +118,7 @@ public struct LoopSettings: Equatable {
         self.maximumBolus = maximumBolus
         self.suspendThreshold = suspendThreshold
         self.automaticDosingStrategy = automaticDosingStrategy
+        self.automaticBolusSchedule = automaticBolusSchedule
         self.defaultRapidActingModel = defaultRapidActingModel
     }
 }
@@ -264,6 +273,10 @@ extension LoopSettings: RawRepresentable {
             self.scheduleOverride = TemporaryScheduleOverride(rawValue: rawOverride)
         }
 
+        if let rawSchedule = rawValue["automaticBolusSchedule"] as? AutomaticBolusSchedule.RawValue {
+            self.automaticBolusSchedule = AutomaticBolusSchedule(rawValue: rawSchedule) ?? AutomaticBolusSchedule(isEnabled: true)
+        }
+
         self.maximumBasalRatePerHour = rawValue["maximumBasalRatePerHour"] as? Double
 
         self.maximumBolus = rawValue["maximumBolus"] as? Double
@@ -295,7 +308,69 @@ extension LoopSettings: RawRepresentable {
         raw["maximumBolus"] = maximumBolus
         raw["minimumBGGuard"] = suspendThreshold?.rawValue
         raw["dosingStrategy"] = automaticDosingStrategy.rawValue
+        raw["automaticBolusSchedule"] = automaticBolusSchedule.rawValue
         
         return raw
+    }
+}
+
+
+/// Daily wall-clock ranges in the device's current time zone. Starts are inclusive;
+/// ends are exclusive. Equal start/end times are invalid, rather than all day.
+public struct AutomaticBolusSchedule: Equatable, RawRepresentable {
+    public struct TimeRange: Equatable {
+        public var startMinute: Int
+        public var endMinute: Int
+
+        public init(startMinute: Int, endMinute: Int) {
+            self.startMinute = startMinute
+            self.endMinute = endMinute
+        }
+
+        public var isValid: Bool {
+            (0..<1440).contains(startMinute) && (0..<1440).contains(endMinute) && startMinute != endMinute
+        }
+
+        public func contains(minute: Int) -> Bool {
+            guard isValid else { return false }
+            if startMinute < endMinute {
+                return minute >= startMinute && minute < endMinute
+            }
+            return minute >= startMinute || minute < endMinute
+        }
+    }
+
+    public var isEnabled: Bool
+    public var ranges: [TimeRange]
+
+    public init(isEnabled: Bool = false, ranges: [TimeRange] = []) {
+        self.isEnabled = isEnabled
+        self.ranges = ranges
+    }
+
+    public func allowsAutomaticBolus(at date: Date, calendar: Calendar = .current) -> Bool {
+        guard isEnabled else { return true }
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        guard let hour = components.hour, let minute = components.minute else { return false }
+        return ranges.contains { $0.contains(minute: hour * 60 + minute) }
+    }
+
+    public typealias RawValue = [String: Any]
+
+    public init?(rawValue: RawValue) {
+        guard let enabled = rawValue["isEnabled"] as? Bool,
+              let rawRanges = rawValue["ranges"] as? [[String: Int]] else { return nil }
+        var ranges: [TimeRange] = []
+        for rawRange in rawRanges {
+            guard let start = rawRange["startMinute"], let end = rawRange["endMinute"] else { return nil }
+            let range = TimeRange(startMinute: start, endMinute: end)
+            guard (0..<1440).contains(start), (0..<1440).contains(end) else { return nil }
+            ranges.append(range)
+        }
+        self.init(isEnabled: enabled, ranges: ranges)
+    }
+
+    public var rawValue: RawValue {
+        ["isEnabled": isEnabled, "ranges": ranges.map { ["startMinute": $0.startMinute, "endMinute": $0.endMinute] }]
     }
 }

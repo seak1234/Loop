@@ -25,6 +25,18 @@ class LoopSettingsTests: XCTestCase {
         return settings
     }()
     
+    func testAutomaticBolusScheduleRoundTripAndLegacyDefault() {
+        var settings = LoopSettings(automaticDosingStrategy: .automaticBolus)
+        settings.automaticBolusSchedule = AutomaticBolusSchedule(isEnabled: true, ranges: [
+            .init(startMinute: 1380, endMinute: 180),
+            .init(startMinute: 300, endMinute: 420)
+        ])
+        XCTAssertEqual(LoopSettings(rawValue: settings.rawValue), settings)
+        var legacy = settings.rawValue
+        legacy.removeValue(forKey: "automaticBolusSchedule")
+        XCTAssertEqual(LoopSettings(rawValue: legacy)?.automaticBolusSchedule, AutomaticBolusSchedule())
+    }
+
     func testPreMealOverride() {
         var settings = self.settings
         let preMealStart = Date()

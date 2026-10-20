@@ -109,6 +109,7 @@ class SettingsManager {
                 maximumBolus: latestSettings.maximumBolus,
                 suspendThreshold: latestSettings.suspendThreshold,
                 automaticDosingStrategy: latestSettings.automaticDosingStrategy,
+                automaticBolusSchedule: UserDefaults.standard.automaticBolusSchedule,
                 defaultRapidActingModel: latestSettings.defaultRapidActingModel?.presetForRapidActingInsulin)
         }
     }
@@ -144,6 +145,11 @@ class SettingsManager {
     }
 
     func storeSettings(newLoopSettings: LoopSettings? = nil, notificationSettings: NotificationSettings? = nil) {
+
+        // This device-local schedule is stored separately from the synced therapy settings.
+        if let newLoopSettings = newLoopSettings {
+            UserDefaults.standard.automaticBolusSchedule = newLoopSettings.automaticBolusSchedule
+        }
 
         var deviceTokenStr: String?
 

@@ -568,6 +568,36 @@ class LoopDataManagerDosingTests: LoopDataManagerTests {
         XCTAssertNil(mockDelegate.recommendation)
     }
 
+    func testScheduledAutomaticBolusFallsBackToTempBasalOutsideRanges() {
+        setUp(for: .highAndRisingWithCOB, maxBolus: 5, dosingStrategy: .automaticBolus)
+        let delegate = MockDelegate()
+        loopDataManager.delegate = delegate
+        let minute = Calendar.current.component(.hour, from: now) * 60 + Calendar.current.component(.minute, from: now)
+        let range = AutomaticBolusSchedule.TimeRange(startMinute: (minute + 1439) % 1440, endMinute: (minute + 1) % 1440)
+        loopDataManager.mutateSettings { settings in
+            settings.automaticBolusSchedule = AutomaticBolusSchedule(isEnabled: true, ranges: [range])
+        }
+        let group = DispatchGroup()
+        group.enter()
+        loopDataManager.getLoopState { _, state in
+            XCTAssertGreaterThan(state.recommendedAutomaticDose?.recommendation.bolusUnits ?? 0, 0)
+            group.leave()
+        }
+        group.wait()
+
+        // An enabled schedule with no ranges excludes the current time.
+        loopDataManager.mutateSettings { settings in
+            settings.automaticBolusSchedule.ranges = []
+        }
+        group.enter()
+        loopDataManager.getLoopState { _, state in
+            XCTAssertNil(state.recommendedAutomaticDose?.recommendation.bolusUnits)
+            XCTAssertNotNil(state.recommendedAutomaticDose?.recommendation.basalAdjustment)
+            group.leave()
+        }
+        group.wait()
+    }
+
     func testAutoBolusMaxIOBClamping() {
         /// `maxBolus` is set to clamp the automatic dose
         /// Autobolus without clamping: 0.65 U. Clamped recommendation: 0.2 U.

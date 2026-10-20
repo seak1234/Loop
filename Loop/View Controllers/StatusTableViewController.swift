@@ -3517,6 +3517,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
                                           initialDosingEnabled: deviceManager.loopManager.settings.dosingEnabled,
                                           isClosedLoopAllowed: automaticDosingStatus.$isAutomaticDosingAllowed,
                                           automaticDosingStrategy: deviceManager.loopManager.settings.automaticDosingStrategy,
+                                          automaticBolusSchedule: deviceManager.loopManager.settings.automaticBolusSchedule,
                                           availableSupports: supportManager.availableSupports,
                                           isOnboardingComplete: onboardingManager.isComplete,
                                           therapySettingsViewModelDelegate: deviceManager,
@@ -3583,7 +3584,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
     private func updateLoopStatusHUD() {
         hudView?.setLoopStatus(
             isClosedLoop: automaticDosingStatus.automaticDosingEnabled,
-            automaticDosingStrategy: deviceManager.loopManager.settings.automaticDosingStrategy
+            automaticDosingStrategy: deviceManager.loopManager.settings.effectiveDosingStrategy()
         )
     }
 
@@ -4145,13 +4146,20 @@ extension StatusTableViewController: SettingsViewModelDelegate {
         }
     }
     
+    func automaticBolusScheduleChanged(_ schedule: AutomaticBolusSchedule) {
+        deviceManager.loopManager.mutateSettings { settings in
+            settings.automaticBolusSchedule = schedule
+        }
+        updateLoopStatusHUD()
+    }
+
     func dosingStrategyChanged(_ strategy: AutomaticDosingStrategy) {
         self.deviceManager.loopManager.mutateSettings { settings in
             settings.automaticDosingStrategy = strategy
         }
         hudView?.setLoopStatus(
             isClosedLoop: automaticDosingStatus.automaticDosingEnabled,
-            automaticDosingStrategy: strategy
+            automaticDosingStrategy: deviceManager.loopManager.settings.effectiveDosingStrategy()
         )
     }
 

@@ -328,6 +328,10 @@ final class LoopDataManager {
             mealDetectionManager.maximumBolus = newValue.maximumBolus
         }
 
+        if newValue.automaticBolusSchedule != oldValue.automaticBolusSchedule || newValue.automaticDosingStrategy != oldValue.automaticDosingStrategy {
+            invalidateCachedEffects = true
+        }
+
         if invalidateCachedEffects {
             dataAccessQueue.async {
                 // Invalidate cached effects based on this schedule
@@ -401,6 +405,8 @@ final class LoopDataManager {
     fileprivate var predictedGlucoseIncludingPendingInsulin: [PredictedGlucoseValue]?
 
     private var recentCarbEntries: [StoredCarbEntry]?
+
+    private var recommendationDosingStrategy: AutomaticDosingStrategy?
 
     fileprivate var recommendedAutomaticDose: (recommendation: AutomaticDoseRecommendation, date: Date)?
 
@@ -1164,8 +1170,8 @@ extension LoopDataManager {
         dosingDecision.predictedGlucose = predictedGlucoseIncludingPendingInsulin
         dosingDecision.automaticDoseRecommendation = recommendedAutomaticDose?.recommendation
 
-        // If the glucose prediction hasn't changed, then nothing has changed, so just use pre-existing recommendations
-        guard predictedGlucose == nil else {
+        // A time range boundary can change the strategy even without new glucose.
+        guard predictedGlucose == nil || recommendationDosingStrategy != settings.effectiveDosingStrategy(at: now()) else {
 
             // If we still have a bolus in progress, then warn (unlikely, but possible if device comms fail)
             if lastRequestedBolus != nil, dosingDecision.automaticDoseRecommendation == nil, dosingDecision.manualBolusRecommendation == nil {
@@ -1815,7 +1821,8 @@ extension LoopDataManager {
             let automaticDosingIOBLimit = maxBolus! * 2.0
             let iobHeadroom = automaticDosingIOBLimit - self.insulinOnBoard!.value
 
-            switch settings.automaticDosingStrategy {
+            let dosingStrategy = settings.effectiveDosingStrategy(at: startDate)
+            switch dosingStrategy {
             case .automaticBolus:
                 let volumeRounder = { (_ units: Double) in
                     return self.delegate?.roundBolusVolume(units: units) ?? units
@@ -1871,6 +1878,8 @@ extension LoopDataManager {
                 dosingRecommendation = AutomaticDoseRecommendation(basalAdjustment: temp)
             }
 
+            recommendationDosingStrategy = dosingStrategy
+
             if let dosingRecommendation = dosingRecommendation {
                 self.logger.default("Recommending dose: %{public}@ at %{public}@", String(describing: dosingRecommendation), String(describing: startDate))
                 recommendedAutomaticDose = (recommendation: dosingRecommendation, date: startDate)
@@ -1902,6 +1911,15 @@ extension LoopDataManager {
             return LoopError.recommendationExpired(date: recommendedDose.date)
         }
         
+        // A recommendation can cross a scheduled boundary while waiting for enactment.
+        // Discard an automatic bolus if it is no longer permitted; the next loop
+        // will compute a fresh temporary basal recommendation.
+        if (recommendedDose.recommendation.bolusUnits ?? 0) > 0,
+           settings.effectiveDosingStrategy(at: now()) != .automaticBolus {
+            self.recommendedAutomaticDose = nil
+            return nil
+        }
+
         if case .suspended = basalDeliveryState {
             return LoopError.pumpSuspended
         }

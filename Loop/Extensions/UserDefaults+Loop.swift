@@ -7,6 +7,7 @@
 
 import Foundation
 import LoopKit
+import LoopCore
 
 
 extension UserDefaults {
@@ -16,7 +17,19 @@ extension UserDefaults {
         case legacyServicesState = "com.loopkit.Loop.ServicesState"
         case loopNotRunningNotifications = "com.loopkit.Loop.loopNotRunningNotifications"
         case inFlightAutomaticDose = "com.loopkit.Loop.inFlightAutomaticDose"
+        case automaticBolusSchedule = "com.loopkit.Loop.automaticBolusSchedule"
         case favoriteFoods = "com.loopkit.Loop.favoriteFoods"
+    }
+
+    var automaticBolusSchedule: AutomaticBolusSchedule {
+        get {
+            guard let raw = dictionary(forKey: Key.automaticBolusSchedule.rawValue) else {
+                return AutomaticBolusSchedule()
+            }
+            // A malformed saved schedule must not enable unrestricted boluses.
+            return AutomaticBolusSchedule(rawValue: raw) ?? AutomaticBolusSchedule(isEnabled: true)
+        }
+        set { set(newValue.rawValue, forKey: Key.automaticBolusSchedule.rawValue) }
     }
 
     var legacyPumpManagerRawValue: PumpManager.RawValue? {

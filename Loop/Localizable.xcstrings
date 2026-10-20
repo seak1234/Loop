@@ -5951,6 +5951,9 @@
     "Add the periods you remember, starting with the most recent. Previous dates help place today in your cycle and make comparisons more useful." : {
 
     },
+    "Add Time Range" : {
+
+    },
     "Adjusted for" : {
       "localizations" : {
         "da" : {
@@ -12376,6 +12379,9 @@
     "Choose an end date for this earlier period." : {
 
     },
+    "Choose different start and end times. This range is inactive." : {
+
+    },
     "Choose Favorite:" : {
       "comment" : "The label for the row where you choose saved Favorite Food",
       "extractionState" : "stale",
@@ -17795,8 +17801,14 @@
         }
       }
     },
+    "End" : {
+
+    },
     "Ended" : {
       "comment" : "Period history end date label"
+    },
+    "Ends the following day" : {
+
     },
     "Enter a blood glucose from a meter for a recommended bolus amount." : {
       "comment" : "Caption for bolus screen notice when glucose data is missing or stale",
@@ -24852,6 +24864,9 @@
 
     },
     "Let Mochi save notes when I ask" : {
+
+    },
+    "Limit Automatic Bolus to Time Ranges" : {
 
     },
     "Live activity" : {
@@ -33243,6 +33258,9 @@
         }
       }
     },
+    "Ranges repeat every day and may cross midnight. Overlapping ranges are combined. With no active ranges, Loop uses Temp Basal Only all day." : {
+
+    },
     "Rapid-Acting – Adults" : {
       "comment" : "Title of insulin model preset",
       "extractionState" : "manual",
@@ -34238,6 +34256,9 @@
       }
     },
     "Remove API key" : {
+
+    },
+    "Remove Time Range" : {
 
     },
     "Replace key (optional)" : {
@@ -36223,6 +36244,9 @@
       }
     },
     "Some notes changed in both places. Both versions were kept; review your journal." : {
+
+    },
+    "Start" : {
 
     },
     "Start time is out of range: %@" : {
@@ -38940,6 +38964,9 @@
       }
     },
     "This will pause the rule." : {
+
+    },
+    "Time Range %lld" : {
 
     },
     "Time Sensitive Alerts" : {
@@ -41948,6 +41975,9 @@
           }
         }
       }
+    },
+    "When enabled, Automatic Bolus is used only during these daily time ranges. Outside them, Loop uses Temp Basal Only. Times follow your device’s time zone. Closed Loop must be enabled." : {
+
     },
     "When enabled, Loop can notify you when it detects a meal that wasn't logged." : {
       "comment" : "Description of missed meal notifications.",
