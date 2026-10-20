@@ -23,6 +23,7 @@
 		D748E9F72F93329100C54301 /* GlucoseGraphSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */; };
 		A5E9698E8E754555AA8DD12F /* GlucoseStatisticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E304F329D254D3B91FD2757 /* GlucoseStatisticsTests.swift */; };
 		D748E9F52F93329100C54301 /* GlucoseGraphSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */; };
+		F3A7C0010000000000000002 /* GlucoseAGPTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A7C0010000000000000001 /* GlucoseAGPTableViewCell.swift */; };
 		12A7347EB8004099BF3B8CFF /* GlucoseStatisticsTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDC3E36753D4A359DFD1096 /* GlucoseStatisticsTableViewCell.swift */; };
 		D748E9F32F93329100C54301 /* GlucoseGraphSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */; };
 		6FFEF0B263134128BC8835AA /* GlucoseStatisticsLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F2DDDC9D7045C5ACEE2E85 /* GlucoseStatisticsLoader.swift */; };
@@ -798,6 +799,7 @@
 		D748E9F62F93329100C54301 /* GlucoseGraphSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettingsTests.swift; sourceTree = "<group>"; };
 		3E304F329D254D3B91FD2757 /* GlucoseStatisticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseStatisticsTests.swift; sourceTree = "<group>"; };
 		D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettingsView.swift; sourceTree = "<group>"; };
+		F3A7C0010000000000000001 /* GlucoseAGPTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseAGPTableViewCell.swift; sourceTree = "<group>"; };
 		1DDC3E36753D4A359DFD1096 /* GlucoseStatisticsTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseStatisticsTableViewCell.swift; sourceTree = "<group>"; };
 		D748E9F22F93329100C54301 /* GlucoseGraphSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphSettings.swift; sourceTree = "<group>"; };
 		20F2DDDC9D7045C5ACEE2E85 /* GlucoseStatisticsLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseStatisticsLoader.swift; sourceTree = "<group>"; };
@@ -2061,6 +2063,7 @@
 				439706E522D2E84900C81566 /* PredictionSettingTableViewCell.swift */,
 				1DE09BA824A3E23F009EE9F9 /* SettingsView.swift */,
 				D748E9F42F93329100C54301 /* GlucoseGraphSettingsView.swift */,
+				F3A7C0010000000000000001 /* GlucoseAGPTableViewCell.swift */,
 				1DDC3E36753D4A359DFD1096 /* GlucoseStatisticsTableViewCell.swift */,
 				DDC389FB2A2BC6670066E2E8 /* SettingsView+algorithmExperimentsSection.swift */,
 				C1DE5D22251BFC4D00439E49 /* SimpleBolusView.swift */,
@@ -3613,6 +3616,7 @@
 				A9DCF32A25B0FABF00C89088 /* LoopUIColorPalette+Default.swift in Sources */,
 				1DDE273E24AEA4B000796622 /* SettingsView.swift in Sources */,
 				D748E9F52F93329100C54301 /* GlucoseGraphSettingsView.swift in Sources */,
+				F3A7C0010000000000000002 /* GlucoseAGPTableViewCell.swift in Sources */,
 				12A7347EB8004099BF3B8CFF /* GlucoseStatisticsTableViewCell.swift in Sources */,
 				A9B607B0247F000F00792BE4 /* UserNotifications+Loop.swift in Sources */,
 				84AB0A833008A62400A13446 /* SceneDelegate.swift in Sources */,

@@ -39,6 +39,14 @@ struct GlucoseStatistics {
         return 3.31 + 0.02392 * mean
     }
 
+    // Inverse of the ADAG eAG relationship: eAG = 28.7 × HbA1c − 46.7.
+    // https://doi.org/10.2337/dc08-0545. An estimate, not a lab measurement.
+    // Apply the same reporting eligibility as GMI so sparse/short data stay unknown.
+    var estimatedA1c: Double? {
+        guard gmi != nil, let mean = meanMGDL else { return nil }
+        return (mean + 46.7) / 28.7
+    }
+
     static func calculate(readings: [GlucoseStatisticsReading], start: Date, end: Date,
                           lower: Double, upper: Double) -> Self {
         // A measurement represents at most five minutes, ending at the next
@@ -84,6 +92,68 @@ struct GlucoseStatistics {
             if index == local.count || local[index].date > reading.date.addingTimeInterval(120) { result.append(reading) }
         }
         return result
+    }
+}
+
+/// A local-time, 24-hour profile of observed CGM data, not a prediction.
+/// Each day contributes one median per 15-minute slot, avoiding sampling-rate bias.
+struct GlucoseAmbulatoryProfile: Equatable {
+    struct Point: Equatable {
+        let minute: Int
+        let days: Int
+        let p05: Double
+        let p25: Double
+        let median: Double
+        let p75: Double
+        let p95: Double
+    }
+
+    let points: [Point]
+    let daysWithData: Int
+    static let slotMinutes = 15
+    static let minimumDaysPerSlot = 3
+
+    /// Never draw a line or shaded band across an unsupported clock-time slot.
+    var segments: [[Point]] {
+        var result: [[Point]] = []
+        for point in points {
+            if let last = result.last?.last, point.minute - last.minute == Self.slotMinutes {
+                result[result.count - 1].append(point)
+            } else { result.append([point]) }
+        }
+        return result
+    }
+
+    static func calculate(readings: [GlucoseStatisticsReading], start: Date, end: Date,
+                          calendar: Calendar = .current) -> Self {
+        var unique: [Date: Double] = [:]
+        for reading in readings where reading.date >= start && reading.date < end && reading.mgdl.isFinite && reading.mgdl >= 39 {
+            unique[reading.date] = reading.mgdl
+        }
+        var dailySlots: [Date: [Int: [Double]]] = [:]
+        for (date, value) in unique {
+            let time = calendar.dateComponents([.hour, .minute], from: date)
+            let slot = ((time.hour ?? 0) * 60 + (time.minute ?? 0)) / Self.slotMinutes
+            dailySlots[calendar.startOfDay(for: date), default: [:]][slot, default: []].append(value)
+        }
+        var slots: [Int: [Double]] = [:]
+        for day in dailySlots.values {
+            for (slot, values) in day { slots[slot, default: []].append(percentile(values.sorted(), 0.5)) }
+        }
+        let points = slots.keys.sorted().compactMap { slot -> Point? in
+            let values = slots[slot]!.sorted()
+            guard values.count >= minimumDaysPerSlot else { return nil }
+            return Point(minute: slot * slotMinutes, days: values.count,
+                p05: percentile(values, 0.05), p25: percentile(values, 0.25), median: percentile(values, 0.5),
+                p75: percentile(values, 0.75), p95: percentile(values, 0.95))
+        }
+        return Self(points: points, daysWithData: dailySlots.count)
+    }
+
+    private static func percentile(_ sorted: [Double], _ fraction: Double) -> Double {
+        let position = Double(sorted.count - 1) * fraction
+        let lower = Int(position), upper = min(sorted.count - 1, Int(ceil(position)))
+        return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - Double(lower))
     }
 }
 

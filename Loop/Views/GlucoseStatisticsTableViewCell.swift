@@ -11,6 +11,9 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
         let upperBoundary: String
         let glucoseFractions: [Double]?
         let averageGlucose: String
+        let gmi: String
+        let estimatedA1c: String
+        let estimatesNote: String
         let insulinDailyAverage: String
         let basal: String
         let bolus: String
@@ -34,6 +37,9 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
     private let glucoseBar = GlucoseStatisticsBarView(colors: [.dashboardGlucoseBelowRange, .dashboardGlucoseInRange, .dashboardGlucoseAboveRange])
     private let insulinBar = GlucoseStatisticsBarView(colors: [.systemIndigo, .systemCyan], height: 16)
     private let averageValue = UILabel()
+    private let gmiValue = UILabel()
+    private let estimatedA1cValue = UILabel()
+    private let estimatesNote = UILabel()
     private let insulinValue = UILabel()
     private let status = UILabel()
     private let insulinNote = UILabel()
@@ -111,6 +117,12 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
         [below, inside, above].forEach { glucoseLegend.addArrangedSubview($0) }
         stack.addArrangedSubview(glucoseLegend)
         stack.addArrangedSubview(valueRow("Average glucose", value: averageValue))
+        gmiValue.accessibilityIdentifier = "glucoseStatisticsGMI"
+        estimatedA1cValue.accessibilityIdentifier = "glucoseStatisticsEstimatedA1c"
+        stack.addArrangedSubview(valueRow(NSLocalizedString("GMI", comment: "CGM-derived glucose management indicator"), value: gmiValue))
+        stack.addArrangedSubview(valueRow(NSLocalizedString("Est. HbA1c", comment: "ADAG-derived HbA1c estimate, not a lab measurement"), value: estimatedA1cValue))
+        reserveTwoLines(estimatesNote)
+        stack.addArrangedSubview(estimatesNote)
         reserveTwoLines(status)
         status.accessibilityIdentifier = "glucoseStatisticsStatus"
         stack.addArrangedSubview(status)
@@ -144,6 +156,9 @@ final class GlucoseStatisticsTableViewCell: UITableViewCell {
             inside.configure(value: summary.inRange, detail: summary.lowerBoundary + "–" + summary.upperBoundary)
             above.configure(value: summary.aboveRange, detail: "> " + summary.upperBoundary)
             averageValue.text = summary.averageGlucose
+            gmiValue.text = summary.gmi
+            estimatedA1cValue.text = summary.estimatedA1c
+            estimatesNote.text = summary.estimatesNote
             status.text = summary.status
             insulinValue.text = summary.insulinDailyAverage
             insulinBar.setFractions(summary.insulinFractions)

@@ -61,6 +61,105 @@ final class GlucoseStatisticsTests: XCTestCase {
         XCTAssertNil(calculate(readings, seconds: 86400).gmi)
     }
 
+    func testEstimatedA1cUsesADAGAndSharesGMICoverageRequirement() {
+        let seconds = 14.0 * 86400
+        let readings = stride(from: 0.0, to: seconds, by: 300).map { reading($0, 120) }
+        let result = calculate(readings, seconds: seconds)
+        XCTAssertTrue(close(result.gmi, 6.1804))
+        XCTAssertTrue(close(result.estimatedA1c, (120 + 46.7) / 28.7))
+        XCTAssertNil(calculate(readings, seconds: 86400).estimatedA1c)
+        XCTAssertNil(calculate(Array(readings.prefix(100)), seconds: seconds).estimatedA1c)
+        XCTAssertNil(calculate([]).estimatedA1c)
+    }
+
+    private var profileCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private var profileStart: Date { profileCalendar.date(from: DateComponents(year: 2026, month: 10, day: 1))! }
+
+    private func profileReading(_ day: Int, _ minute: Int, _ value: Double) -> GlucoseStatisticsReading {
+        .init(date: profileStart.addingTimeInterval(Double(day * 86400 + minute * 60)), mgdl: value)
+    }
+
+    private func profile(_ readings: [GlucoseStatisticsReading]) -> GlucoseAmbulatoryProfile {
+        .calculate(readings: readings, start: profileStart, end: profileStart.addingTimeInterval(14 * 86400), calendar: profileCalendar)
+    }
+
+    func testAGPPercentilesGiveEachObservedDayEqualWeight() {
+        // The densely sampled first day must not outweigh the other two days.
+        let firstDay = (480..<490).map { profileReading(0, $0, 100) }
+        let result = profile(firstDay + [profileReading(1, 480, 200), profileReading(2, 480, 300)])
+        XCTAssertEqual(result.daysWithData, 3)
+        XCTAssertEqual(result.points.count, 1)
+        let point = result.points[0]
+        XCTAssertEqual(point.minute, 480)
+        XCTAssertEqual(point.days, 3)
+        XCTAssertTrue(close(point.p05, 110))
+        XCTAssertTrue(close(point.p25, 150))
+        XCTAssertTrue(close(point.median, 200))
+        XCTAssertTrue(close(point.p75, 250))
+        XCTAssertTrue(close(point.p95, 290))
+    }
+
+    func testAGPDoesNotBridgeMissingOrInsufficientlyObservedSlots() {
+        var readings = (0..<3).flatMap { day in [0, 15, 60].map { profileReading(day, $0, 100) } }
+        readings += [profileReading(0, 30, 100), profileReading(1, 30, 100)]
+        let result = profile(readings)
+        XCTAssertEqual(result.points.map(\.minute), [0, 15, 60])
+        XCTAssertEqual(result.segments.count, 2)
+        XCTAssertEqual(result.segments[0].count, 2)
+        XCTAssertEqual(result.segments[1].count, 1)
+        XCTAssertTrue(profile([profileReading(0, 0, 100), profileReading(1, 0, 100)]).points.isEmpty)
+        XCTAssertTrue(profile([]).points.isEmpty)
+    }
+
+    func testAGPFiltersWindowInvalidValuesAndDuplicateTimestamps() {
+        let valid = (0..<3).map { profileReading($0, 0, 120) }
+        let rejected = [profileReading(-1, 0, 500), profileReading(14, 0, 500),
+            profileReading(3, 0, .nan), profileReading(4, 0, 38)]
+        let result = profile(valid + rejected + [valid[0], valid[0]])
+        XCTAssertEqual(result.daysWithData, 3)
+        XCTAssertEqual(result.points[0].days, 3)
+        XCTAssertTrue(close(result.points[0].median, 120))
+    }
+
+    func testAGPUsesLocalClockTime() {
+        var local = profileCalendar
+        local.timeZone = TimeZone(identifier: "America/New_York")!
+        let readings = (0..<3).map { profileReading($0, 360, 120) }
+        let result = GlucoseAmbulatoryProfile.calculate(readings: readings, start: profileStart,
+            end: profileStart.addingTimeInterval(14 * 86400), calendar: local)
+        XCTAssertEqual(result.points[0].minute, 120) // 06:00 UTC is 02:00 local in October.
+    }
+
+    func testAGPFollowsTheSelectedReportingWindow() {
+        let readings = (0..<14).map { profileReading($0, 480, $0 < 7 ? 100 : 200) }
+        let full = profile(readings)
+        let week = GlucoseAmbulatoryProfile.calculate(readings: readings,
+            start: profileStart.addingTimeInterval(7 * 86400), end: profileStart.addingTimeInterval(14 * 86400), calendar: profileCalendar)
+        XCTAssertEqual(full.points[0].days, 14)
+        XCTAssertTrue(close(full.points[0].median, 150))
+        XCTAssertEqual(week.points[0].days, 7)
+        XCTAssertTrue(close(week.points[0].median, 200))
+    }
+
+    func testAGPRepeatedDSTHourDoesNotCountAsAnExtraDay() {
+        let formatter = ISO8601DateFormatter()
+        let dates = ["2026-10-31T05:30:00Z", "2026-11-01T05:30:00Z", "2026-11-01T06:30:00Z", "2026-11-02T06:30:00Z"]
+        let readings = zip(dates, [100.0, 100, 200, 300]).map { GlucoseStatisticsReading(date: formatter.date(from: $0.0)!, mgdl: $0.1) }
+        var local = profileCalendar
+        local.timeZone = TimeZone(identifier: "America/New_York")!
+        let result = GlucoseAmbulatoryProfile.calculate(readings: readings,
+            start: formatter.date(from: "2026-10-31T00:00:00Z")!, end: formatter.date(from: "2026-11-03T00:00:00Z")!, calendar: local)
+        XCTAssertEqual(result.daysWithData, 3)
+        XCTAssertEqual(result.points[0].minute, 90)
+        XCTAssertEqual(result.points[0].days, 3)
+        XCTAssertTrue(close(result.points[0].median, 150))
+    }
+
     func testNightscoutMergeKeepsLocalAndFillsGaps() {
         let merged = GlucoseStatistics.merge(local: [reading(0, 100), reading(300, 110), reading(600, .nan)],
                                              remote: [reading(30, 200), reading(290, 220), reading(600, 120)])

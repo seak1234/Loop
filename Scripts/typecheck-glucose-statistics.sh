@@ -176,8 +176,9 @@ xcrun swiftc -sdk "$task_sdk" -target "$(uname -m)-apple-ios15.1-macabi" \
     "$task_root/Loop/Models/GlucoseStatisticsSettings.swift" \
     "$task_root/Loop/Models/PredictionInputEffect.swift" \
     "$task_root/Loop/Views/GlucoseStatisticsTableViewCell.swift" \
+    "$task_root/Loop/Views/GlucoseAGPTableViewCell.swift" \
     "$task_root/Loop/Views/PredictionInputEffectTableViewCell.swift" \
     "$task_temp/Interfaces.swift" "$task_temp/DisplayGlucosePreference.swift" \
     "$task_temp/GlucoseGraphSettingsView.swift" "$task_temp/GlucoseStatisticsLoader.swift" \
     "$task_temp/PredictionTableViewController.swift"
-echo "Predicted Glucose statistics screen, settings and loader UIKit/SwiftUI type checks passed."
+echo "Glucose statistics, AGP, settings and loader UIKit/SwiftUI type checks passed."

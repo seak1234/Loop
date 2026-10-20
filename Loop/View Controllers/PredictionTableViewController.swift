@@ -56,6 +56,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         let upper: Double
         let glucose: GlucoseStatistics
         let insulin: GlucoseInsulinStatistics
+        let profile: GlucoseAmbulatoryProfile
     }
     private var statisticsValues: [Int: StatisticsValues] = [:]
     private var statisticsCalculationInProgress = false
@@ -86,6 +87,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         tableView.contentInset = UIEdgeInsets(top: 6, left: 0, bottom: 12, right: 0)
         updateDashboardBackgroundAppearance()
         tableView.register(GlucoseStatisticsTableViewCell.self, forCellReuseIdentifier: "GlucoseStatistics")
+        tableView.register(GlucoseAGPTableViewCell.self, forCellReuseIdentifier: "GlucoseAGP")
         title = NSLocalizedString("Glucose", comment: "Title of the glucose page")
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             title: NSLocalizedString("Settings", comment: "Button opening glucose range and data settings"),
@@ -336,6 +338,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
 
     private enum Section: Int, CaseIterable {
         case statistics
+        case agp
         case charts
         case inputs
     }
@@ -352,9 +355,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section)! {
-        case .statistics:
-            return 1
-        case .charts:
+        case .statistics, .agp, .charts:
             return 1
         case .inputs:
             return availableInputs.count
@@ -365,6 +366,10 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         switch Section(rawValue: indexPath.section)! {
         case .statistics:
             return statisticsCell(at: indexPath)
+        case .agp:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "GlucoseAGP", for: indexPath) as! GlucoseAGPTableViewCell
+            cell.configure(agpSummary())
+            return cell
         case .charts:
             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
             cell.dashboardCardAccentColor = .dashboardGlucoseAccent
@@ -485,6 +490,9 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         if let cell = tableView.cellForRow(at: indexPath) as? GlucoseStatisticsTableViewCell {
             cell.configure(statisticsSummary())
         }
+        if let cell = tableView.cellForRow(at: IndexPath(row: 0, section: Section.agp.rawValue)) as? GlucoseAGPTableViewCell {
+            cell.configure(agpSummary())
+        }
     }
 
     private func refreshStatisticsDisplay() {
@@ -497,11 +505,12 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         let range = GlucoseGraphSettingsStore.shared.settings
         let days = GlucoseStatisticsSettingsStore.shared.days
         let sourceVersion = statistics.sourceVersion
+        let calendar = Calendar.current
         // Precompute the other buttons after a load. Returning to a period then
         // uses its numbers immediately, without a dash/number flash.
         let periods = statistics.isLoading ? [days] : [days] + GlucoseStatisticsSettingsStore.periods.filter { $0 != days }
-        let calculation = Task.detached(priority: .userInitiated) { () -> [Int: (GlucoseStatistics, GlucoseInsulinStatistics)] in
-            var values: [Int: (GlucoseStatistics, GlucoseInsulinStatistics)] = [:]
+        let calculation = Task.detached(priority: .userInitiated) { () -> [Int: (GlucoseStatistics, GlucoseInsulinStatistics, GlucoseAmbulatoryProfile)] in
+            var values: [Int: (GlucoseStatistics, GlucoseInsulinStatistics, GlucoseAmbulatoryProfile)] = [:]
             for period in periods {
                 guard !Task.isCancelled else { return [:] }
                 let start = end.addingTimeInterval(-Double(period) * 86400)
@@ -509,7 +518,9 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
                                                           lower: range.lowerBoundMGDL, upper: range.upperBoundMGDL)
                 guard !Task.isCancelled else { return [:] }
                 let insulin = GlucoseInsulinStatistics.calculate(local: doses, remoteBoluses: remoteBoluses, start: start, end: end)
-                values[period] = (glucose, insulin)
+                guard !Task.isCancelled else { return [:] }
+                let profile = GlucoseAmbulatoryProfile.calculate(readings: readings, start: start, end: end, calendar: calendar)
+                values[period] = (glucose, insulin, profile)
             }
             return values
         }
@@ -518,7 +529,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
             guard !Task.isCancelled, let self else { return }
             for (period, value) in values {
                 self.statisticsValues[period] = StatisticsValues(sourceVersion: sourceVersion, lower: range.lowerBoundMGDL,
-                                                                 upper: range.upperBoundMGDL, glucose: value.0, insulin: value.1)
+                                                                 upper: range.upperBoundMGDL, glucose: value.0, insulin: value.1, profile: value.2)
             }
             self.statisticsCalculationInProgress = false
             self.updateVisibleStatisticsCell()
@@ -554,6 +565,7 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         func number(_ value: Double?, suffix: String, multiplier: Double = 1, decimals: Int = 0) -> String {
             guard let value else { return "—" }
             numberFormatter.maximumFractionDigits = decimals
+            numberFormatter.minimumFractionDigits = decimals
             return (numberFormatter.string(from: NSNumber(value: value * multiplier)) ?? "—") + suffix
         }
         let status: String
@@ -583,10 +595,31 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
             upperBoundary: glucose(settings.upperBoundMGDL),
             glucoseFractions: result.inRange.map { [result.belowRange ?? 0, $0, result.aboveRange ?? 0] },
             averageGlucose: glucose(result.meanMGDL),
+            gmi: number(result.gmi, suffix: "%", decimals: 1),
+            estimatedA1c: number(result.estimatedA1c, suffix: "%", decimals: 1),
+            estimatesNote: result.gmi == nil
+                ? NSLocalizedString("Needs ≥14 days and ≥70% CGM coverage.", comment: "GMI and HbA1c estimate data requirement")
+                : NSLocalizedString("CGM estimates; lab HbA1c can differ.", comment: "GMI and ADAG estimates are not laboratory measurements"),
             insulinDailyAverage: number(insulin.recordedDailyAverage, suffix: " U/day", decimals: 1),
             basal: number(insulin.basal, suffix: " U", decimals: 1),
             bolus: number(insulin.bolus, suffix: " U", decimals: 1),
             insulinFractions: insulinFractions, insulinNote: insulinNote, status: status)
+    }
+
+    private func agpSummary() -> GlucoseAGPTableViewCell.Summary {
+        let settings = GlucoseGraphSettingsStore.shared.settings
+        let days = GlucoseStatisticsSettingsStore.shared.days
+        let saved = statisticsValues[days]
+        let current = saved.flatMap { $0.sourceVersion == statistics.sourceVersion && $0.lower == settings.lowerBoundMGDL && $0.upper == settings.upperBoundMGDL ? $0 : nil }
+        let unit = glucoseChart.glucoseUnit
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .percent
+        formatter.maximumFractionDigits = 0
+        return .init(profile: current?.profile ?? .init(points: [], daysWithData: 0), days: days,
+            coverage: current.map { formatter.string(from: NSNumber(value: $0.glucose.coverage)) ?? "—" } ?? "—",
+            lowerMGDL: settings.lowerBoundMGDL, upperMGDL: settings.upperBoundMGDL, showRange: settings.isEnabled,
+            unitMultiplier: HKQuantity(unit: .milligramsPerDeciliter, doubleValue: 1).doubleValue(for: unit),
+            unitLabel: unit.localizedShortUnitString, isLoading: statistics.isLoading || (current == nil && statisticsCalculationInProgress))
     }
 
     // MARK: - UITableViewDelegate
@@ -637,6 +670,8 @@ class PredictionTableViewController: LoopChartsTableViewController, Identifiable
         switch Section(rawValue: indexPath.section)! {
         case .statistics:
             return statisticsRowHeight()
+        case .agp:
+            return 370
         case .charts:
             return 275
         case .inputs:
