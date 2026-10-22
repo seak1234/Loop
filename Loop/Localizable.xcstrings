@@ -3239,33 +3239,6 @@
     "%lld/6,000" : {
 
     },
-    "Daily cycle notes backed up through: %@" : {
-
-    },
-    "Last successful sync: %@" : {
-
-    },
-    "Nightscout cycle sync" : {
-
-    },
-    "Open sync settings" : {
-
-    },
-    "Sharing cycle days, notes and period dates is off. Your Nightscout connection is managed separately." : {
-
-    },
-    "Syncing cycle days, notes and period dates…" : {
-
-    },
-    "This day’s cycle details are saved in Nightscout." : {
-
-    },
-    "This day’s cycle details are waiting to sync." : {
-
-    },
-    "Waiting for the first successful sync." : {
-
-    },
     "⚠️" : {
       "localizations" : {
         "da" : {
@@ -15026,16 +14999,6 @@
     "Cycle comparisons will update without this note." : {
 
     },
-    "Cycle day %lld · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Cycle day %1$lld · %2$@"
-          }
-        }
-      }
-    },
     "Cycle journal" : {
 
     },
@@ -15056,6 +15019,9 @@
     },
     "Cycle tracking" : {
       "comment" : "Cycle summary phase before a period is logged"
+    },
+    "Daily cycle notes backed up through: %@" : {
+
     },
     "Data & privacy" : {
 
@@ -24592,6 +24558,9 @@
     "Last %1$dd · %2$@ CGM coverage\nLocal time · 14+ days recommended" : {
       "comment" : "AGP reporting period, observed days and CGM coverage"
     },
+    "Last successful sync: %@" : {
+
+    },
     "Last synced: %@" : {
 
     },
@@ -25121,9 +25090,6 @@
           }
         }
       }
-    },
-    "Log a period start to place this day in your cycle." : {
-
     },
     "Log Dose" : {
       "comment" : "Button text to log a dose\nTitle for dose logging screen",
@@ -28408,6 +28374,9 @@
         }
       }
     },
+    "Nightscout cycle sync" : {
+
+    },
     "Nightscout insulin shows logged boluses only. Basal delivery is not included." : {
 
     },
@@ -28680,6 +28649,9 @@
           }
         }
       }
+    },
+    "No glucose, insulin or carb records saved for this day." : {
+
     },
     "No matching models." : {
 
@@ -29158,9 +29130,6 @@
           }
         }
       }
-    },
-    "No glucose, insulin or carb records saved for this day." : {
-
     },
     "No retained records or notes." : {
 
@@ -30370,6 +30339,9 @@
 
     },
     "Open Mochi to explore this message" : {
+
+    },
+    "Open sync settings" : {
 
     },
     "Open this day's cycle journal" : {
@@ -35654,6 +35626,9 @@
     "Share every calendar day’s cycle day, phase and phase day, even without a journal note, plus notes, tags and logged period dates. Past days from the first logged period through today are backed up to Nightscout. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies." : {
 
     },
+    "Sharing cycle days, notes and period dates is off. Your Nightscout connection is managed separately." : {
+
+    },
     "Short-period estimates; lab HbA1c can differ." : {
       "comment" : "GMI and HbA1c estimates from a 3- or 7-day period"
     },
@@ -36979,6 +36954,9 @@
 
     },
     "Sync now" : {
+
+    },
+    "Syncing cycle days, notes and period dates…" : {
 
     },
     "Syncing cycle notes…" : {
@@ -38933,6 +38911,12 @@
 
     },
     "These permissions also require health sharing in Mochi settings. Relevant notes and recorded summaries are sent to OpenRouter and your selected model when requested in chat. Saving permission lets Mochi add notes only when you ask. Existing transmitted content cannot be recalled." : {
+
+    },
+    "This day’s cycle details are saved in Nightscout." : {
+
+    },
+    "This day’s cycle details are waiting to sync." : {
 
     },
     "This is the development version of Loop, built from the dev branch. Any updates on this branch may contain new, untested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main." : {
@@ -41517,6 +41501,9 @@
 
     },
     "View supporting records" : {
+
+    },
+    "Waiting for the first successful sync." : {
 
     },
     "Walsh" : {
