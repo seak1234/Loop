@@ -51,6 +51,7 @@ import Combine
     func json(_ value: Any) throws -> String { String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self) }
     func object<T: Encodable>(_ value: T) throws -> Any { try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) }
 '''
+shell += controller[controller.index('    private var diabetesMindset:'):controller.index('    private var instructions:')]
 shell += '\n'.join(method(name) for name in ['commit', 'send', 'reviewMeal', 'decline', 'cancelChat']) + '\n}\n'
 shell += controller[controller.index('@MainActor\nfinal class CompanionMealConversation'):]
 (out / 'Controller.swift').write_text(shell)

@@ -104,6 +104,7 @@ final class CompanionController: ObservableObject {
         cycleObserver = cycleStore.$periodEntries.dropFirst().sink { [weak self] _ in
             Task { @MainActor in
                 self?.dashboardDataDidChange()
+                self?.scheduleCycleNoteSync()
                 await self?.refreshCycleSummaries()
             }
         }
@@ -1239,6 +1240,7 @@ final class CompanionController: ObservableObject {
                 }
             }
             let carbs = try? await manager.carbStore.getCarbEntries(start: start, end: now)
+            let carbCacheStart = manager.carbStore.earliestCacheDate
             try Task.checkCancellation()
             let range = GlucoseGraphSettingsStore.shared.settings
             var summaries: [CycleDailySummary] = []
@@ -1249,11 +1251,13 @@ final class CompanionController: ObservableObject {
                 let dayDoses = (doses ?? []).filter { $0.startDate < min(end, now) && $0.endDate >= day }
                     .map { $0.trimmed(from: day, to: min(end, now)) }
                 let dayCarbs = (carbs ?? []).filter { $0.startDate >= day && $0.startDate < min(end, now) }
-                guard !dayReadings.isEmpty || !dayDoses.isEmpty || !dayCarbs.isEmpty else { continue }
+                let completeCarbs = carbs != nil && day >= carbCacheStart
+                guard !dayReadings.isEmpty || !dayDoses.isEmpty || !dayCarbs.isEmpty
+                        || (completeCarbs && cycleJournal.summary(on: day) != nil) else { continue }
                 summaries.append(CycleDailySummary.make(start: day, end: end, now: now, readings: dayReadings,
                     range: { _ in (range.lowerBoundMGDL, range.upperBoundMGDL) }, insulin: dayDoses.isEmpty ? nil : dayDoses.map(\.unitsInDeliverableIncrements).reduce(0, +),
                     insulinRecords: dayDoses.count, carbs: dayCarbs.isEmpty ? nil : dayCarbs.map { $0.quantity.doubleValue(for: .gram()) }.reduce(0, +),
-                    carbEntries: dayCarbs.count, calendar: calendar))
+                    carbEntries: dayCarbs.count, calendar: calendar, carbHistoryIsComplete: completeCarbs))
             }
             // A user may disable retention while the health stores are loading.
             guard cycleJournal.state.retainDailySummaries else { return }
@@ -1279,7 +1283,8 @@ final class CompanionController: ObservableObject {
             let batch = try await CycleNightscoutHistory(configuration: configuration).fetch(start: day, end: end)
             guard cycleJournal.state.retainDailySummaries, cycleNightscoutConfiguration(manager: manager) == configuration else { return }
             let range = GlucoseGraphSettingsStore.shared.settings
-            try cycleJournal.retain(batch.summaries(start: day, end: end, now: now, range: { _ in (range.lowerBoundMGDL, range.upperBoundMGDL) }, calendar: calendar))
+            try cycleJournal.retain(batch.summaries(start: day, end: end, now: now, range: { _ in (range.lowerBoundMGDL, range.upperBoundMGDL) }, calendar: calendar,
+                includingEmptyDays: Set(cycleJournal.state.summaries.map(\.day))))
             if !batch.complete { cycleDataError = "Some Nightscout records for this day are unavailable." }
         } catch is CancellationError { }
         catch { cycleDataError = "Nightscout records for this day couldn't refresh." }
@@ -1345,10 +1350,11 @@ final class CompanionController: ObservableObject {
             try await CycleNightscoutNoteSync(journal: cycleJournal, client: client, isCurrent: stillCurrent,
                 contextForNote: { [cycleStore] note in
                     cycleStore.noteContext(for: note)
-                }).run()
+                }, periodTracker: cycleStore).run()
             cycleNoteSyncError = nil
         } catch is CancellationError { }
         catch let error as CycleNightscoutNoteClient.SyncError { cycleNoteSyncError = error.localizedDescription }
+        catch CompanionError.invalid(let message) { cycleNoteSyncError = message }
         catch { cycleNoteSyncError = "Cycle notes couldn't sync. Saved notes are kept; try again when connected." }
     }
 
@@ -1391,7 +1397,8 @@ final class CompanionController: ObservableObject {
                     guard cycleJournal.state.retainDailySummaries, cycleNightscoutConfiguration(manager: manager) == configuration else { return }
                     if readGlucose && batch.glucose == nil { glucoseFailed = true }
                     if readTreatments && batch.boluses == nil { treatmentsFailed = true }
-                    let summaries = batch.summaries(start: start, end: end, now: now, range: range, calendar: calendar)
+                    let summaries = batch.summaries(start: start, end: end, now: now, range: range, calendar: calendar,
+                        includingEmptyDays: Set(cycleJournal.state.summaries.map(\.day)))
                     try cycleJournal.retain(summaries)
                 }
                 end = start

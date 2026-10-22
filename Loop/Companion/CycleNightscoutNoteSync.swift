@@ -34,6 +34,13 @@ struct CycleNightscoutNoteClient {
             .map { String(format: "%02x", $0) }.joined().prefix(24))
     }
 
+    /// Two phones uploading the same previously unshared period target one record.
+    /// The link retains this ID if the logged start date is subsequently corrected.
+    static func periodRemoteID(startDay: String, sourceID: String) -> String {
+        String(SHA256.hash(data: Data((sourceID + ":cycle-period:" + startDay).utf8))
+            .map { String(format: "%02x", $0) }.joined().prefix(24))
+    }
+
     func request(method: String = "GET", id: String? = nil, query: [URLQueryItem] = [], body: [String: Any]? = nil) throws -> URLRequest {
         if let id, !Self.validID(id) { throw SyncError.invalidRecord }
         // Share the existing credential/URL rules, but omit the history date filter.
@@ -137,6 +144,11 @@ struct CycleNightscoutNoteClient {
             text += "\nPhase day: " + (context.phaseDay.map(String.init) ?? "unknown")
             text += "\nCycle timing: " + (context.isEstimated ? "estimated" : "reported")
         }
+        if let period = content.period {
+            text += "\nCycle record: period"
+            text += "\nPeriod start: " + period.startDay
+            text += "\nPeriod end: " + (period.endDay ?? "ongoing")
+        }
         return text
     }
 
@@ -164,6 +176,7 @@ struct CycleNightscoutNoteClient {
         var zone = TimeZone.current
         var tags: [CycleNoteTag] = []
         var context: CycleNoteContext?
+        var period: CyclePeriodSyncContent?
         // A readable footer survives Nightscout's ordinary note editor. Notes entered
         // there need only the [Cycle] prefix; the footer is optional.
         if let footer = text.range(of: "\n\nCycle tags: ", options: .backwards) {
@@ -172,7 +185,7 @@ struct CycleNightscoutNoteClient {
             let details = lines[1].components(separatedBy: "\n")
             guard let zoneName = details.first, let savedZone = TimeZone(identifier: zoneName) else { throw SyncError.invalidRecord }
             if details.count > 1 {
-                guard details.count == 5, details[1].hasPrefix("Cycle day: "), details[2].hasPrefix("Cycle phase: "),
+                guard [5, 8].contains(details.count), details[1].hasPrefix("Cycle day: "), details[2].hasPrefix("Cycle phase: "),
                       details[3].hasPrefix("Phase day: "), details[4].hasPrefix("Cycle timing: ") else { throw SyncError.invalidRecord }
                 func day(_ line: String, prefix: String) throws -> Int? {
                     let value = String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces).lowercased()
@@ -188,6 +201,15 @@ struct CycleNightscoutNoteClient {
                     phaseDay: try day(details[3], prefix: "Phase day: "), isEstimated: timing == "estimated")
                 guard value.isValid else { throw SyncError.invalidRecord }
                 context = value
+                if details.count == 8 {
+                    guard details[5] == "Cycle record: period", details[6].hasPrefix("Period start: "),
+                          details[7].hasPrefix("Period end: ") else { throw SyncError.invalidRecord }
+                    let end = String(details[7].dropFirst("Period end: ".count))
+                    let record = CyclePeriodSyncContent(startDay: String(details[6].dropFirst("Period start: ".count)),
+                        endDay: end == "ongoing" ? nil : end)
+                    guard record.isValid(timeZone: savedZone.identifier, now: now) else { throw SyncError.invalidRecord }
+                    period = record
+                }
             }
             let values = lines[0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
             guard values.allSatisfy({ CycleNoteTag(rawValue: $0) != nil }) else { throw SyncError.invalidRecord }
@@ -200,6 +222,7 @@ struct CycleNightscoutNoteClient {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
         var note = CycleJournalNote(day: CycleDay.key(date, calendar: calendar), occurredAt: date, timeZone: zone.identifier, text: text, tags: tags)
         note.cycleContext = context
+        note.period = period
         return Record(id: id, content: CycleNoteSyncContent(note), raw: raw)
     }
 }
@@ -212,11 +235,13 @@ struct CycleNightscoutNoteSync {
     let client: CycleNightscoutNoteClient
     var isCurrent: () -> Bool
     var contextForNote: (CycleJournalNote) -> CycleNoteContext = { _ in CycleNoteContext() }
+    var periodTracker: CycleTrackingStore?
     private var sourceID: String { client.configuration.sourceID }
 
     private func check() throws {
         try Task.checkCancellation()
         guard journal.state.noteSync?.enabledSourceID == sourceID, isCurrent() else { throw CancellationError() }
+        if let periodTracker { try journal.stagePeriodHistory(periodTracker.periodHistorySyncNotes()) }
     }
 
     private func change(_ edit: (inout CycleJournalState, inout CycleNoteSyncState, inout CycleNoteSyncSite) -> Void) throws {
@@ -239,19 +264,33 @@ struct CycleNightscoutNoteSync {
         let discovered = Dictionary(uniqueKeysWithValues: remoteNotes.map { ($0.id, $0) })
         try change { state, _, site in
             for remote in remoteNotes where !site.links.contains(where: { $0.remoteID == remote.id }) {
+                // Two existing phones may already have the same logged period.
+                // Link that record rather than importing another copy.
+                if let period = remote.content.period,
+                   let note = state.synchronizedNotes.first(where: { candidate in candidate.period?.startDay == period.startDay && !site.links.contains(where: { $0.localID == candidate.id }) }) {
+                    let sameDates = note.period == period
+                    if sameDates, let index = state.synchronizedNotes.firstIndex(where: { $0.id == note.id }) {
+                        state.synchronizedNotes[index] = remote.content.note(id: note.id, source: note.source)
+                    }
+                    site.links.append(.init(localID: note.id, remoteID: remote.id,
+                        base: sameDates ? remote.content : CycleNoteSyncContent(note), acknowledged: sameDates))
+                    continue
+                }
                 var note = remote.content.note()
                 if note.cycleContext == nil { note.cycleContext = contextForNote(note) }
-                state.notes.append(note)
+                state.synchronizedNotes.append(note)
                 site.links.append(.init(localID: note.id, remoteID: remote.id, base: remote.content, acknowledged: true))
             }
         }
         // Register pending creates durably before sending them. Leave failed requests
         // linked so a retry can look up the exact ID instead of creating duplicates.
         try change { state, _, site in
-            for index in state.notes.indices where !site.links.contains(where: { $0.localID == state.notes[index].id }) {
-                if state.notes[index].cycleContext == nil { state.notes[index].cycleContext = contextForNote(state.notes[index]) }
-                let note = state.notes[index]
-                site.links.append(.init(localID: note.id, remoteID: CycleNightscoutNoteClient.remoteID(localID: note.id, sourceID: sourceID), base: CycleNoteSyncContent(note), acknowledged: false))
+            for index in state.synchronizedNotes.indices where !site.links.contains(where: { $0.localID == state.synchronizedNotes[index].id }) {
+                if state.synchronizedNotes[index].cycleContext == nil { state.synchronizedNotes[index].cycleContext = contextForNote(state.synchronizedNotes[index]) }
+                let note = state.synchronizedNotes[index]
+                let remoteID = note.period.map { CycleNightscoutNoteClient.periodRemoteID(startDay: $0.startDay, sourceID: sourceID) }
+                    ?? CycleNightscoutNoteClient.remoteID(localID: note.id, sourceID: sourceID)
+                site.links.append(.init(localID: note.id, remoteID: remoteID, base: CycleNoteSyncContent(note), acknowledged: false))
             }
         }
         let ids = journal.state.noteSync?.sites[sourceID]?.links.map(\.localID) ?? []
@@ -259,15 +298,26 @@ struct CycleNightscoutNoteSync {
             try check()
             guard let link = journal.state.noteSync?.sites[sourceID]?.links.first(where: { $0.localID == id }) else { continue }
             if link.acknowledged, discovered[link.remoteID]?.content == link.base,
-               journal.state.notes.first(where: { $0.id == id }).map(CycleNoteSyncContent.init) == link.base {
+               journal.state.synchronizedNotes.first(where: { $0.id == id }).map(CycleNoteSyncContent.init) == link.base {
                 continue
             }
             let remote = try await client.lookup(link.remoteID)
             try check()
-            let local = journal.state.notes.first { $0.id == id }.map(CycleNoteSyncContent.init)
+            let local = journal.state.synchronizedNotes.first { $0.id == id }.map(CycleNoteSyncContent.init)
             if let remote {
+                // Removing the history footer must not silently erase tracker data.
+                guard (link.base.period == nil) == (remote.content.period == nil) else { throw CycleNightscoutNoteClient.SyncError.invalidRecord }
                 let remoteChanged = remote.content != link.base
-                if local == remote.content {
+                if !link.acknowledged, let period = local?.period, period == remote.content.period {
+                    // A concurrent first upload can have another phone's timestamp
+                    // or time zone while representing exactly the same civil dates.
+                    try change { state, _, _ in
+                        if let index = state.synchronizedNotes.firstIndex(where: { $0.id == id }) {
+                            state.synchronizedNotes[index] = remote.content.note(id: id)
+                        }
+                    }
+                    try acknowledge(link, content: remote.content)
+                } else if local == remote.content {
                     try acknowledge(link, content: remote.content)
                 } else if let local {
                     if !remoteChanged {
@@ -276,14 +326,14 @@ struct CycleNightscoutNoteSync {
                     } else {
                         try change { state, sync, site in
                             if local != link.base || !link.acknowledged {
-                                state.notes.append(local.note(source: "user"))
+                                state.synchronizedNotes.append(local.conflictNote())
                                 sync.conflictCopies += 1
                             }
-                            if let index = state.notes.firstIndex(where: { $0.id == id }) {
-                                let original = state.notes[index]
+                            if let index = state.synchronizedNotes.firstIndex(where: { $0.id == id }) {
+                                let original = state.synchronizedNotes[index]
                                 var replacement = remote.content.note(id: id, source: original.source)
                                 replacement.createdAt = original.createdAt
-                                state.notes[index] = replacement
+                                state.synchronizedNotes[index] = replacement
                             }
                             if let index = site.links.firstIndex(where: { $0.localID == id }) {
                                 site.links[index].base = remote.content; site.links[index].acknowledged = true
@@ -293,7 +343,7 @@ struct CycleNightscoutNoteSync {
                 } else if remoteChanged {
                     // Local deletion versus remote edit: keep the edited version.
                     try change { state, sync, site in
-                        state.notes.append(remote.content.note(id: id)); sync.conflictCopies += 1
+                        state.synchronizedNotes.append(remote.content.note(id: id)); sync.conflictCopies += 1
                         if let index = site.links.firstIndex(where: { $0.localID == id }) {
                             site.links[index].base = remote.content; site.links[index].acknowledged = true
                         }
@@ -310,13 +360,19 @@ struct CycleNightscoutNoteSync {
                     // Remote deletion versus a local edit: keep a new, unlinked copy.
                     try change { state, sync, site in
                         if local != link.base {
-                            state.notes.append(local.note(source: "user")); sync.conflictCopies += 1
+                            state.synchronizedNotes.append(local.note(source: "user")); sync.conflictCopies += 1
                         }
-                        state.notes.removeAll { $0.id == id }
+                        state.synchronizedNotes.removeAll { $0.id == id }
                         site.links.removeAll { $0.localID == id }
                     }
                 }
             } else { try unlink(link) }
+        }
+        try check()
+        if let periodTracker {
+            try periodTracker.restorePeriodHistory(from: journal.state.periodSyncNotes ?? [])
+            try journal.update { $0.periodTrackerSnapshot = periodTracker.periodHistorySyncNotes() }
+            try journal.fillMissingCycleContexts { periodTracker.noteContext(for: $0) }
         }
         try change { _, _, site in site.lastSyncedAt = Date() }
     }

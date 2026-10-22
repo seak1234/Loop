@@ -22,7 +22,8 @@ struct CycleNightscoutBatch {
     var carbs: [CycleNightscoutAmount]?
     var complete: Bool { glucose != nil && boluses != nil && carbs != nil }
 
-    func summaries(start: Date, end: Date, now: Date, range: (Date) -> (Double, Double)?, calendar: Calendar = .current) -> [CycleDailySummary] {
+    func summaries(start: Date, end: Date, now: Date, range: (Date) -> (Double, Double)?, calendar: Calendar = .current,
+                   includingEmptyDays: Set<String> = []) -> [CycleDailySummary] {
         var day = calendar.startOfDay(for: start)
         var result: [CycleDailySummary] = []
         while day < end {
@@ -30,13 +31,15 @@ struct CycleNightscoutBatch {
             let readings = (glucose ?? []).filter { $0.date >= day && $0.date < min(next, now) }
             let insulin = (boluses ?? []).filter { $0.date >= day && $0.date < min(next, now) }
             let meals = (carbs ?? []).filter { $0.date >= day && $0.date < min(next, now) }
-            if !readings.isEmpty || !insulin.isEmpty || !meals.isEmpty {
+            let completeCarbs = carbs != nil && day >= start
+            if !readings.isEmpty || !insulin.isEmpty || !meals.isEmpty || (completeCarbs && includingEmptyDays.contains(CycleDay.key(day, calendar: calendar))) {
                 var summary = CycleDailySummary.make(start: day, end: next, now: now, readings: readings, range: range,
                     insulin: insulin.isEmpty ? nil : insulin.map(\.amount).reduce(0, +), insulinRecords: insulin.count,
-                    carbs: meals.isEmpty ? nil : meals.map(\.amount).reduce(0, +), carbEntries: meals.count, calendar: calendar)
+                    carbs: meals.isEmpty ? nil : meals.map(\.amount).reduce(0, +), carbEntries: meals.count, calendar: calendar,
+                    carbHistoryIsComplete: completeCarbs)
                 summary.glucoseSource = readings.isEmpty ? nil : "Nightscout"
                 summary.insulinSource = insulin.isEmpty ? nil : "Nightscout"
-                summary.carbSource = meals.isEmpty ? nil : "Nightscout"
+                summary.carbSource = carbs == nil ? nil : "Nightscout"
                 // Nightscout treatments do not establish complete basal delivery.
                 summary.insulinIsPartial = !insulin.isEmpty
                 result.append(summary)

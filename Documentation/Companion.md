@@ -143,9 +143,14 @@ Without Xcode, run the same core test bodies using:
 bash Scripts/test-companion-core.sh
 bash Scripts/test-ui-regressions.sh
 bash Scripts/test-cycle-companion.sh
+bash Scripts/test-cycle-summary-refresh.sh
 ```
 
 If the selected command-line SDK does not match the installed compiler, set `MOCHI_TEST_SDK` to a compatible SDK path. The harness uses Swift assertions and does not require XCTest or Swift Package Manager.
+
+The summary-refresh harness runs the production local collection method against controlled stores. It checks carb deletions, deleting the last entry on an otherwise empty day, failed queries, partial cache expiry and persistence of corrected totals. A successful query covering a day's elapsed history can replace that source's carb totals, including removals. Failed queries and expired local caches preserve retained history. Nightscout refreshes also revisit saved days with no remaining treatments so deletion of the last carb is reflected.
+
+Editing a cycle note uses its saved time zone in both the date picker and persistence. Text or tag edits keep the note on its original civil day after travel; an explicit date change uses that same calendar and recalculates cycle context.
 
 Before a device release, build LoopWorkspace in Xcode and test with mock CGM data: configure each rule, replay a triggering episode, verify a single notification, clear/rearm it, relaunch, tap each notification, revoke permissions, disconnect networking, and review/cancel/save an edited carb draft. Verify live OpenRouter responses with a user-supplied key. Core tests do not establish on-device notification delivery or clinical validity.
 

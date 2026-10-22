@@ -72,7 +72,7 @@ struct CycleJournalDayView: View {
             if let summary = journal.summary(on: date) {
                 CycleDailySummaryView(summary: summary)
             } else {
-                Text("No records for this day yet. Available Nightscout history will be included when connected.")
+                Text("No glucose, insulin or carb records saved for this day.")
                     .font(.footnote).foregroundColor(.secondary)
             }
             ForEach(journal.notes(on: date)) { note in
@@ -95,8 +95,7 @@ struct CycleJournalDayView: View {
             }.disabled(date > Date() || journal.failure != nil)
             if controller.isCollectingCycleData { ProgressView("Updating records…").font(.caption) }
             if let message = controller.cycleDataError { Text(message).font(.caption).foregroundColor(.secondary) }
-            if controller.isSyncingCycleNotes { ProgressView("Syncing cycle notes…").font(.caption) }
-            if let message = controller.cycleNoteSyncError { Text(message).font(.caption).foregroundColor(.secondary) }
+            nightscoutSyncStatus
             if (journal.state.noteSync?.conflictCopies ?? 0) > 0 {
                 Text("Some notes changed in both places. Both versions were kept; review your journal.")
                     .font(.caption).foregroundColor(.secondary)
@@ -118,6 +117,34 @@ struct CycleJournalDayView: View {
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
             Task { await controller.syncCycleNotes() }
         }
+    }
+
+    private var nightscoutSyncStatus: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Nightscout cycle sync", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption.bold())
+            if controller.cycleNoteSyncEnabled {
+                if controller.isSyncingCycleNotes {
+                    ProgressView("Syncing notes and period dates…")
+                } else if let message = controller.cycleNoteSyncError {
+                    Text(message)
+                } else if let source = journal.state.noteSync?.enabledSourceID,
+                          let last = journal.state.noteSync?.sites[source]?.lastSyncedAt {
+                    Text("Last successful sync: \(last.formatted(date: .abbreviated, time: .shortened))")
+                } else {
+                    Text("Waiting for the first successful sync.")
+                }
+                Button("Sync now") { Task { await controller.syncCycleNotes(force: true) } }
+                    .disabled(controller.isSyncingCycleNotes)
+                    .foregroundColor(.accentColor)
+            } else {
+                Text("Sharing notes and period dates is off. Your Nightscout connection is managed separately.")
+                Button("Open sync settings") { showsSettings = true }
+                    .foregroundColor(.accentColor)
+            }
+        }
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
 
     private func hide(_ observation: CycleInsight, days: Int) {
@@ -157,6 +184,7 @@ struct CycleNoteEditor: View {
         NavigationView {
             Form {
                 DatePicker("When", selection: $date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
+                    .environment(\.timeZone, noteCalendar.timeZone)
                 Section(header: Text("Your note (optional)"), footer: Text("Select a tag, write a note, or do both. Notes about insulin sensitivity reflect how you felt, not a measured diagnosis.")) {
                     TextEditor(text: $text).frame(minHeight: 130).accessibilityLabel("Cycle note")
                     Text("\(text.count)/6,000").font(.caption).foregroundColor(text.count > 6000 ? .red : .secondary)
@@ -196,14 +224,21 @@ struct CycleNoteEditor: View {
             } message: { Text("Cycle comparisons will update without this note.") }
         }.navigationViewStyle(.stack)
     }
+    private var noteCalendar: Calendar {
+        var calendar = Calendar.current
+        if let name = item.note?.timeZone, let zone = TimeZone(identifier: name) { calendar.timeZone = zone }
+        return calendar
+    }
+
     private var automaticCycleContext: CycleNoteContext {
-        if let original = item.note, CycleDay.key(date) == CycleDay.key(original.occurredAt) {
+        let day = CycleDay.key(date, calendar: noteCalendar)
+        if let original = item.note, day == original.day {
             // Preserve synced values on ordinary edits and fill any missing fields.
             let note = journal.state.notes.first(where: { $0.id == original.id }) ?? original
             return CycleTrackingStore.shared.noteContext(for: note)
         }
         // Resolve at save time so new notes and date changes use current history.
-        return CycleTrackingStore.shared.noteContext(on: date)
+        return CycleTrackingStore.shared.noteContext(on: CycleDay.date(day) ?? date)
     }
 }
 
@@ -322,8 +357,8 @@ struct CycleJournalSettings: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Nightscout notes"), footer: Text("Share all existing and new cycle notes, including text and tags, with your connected Nightscout site. People who can view its treatments may see them. Edits and deletions sync both ways while this app is active. To add a cycle note in Nightscout, start a Note with [Cycle]. Keep the note footer when editing; its cycle day, phase and phase day can be edited in either place. Turning sync off keeps existing copies in both places. Period history is not uploaded.")) {
-                    Toggle("Sync cycle notes with Nightscout", isOn: Binding(
+                Section(header: Text("Nightscout notes and period dates"), footer: Text("Share cycle notes, tags, cycle context and logged period start and end dates with your connected Nightscout site. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies.")) {
+                    Toggle("Sync cycle notes and period dates with Nightscout", isOn: Binding(
                         get: { controller.cycleNoteSyncEnabled },
                         set: { controller.setCycleNoteSyncEnabled($0) }))
                     if controller.cycleNoteSyncEnabled {

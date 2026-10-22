@@ -3239,6 +3239,24 @@
     "%lld/6,000" : {
 
     },
+    "Last successful sync: %@" : {
+
+    },
+    "Nightscout cycle sync" : {
+
+    },
+    "Open sync settings" : {
+
+    },
+    "Sharing notes and period dates is off. Your Nightscout connection is managed separately." : {
+
+    },
+    "Syncing notes and period dates…" : {
+
+    },
+    "Waiting for the first successful sync." : {
+
+    },
     "⚠️" : {
       "localizations" : {
         "da" : {
@@ -6042,6 +6060,12 @@
         }
       }
     },
+    "AGP · Typical day" : {
+      "comment" : "Title of the observed 24-hour glucose profile"
+    },
+    "AGP, last %d days" : {
+      "comment" : "AGP period selector accessibility label"
+    },
     "Alert Management" : {
       "comment" : "Alert Permissions button text\nTitle of alert management screen",
       "localizations" : {
@@ -6684,6 +6708,9 @@
     },
     "Allow health data for Mochi" : {
 
+    },
+    "Ambulatory glucose profile" : {
+      "comment" : "Accessibility name of the 24-hour glucose distribution"
     },
     "Amount Consumed" : {
       "comment" : "Label for carb quantity entry row on carb entry screen",
@@ -11544,6 +11571,12 @@
           }
         }
       }
+    },
+    "CGM estimates appear when data is available." : {
+      "comment" : "GMI and HbA1c estimates need observed glucose data"
+    },
+    "CGM estimates; lab HbA1c can differ." : {
+      "comment" : "GMI and ADAG estimates are not laboratory measurements"
     },
     "Change the pump battery immediately" : {
       "comment" : "The notification alert describing a low pump battery",
@@ -18653,6 +18686,9 @@
         }
       }
     },
+    "Est. HbA1c" : {
+      "comment" : "ADAG-derived HbA1c estimate, not a lab measurement"
+    },
     "Estimate a meal from a photo" : {
 
     },
@@ -20598,7 +20634,7 @@
       }
     },
     "Glucose" : {
-      "comment" : "The title of the glucose and prediction graph\nThe title of the glucose summary card\nTitle for predicted glucose chart on bolus screen",
+      "comment" : "The title of the glucose and prediction graph\nThe title of the glucose summary card\nTitle for predicted glucose chart on bolus screen\nTitle of the glucose page",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -21372,7 +21408,7 @@
     "Glucose range" : {
 
     },
-    "Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Predicted Glucose statistics settings. Missing means unknown. The trace retains one reading per 15 minutes." : {
+    "Glucose statistics cover observed readings only; coverage is the portion of the full calendar day with readings. Time in range uses the glucose range in Glucose → Settings. Missing means unknown. The trace retains one reading per 15 minutes." : {
 
     },
     "Glucose Target Range Schedule" : {
@@ -21454,6 +21490,9 @@
     },
     "Glucose: daily mean in mg/dL. Insulin: recorded units, potentially incomplete. Carbs: logged grams only. Gray bars indicate insufficient glucose coverage or an unfinished day. Missing days are unknown, not zero. Notes: entry count. Tap a day for its records." : {
 
+    },
+    "GMI" : {
+      "comment" : "CGM-derived glucose management indicator"
     },
     "Graph" : {
 
@@ -24541,6 +24580,9 @@
         }
       }
     },
+    "Last %1$dd · %2$@ CGM coverage\nLocal time · 14+ days recommended" : {
+      "comment" : "AGP reporting period, observed days and CGM coverage"
+    },
     "Last synced: %@" : {
 
     },
@@ -24869,6 +24911,9 @@
     "Limit Automatic Bolus to Time Ranges" : {
 
     },
+    "Limited CGM data; rough estimates only." : {
+      "comment" : "GMI and HbA1c estimates with low CGM coverage"
+    },
     "Live activity" : {
       "comment" : "Alert Permissions live activity\nLive activity screen title",
       "localizations" : {
@@ -24909,6 +24954,9 @@
           }
         }
       }
+    },
+    "Loading profile…" : {
+      "comment" : "AGP graph loading message"
     },
     "Loading..." : {
       "comment" : "The loading message for the diagnostic report screen",
@@ -26861,6 +26909,12 @@
     "Meal photos are sent automatically to OpenRouter and your selected AI provider for an estimate." : {
 
     },
+    "Median" : {
+      "comment" : "AGP median line"
+    },
+    "Median glucose %1$@ to %2$@ %3$@. Dark band: 25th to 75th percentiles. Light band: 5th to 95th percentiles. Gaps have insufficient data." : {
+      "comment" : "Accessible AGP description"
+    },
     "mg/dL" : {
       "comment" : "The short unit display string for milligrams of glucose per decilter",
       "localizations" : {
@@ -27969,6 +28023,9 @@
         }
       }
     },
+    "Needs at least 3 days of readings per time slot." : {
+      "comment" : "AGP unavailable without several observed days"
+    },
     "Needs Attention" : {
       "comment" : "Sensor state description for the non-valid state",
       "extractionState" : "manual",
@@ -28345,7 +28402,7 @@
     "Nightscout insulin shows logged boluses only. Basal delivery is not included." : {
 
     },
-    "Nightscout notes" : {
+    "Nightscout notes and period dates" : {
 
     },
     "No alerts or alarms will sound while muted. Select how long you would you like to mute for." : {
@@ -29093,7 +29150,7 @@
         }
       }
     },
-    "No records for this day yet. Available Nightscout history will be included when connected." : {
+    "No glucose, insulin or carb records saved for this day." : {
 
     },
     "No retained records or notes." : {
@@ -29319,6 +29376,12 @@
     },
     "Not connected" : {
 
+    },
+    "Not enough data" : {
+      "comment" : "AGP graph empty message"
+    },
+    "Not enough observed days to draw a profile." : {
+      "comment" : "AGP empty accessibility description"
     },
     "Notes" : {
 
@@ -35372,7 +35435,7 @@
       }
     },
     "Settings" : {
-      "comment" : "Label of button that navigation user to iOS Settings\nSettings screen title\nThe label of the settings button",
+      "comment" : "Button opening glucose range and data settings\nLabel of button that navigation user to iOS Settings\nSettings screen title\nThe label of the settings button",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -35579,8 +35642,11 @@
         }
       }
     },
-    "Share all existing and new cycle notes, including text and tags, with your connected Nightscout site. People who can view its treatments may see them. Edits and deletions sync both ways while this app is active. To add a cycle note in Nightscout, start a Note with [Cycle]. Keep the note footer when editing; its cycle day, phase and phase day can be edited in either place. Turning sync off keeps existing copies in both places. Period history is not uploaded." : {
+    "Share cycle notes, tags, cycle context and logged period start and end dates with your connected Nightscout site. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies." : {
 
+    },
+    "Short-period estimates; lab HbA1c can differ." : {
+      "comment" : "GMI and HbA1c estimates from a 3- or 7-day period"
     },
     "Show Cycle Tracking Details" : {
       "comment" : "Accessibility label for opening cycle details"
@@ -36900,7 +36966,7 @@
     "Switches glucose unit between US (mg/dL) and European (mmol/L) units" : {
       "comment" : "Accessibility hint for glucose unit toggle"
     },
-    "Sync cycle notes with Nightscout" : {
+    "Sync cycle notes and period dates with Nightscout" : {
 
     },
     "Sync now" : {
@@ -40953,6 +41019,9 @@
           }
         }
       }
+    },
+    "Updating glucose profile…" : {
+      "comment" : "AGP loading caption"
     },
     "Updating records…" : {
 

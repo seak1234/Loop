@@ -621,6 +621,37 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: journal.url), original)
     }
 
+    func testEditingAnImportedNoteKeepsItsCivilDayAndTimeZone() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        let date = ISO8601DateFormatter().date(from: "2026-01-02T10:30:00Z")!
+        // These zones put the same instant on different dates, regardless of
+        // the machine's current zone. No process-wide time-zone changes needed.
+        for zoneName in ["Pacific/Kiritimati", "Pacific/Pago_Pago"] {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: zoneName)!
+            var original = CycleJournalNote(day: CycleDay.key(date, calendar: calendar), occurredAt: date,
+                timeZone: zoneName, text: "Imported note", tags: [.sensitive], source: "nightscout")
+            original.cycleContext = .init(cycleDay: 20, phase: .luteal, phaseDay: 3)
+            try journal.update { $0.notes.append(original) }
+
+            let edited = try journal.saveNote(id: original.id, date: date, text: "Edited text", tags: [.exercise])
+            XCTAssertEqual(edited.day, original.day)
+            XCTAssertEqual(edited.timeZone, original.timeZone)
+            XCTAssertEqual(edited.occurredAt, original.occurredAt)
+            XCTAssertEqual(edited.cycleContext, original.cycleContext)
+            XCTAssertEqual(edited.source, original.source)
+            XCTAssertEqual(CycleJournalStore(url: journal.url).state.notes.first { $0.id == edited.id }, edited)
+
+            let nextDay = calendar.date(byAdding: .day, value: 1, to: date)!
+            let moved = try journal.saveNote(id: edited.id, date: nextDay, text: edited.text, tags: edited.tags)
+            XCTAssertEqual(moved.day, CycleDay.key(nextDay, calendar: calendar))
+            XCTAssertEqual(moved.timeZone, zoneName)
+            XCTAssertNil(moved.cycleContext)
+        }
+    }
+
     func testMochiWritesRequireSeparatePermissionAndReturnRealSavedID() async throws {
         let (controller, provider, _, cleanup) = try fixture(sharing: true)
         defer { cleanup() }
@@ -874,6 +905,82 @@ final class CompanionCycleSurfaceTests: XCTestCase {
         try controller.cycleJournal.update { $0.retainDailySummaries = false }
         try controller.cycleJournal.retain([state.summaries[1]])
         XCTAssertEqual(controller.cycleJournal.state.summaries.count, 1)
+    }
+
+    func testCompleteCarbRefreshAppliesDeletionsAndFailedRefreshKeepsHistory() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        let start = Calendar.current.startOfDay(for: Date().addingTimeInterval(-86400))
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        let original = CycleDailySummary.make(start: start, end: end, now: end,
+            readings: [.init(date: start, mgdl: 110)], range: { _ in (80, 145) },
+            insulin: 12, insulinRecords: 3, carbs: 80, carbEntries: 2)
+        var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as! [String: Any]
+        legacy.removeValue(forKey: "carbHistoryIsComplete")
+        let restored = try JSONDecoder().decode(CycleDailySummary.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(restored.carbHistoryIsComplete)
+        try journal.retain([restored])
+        var corrected = original
+        corrected.carbEntryCount = 1; corrected.carbGrams = 30
+        corrected.carbHistoryIsComplete = true
+        try journal.retain([corrected])
+        XCTAssertEqual(journal.summary(on: start)?.carbEntryCount, 1)
+        XCTAssertEqual(journal.summary(on: start)?.carbGrams, 30)
+
+        var unavailable = corrected
+        unavailable.carbEntryCount = 0; unavailable.carbGrams = nil
+        unavailable.carbHistoryIsComplete = false
+        try journal.retain([unavailable])
+        XCTAssertEqual(journal.summary(on: start)?.carbGrams, 30)
+
+        var deleted = unavailable
+        deleted.carbHistoryIsComplete = true
+        try journal.retain([deleted])
+        let saved = CycleJournalStore(url: journal.url).summary(on: start)!
+        XCTAssertEqual(saved.carbEntryCount, 0)
+        XCTAssertNil(saved.carbGrams)
+        XCTAssertEqual(saved.insulinUnits, original.insulinUnits)
+        XCTAssertEqual(saved.meanMGDL, original.meanMGDL)
+    }
+
+    func testCompleteCarbRefreshDoesNotEraseHistoryFromAnotherSource() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        let start = Calendar.current.startOfDay(for: Date().addingTimeInterval(-86400))
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        let batch = CycleNightscoutBatch(glucose: [], boluses: [], carbs: [.init(date: start, amount: 80)])
+        try journal.retain(batch.summaries(start: start, end: end, now: end, range: { _ in nil }))
+        let local = CycleDailySummary.make(start: start, end: end, now: end, readings: [], range: { _ in nil },
+            insulin: nil, insulinRecords: 0, carbs: nil, carbEntries: 0, carbHistoryIsComplete: true)
+        try journal.retain([local])
+        XCTAssertEqual(journal.summary(on: start)?.carbGrams, 80)
+        XCTAssertEqual(journal.summary(on: start)?.carbSource, "Nightscout")
+    }
+
+    func testNightscoutRefreshRemovesTheLastCarbOnAnOtherwiseEmptyDay() throws {
+        let (controller, _, _, cleanup) = try fixture(sharing: true)
+        defer { cleanup() }
+        let journal = controller.cycleJournal
+        let start = Calendar.current.startOfDay(for: Date().addingTimeInterval(-86400))
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        let original = CycleNightscoutBatch(glucose: [], boluses: [], carbs: [.init(date: start, amount: 30)])
+        try journal.retain(original.summaries(start: start, end: end, now: end, range: { _ in nil }))
+        let days = Set(journal.state.summaries.map(\.day))
+        let empty = CycleNightscoutBatch(glucose: [], boluses: [], carbs: [])
+        XCTAssertTrue(empty.summaries(start: start.addingTimeInterval(3600), end: end, now: end,
+            range: { _ in nil }, includingEmptyDays: days).isEmpty)
+        let refreshed = empty.summaries(start: start, end: end, now: end, range: { _ in nil }, includingEmptyDays: days)
+        XCTAssertEqual(refreshed.count, 1)
+        XCTAssertEqual(refreshed.first?.carbSource, "Nightscout")
+        XCTAssertEqual(refreshed.first?.carbHistoryIsComplete, true)
+        try journal.retain(refreshed)
+        XCTAssertEqual(journal.summary(on: start)?.carbEntryCount, 0)
+        XCTAssertNil(journal.summary(on: start)?.carbGrams)
+        // An unavailable treatment endpoint must not clear that day's history.
+        let failed = CycleNightscoutBatch(glucose: [], boluses: nil, carbs: nil)
+        XCTAssertTrue(failed.summaries(start: start, end: end, now: end, range: { _ in nil }, includingEmptyDays: days).isEmpty)
     }
 
     func testPeriodHistoryAllowsFirstEntryButRejectsOverlapsAndFutureDates() throws {

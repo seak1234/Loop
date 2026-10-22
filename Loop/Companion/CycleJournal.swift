@@ -69,9 +69,26 @@ struct CycleJournalNote: Codable, Identifiable, Equatable {
     var createdAt = Date()
     var updatedAt = Date()
     var cycleContext: CycleNoteContext?
+    /// Present only on the dedicated Nightscout period-history notes.
+    var period: CyclePeriodSyncContent?
 
     var displayText: String {
         text.isEmpty ? tags.map(\.title).joined(separator: " · ") : text
+    }
+}
+
+/// Civil dates preserve the logged calendar days across devices and time zones.
+struct CyclePeriodSyncContent: Codable, Equatable {
+    var startDay: String
+    var endDay: String?
+
+    func isValid(timeZone: String, now: Date = Date()) -> Bool {
+        guard let zone = TimeZone(identifier: timeZone) else { return false }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+        let today = CycleDay.key(now, calendar: calendar)
+        guard startDay.count == 10, CycleDay.date(startDay, calendar: calendar) != nil, startDay <= today else { return false }
+        guard let endDay else { return true }
+        return endDay.count == 10 && CycleDay.date(endDay, calendar: calendar) != nil && endDay >= startDay && endDay <= today
     }
 }
 
@@ -135,6 +152,7 @@ struct CycleNoteSyncContent: Codable, Equatable {
     var text: String
     var tags: [CycleNoteTag]
     var cycleContext: CycleNoteContext?
+    var period: CyclePeriodSyncContent?
 
     init(_ note: CycleJournalNote) {
         day = note.day
@@ -142,12 +160,23 @@ struct CycleNoteSyncContent: Codable, Equatable {
         timeZone = note.timeZone
         text = note.text; tags = note.tags
         cycleContext = note.cycleContext
+        period = note.period
     }
 
     func note(id: UUID = UUID(), source: String = "nightscout") -> CycleJournalNote {
         var result = CycleJournalNote(day: day, occurredAt: occurredAt, timeZone: timeZone, text: text, tags: tags, source: source)
         result.id = id
         result.cycleContext = cycleContext
+        result.period = period
+        return result
+    }
+
+    func conflictNote() -> CycleJournalNote {
+        var result = note(source: "user")
+        if let period {
+            result.text += "\n\nPeriod history conflict: " + period.startDay + " through " + (period.endDay ?? "ongoing") + ". Review period history."
+            result.period = nil
+        }
         return result
     }
 }
@@ -189,6 +218,9 @@ struct CycleDailySummary: Codable, Identifiable, Equatable {
     var glucoseSource: String?
     var insulinSource: String?
     var carbSource: String?
+    /// A successful query covered this entire day's elapsed carb history.
+    /// Missing on legacy records; false for failed queries and expired caches.
+    var carbHistoryIsComplete: Bool?
     var insulinIsPartial: Bool?
     /// Exact observed durations grouped by glucose value, independent of the downsampled trace.
     var glucoseDurations: [CycleGlucoseDuration]?
@@ -207,7 +239,8 @@ struct CycleDailySummary: Codable, Identifiable, Equatable {
 
     static func make(start: Date, end: Date, now: Date, readings: [CycleGlucoseReading],
                      range: (Date) -> (Double, Double)?, insulin: Double?, insulinRecords: Int,
-                     carbs: Double?, carbEntries: Int, calendar: Calendar = .current) -> Self {
+                     carbs: Double?, carbEntries: Int, calendar: Calendar = .current,
+                     carbHistoryIsComplete: Bool = false) -> Self {
         let valid = readings.filter { $0.date >= start && $0.date < min(now, end) && $0.mgdl.isFinite && $0.mgdl > 0 }
             .sorted { $0.date < $1.date }
         // A reading represents at most five minutes. Gaps never become in-range time.
@@ -232,6 +265,7 @@ struct CycleDailySummary: Codable, Identifiable, Equatable {
                     timeInRange: rangeSeconds >= seconds * 0.99 && seconds > 0 ? inRange / seconds : nil,
                     insulinUnits: insulin, insulinRecordCount: insulinRecords, carbGrams: carbs,
                     carbEntryCount: carbEntries, glucose: bins.keys.sorted().compactMap { bins[$0] },
+                    carbHistoryIsComplete: carbHistoryIsComplete,
                     glucoseDurations: durations.keys.sorted().map { CycleGlucoseDuration(mgdl: $0, seconds: durations[$0]!) })
     }
 }
@@ -250,6 +284,17 @@ struct CycleJournalState: Codable {
     var nightscoutGlucoseSyncedAt: Date?
     var nightscoutTreatmentsSyncedAt: Date?
     var noteSync: CycleNoteSyncState?
+    /// Internal backing records; period history is edited through the tracker.
+    var periodSyncNotes: [CycleJournalNote]?
+    var periodTrackerSnapshot: [CycleJournalNote]?
+
+    var synchronizedNotes: [CycleJournalNote] {
+        get { notes + (periodSyncNotes ?? []) }
+        set {
+            notes = newValue.filter { $0.period == nil }
+            periodSyncNotes = newValue.filter { $0.period != nil }
+        }
+    }
 }
 
 /// Journal transactions are independent of chat history and preserve unreadable files.
@@ -296,10 +341,15 @@ final class CycleJournalStore: ObservableObject {
     @discardableResult
     func saveNote(id: UUID? = nil, date: Date, text: String, tags: [CycleNoteTag], source: String = "user", now: Date = Date(), cycleContext: CycleNoteContext? = nil) throws -> CycleJournalNote {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Edits use the note's original civil calendar, including after travel.
+        let savedZone = state.notes.first(where: { $0.id == id }).flatMap { TimeZone(identifier: $0.timeZone) }
+        let zone = savedZone ?? .current
+        var calendar = Calendar.current
+        calendar.timeZone = zone
         guard (!text.isEmpty || !tags.isEmpty), text.count <= 6000, date <= now,
-              CycleDay.date(CycleDay.key(date)) != nil else { throw CompanionError.invalid("Choose a past or current date, then add text or select at least one tag. Text can be up to 6,000 characters.") }
+              CycleDay.date(CycleDay.key(date, calendar: calendar), calendar: calendar) != nil else { throw CompanionError.invalid("Choose a past or current date, then add text or select at least one tag. Text can be up to 6,000 characters.") }
         guard cycleContext?.isValid != false else { throw CompanionError.invalid("Cycle and phase days must be positive numbers, and phase day cannot exceed cycle day. Choose a phase when entering its day.") }
-        var note = CycleJournalNote(day: CycleDay.key(date), occurredAt: date, timeZone: TimeZone.current.identifier,
+        var note = CycleJournalNote(day: CycleDay.key(date, calendar: calendar), occurredAt: date, timeZone: zone.identifier,
                                     text: text, tags: CycleNoteTag.allCases.filter { tags.contains($0) }, source: source)
         note.cycleContext = cycleContext
         try update { state in
@@ -320,6 +370,38 @@ final class CycleJournalStore: ObservableObject {
     }
 
     func deleteNote(_ id: UUID) throws { try update { $0.notes.removeAll { $0.id == id } } }
+
+    /// Compare with the last tracker snapshot so an empty, newly installed tracker
+    /// never erases downloaded history. Changes queue in the same durable journal.
+    func stagePeriodHistory(_ entries: [CycleJournalNote]) throws {
+        let previous = state.periodTrackerSnapshot ?? []
+        if state.periodTrackerSnapshot != nil,
+           previous.map(\.id) == entries.map(\.id), previous.map(\.period) == entries.map(\.period) { return }
+        try update { state in
+            var notes = state.periodSyncNotes ?? []
+            for old in previous where !entries.contains(where: { $0.id == old.id }) {
+                notes.removeAll { $0.id == old.id }
+            }
+            for entry in entries {
+                let old = previous.first { $0.id == entry.id }
+                guard old == nil || old?.period != entry.period else { continue }
+                if let index = notes.firstIndex(where: { $0.id == entry.id }) {
+                    var replacement = notes[index]
+                    replacement.period = entry.period
+                    replacement.day = entry.day
+                    var calendar = Calendar(identifier: .gregorian)
+                    calendar.timeZone = TimeZone(identifier: replacement.timeZone) ?? .current
+                    if let date = CycleDay.date(entry.day, calendar: calendar) {
+                        replacement.occurredAt = calendar.startOfDay(for: date)
+                    }
+                    replacement.updatedAt = Date()
+                    notes[index] = replacement
+                } else { notes.append(entry) }
+            }
+            state.periodSyncNotes = notes
+            state.periodTrackerSnapshot = entries
+        }
+    }
 
     func fillMissingCycleContexts(using resolve: (CycleJournalNote) -> CycleNoteContext) throws {
         let repaired = state.notes.map { note -> CycleJournalNote in
@@ -359,9 +441,14 @@ final class CycleJournalStore: ObservableObject {
                         summary.insulinUnits = old.insulinUnits; summary.insulinRecordCount = old.insulinRecordCount
                         summary.insulinSource = old.insulinSource; summary.insulinIsPartial = old.insulinIsPartial
                     }
-                    if summary.carbEntryCount < old.carbEntryCount || (summary.carbEntryCount == old.carbEntryCount && old.carbSource == "Nightscout" && summary.carbSource != "Nightscout") {
+                    // Fewer records can mean a deletion or an expired/failed store.
+                    // Only a complete refresh of the same source may remove carbs.
+                    let sameCarbSource = (summary.carbSource ?? "Local records") == (old.carbSource ?? "Local records")
+                    let replacesCarbs = summary.carbHistoryIsComplete == true && sameCarbSource
+                    if !replacesCarbs && (summary.carbEntryCount < old.carbEntryCount || (summary.carbEntryCount == old.carbEntryCount && old.carbSource == "Nightscout" && summary.carbSource != "Nightscout")) {
                         summary.carbGrams = old.carbGrams; summary.carbEntryCount = old.carbEntryCount
                         summary.carbSource = old.carbSource
+                        summary.carbHistoryIsComplete = old.carbHistoryIsComplete
                     }
                 }
                 state.summaries.removeAll { $0.day == summary.day }

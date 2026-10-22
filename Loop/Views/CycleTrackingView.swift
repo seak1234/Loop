@@ -138,6 +138,40 @@ final class CycleTrackingStore: ObservableObject {
         persist()
     }
 
+    func periodHistorySyncNotes() -> [CycleJournalNote] {
+        periodEntries.map { entry in
+            let period = CyclePeriodSyncContent(startDay: CycleDay.key(entry.startDate, calendar: calendar),
+                endDay: entry.endDate.map { CycleDay.key($0, calendar: calendar) })
+            var note = CycleJournalNote(day: period.startDay, occurredAt: entry.startDate,
+                timeZone: calendar.timeZone.identifier, text: "Period history", tags: [], source: "cycle-period")
+            note.id = entry.id
+            note.period = period
+            note.cycleContext = .init(cycleDay: 1, phase: .period, phaseDay: 1, isEstimated: false)
+            return note
+        }
+    }
+
+    /// Validate the complete merged history before publishing any calendar change.
+    func restorePeriodHistory(from notes: [CycleJournalNote]) throws {
+        var entries: [PeriodEntry] = []
+        var seen: [CyclePeriodSyncContent] = []
+        for note in notes {
+            guard let period = note.period, period.isValid(timeZone: note.timeZone),
+                  let start = CycleDay.date(period.startDay, calendar: calendar) else {
+                throw CompanionError.invalid("A Nightscout period note has invalid dates. Review its Period start and Period end fields.")
+            }
+            if seen.contains(period) { continue }
+            seen.append(period)
+            entries.append(.init(id: note.id, startDate: start,
+                endDate: period.endDay.flatMap { CycleDay.date($0, calendar: calendar) }))
+        }
+        if let error = Self.historyValidationError(entries, calendar: calendar) {
+            throw CompanionError.invalid("Nightscout period history needs review: " + error)
+        }
+        let next = normalized(entries)
+        if next != periodEntries { replacePeriodEntries(with: next) }
+    }
+
     func cycleDay(on date: Date = Date()) -> Int? {
         cycleContext(on: date)?.day
     }
