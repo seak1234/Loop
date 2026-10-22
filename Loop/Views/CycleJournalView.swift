@@ -67,7 +67,8 @@ struct CycleJournalDayView: View {
                 .padding(12).background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
             }
             Text(date.formatted(date: .complete, time: .omitted)).font(.subheadline.bold())
-            Text(tracker.summary(on: date).cycleDay.map { "Cycle day \($0) · \(tracker.summary(on: date).phaseName)" } ?? "Log a period start to place this day in your cycle.")
+            Text(tracker.summary(on: date).cycleDay.map { "Cycle day \($0) · \(tracker.summary(on: date).phaseName)" }
+                ?? journal.calendarContext(on: date)?.summaryText ?? "Log a period start to place this day in your cycle.")
                 .font(.caption).foregroundColor(.secondary)
             if let summary = journal.summary(on: date) {
                 CycleDailySummaryView(summary: summary)
@@ -125,12 +126,21 @@ struct CycleJournalDayView: View {
                 .font(.caption.bold())
             if controller.cycleNoteSyncEnabled {
                 if controller.isSyncingCycleNotes {
-                    ProgressView("Syncing notes and period dates…")
+                    ProgressView("Syncing cycle days, notes and period dates…")
                 } else if let message = controller.cycleNoteSyncError {
                     Text(message)
                 } else if let source = journal.state.noteSync?.enabledSourceID,
                           let last = journal.state.noteSync?.sites[source]?.lastSyncedAt {
                     Text("Last successful sync: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    if let through = journal.state.noteSync?.sites[source]?.calendarSyncedThrough,
+                       let throughDate = CycleDay.date(through) {
+                        Text("Daily cycle notes backed up through: \(throughDate.formatted(date: .abbreviated, time: .omitted))")
+                    }
+                    if journal.calendarDayIsSynced(CycleDay.key(date), trackerContext: tracker.noteContext(on: date)) {
+                        Label("This day’s cycle details are saved in Nightscout.", systemImage: "checkmark.circle")
+                    } else if date <= Date(), tracker.noteContext(on: date).cycleDay != nil {
+                        Text("This day’s cycle details are waiting to sync.")
+                    }
                 } else {
                     Text("Waiting for the first successful sync.")
                 }
@@ -138,7 +148,7 @@ struct CycleJournalDayView: View {
                     .disabled(controller.isSyncingCycleNotes)
                     .foregroundColor(.accentColor)
             } else {
-                Text("Sharing notes and period dates is off. Your Nightscout connection is managed separately.")
+                Text("Sharing cycle days, notes and period dates is off. Your Nightscout connection is managed separately.")
                 Button("Open sync settings") { showsSettings = true }
                     .foregroundColor(.accentColor)
             }
@@ -357,8 +367,8 @@ struct CycleJournalSettings: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Nightscout notes and period dates"), footer: Text("Share cycle notes, tags, cycle context and logged period start and end dates with your connected Nightscout site. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies.")) {
-                    Toggle("Sync cycle notes and period dates with Nightscout", isOn: Binding(
+                Section(header: Text("Nightscout notes and period dates"), footer: Text("Share every calendar day’s cycle day, phase and phase day, even without a journal note, plus notes, tags and logged period dates. Past days from the first logged period through today are backed up to Nightscout. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies.")) {
+                    Toggle("Sync cycle days and notes with Nightscout", isOn: Binding(
                         get: { controller.cycleNoteSyncEnabled },
                         set: { controller.setCycleNoteSyncEnabled($0) }))
                     if controller.cycleNoteSyncEnabled {

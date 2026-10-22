@@ -3239,6 +3239,9 @@
     "%lld/6,000" : {
 
     },
+    "Daily cycle notes backed up through: %@" : {
+
+    },
     "Last successful sync: %@" : {
 
     },
@@ -3248,10 +3251,16 @@
     "Open sync settings" : {
 
     },
-    "Sharing notes and period dates is off. Your Nightscout connection is managed separately." : {
+    "Sharing cycle days, notes and period dates is off. Your Nightscout connection is managed separately." : {
 
     },
-    "Syncing notes and period dates…" : {
+    "Syncing cycle days, notes and period dates…" : {
+
+    },
+    "This day’s cycle details are saved in Nightscout." : {
+
+    },
+    "This day’s cycle details are waiting to sync." : {
 
     },
     "Waiting for the first successful sync." : {
@@ -35642,7 +35651,7 @@
         }
       }
     },
-    "Share cycle notes, tags, cycle context and logged period start and end dates with your connected Nightscout site. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies." : {
+    "Share every calendar day’s cycle day, phase and phase day, even without a journal note, plus notes, tags and logged period dates. Past days from the first logged period through today are backed up to Nightscout. Missing records upload automatically, and period history restores from Nightscout on an empty phone. People who can view treatments may see them. Edits and deletions sync both ways while this app is active. Period dates are stored in dedicated [Cycle] notes; keep their footer when editing in Nightscout. Use period history to edit dates in the app. Turning sync off keeps both copies." : {
 
     },
     "Short-period estimates; lab HbA1c can differ." : {
@@ -36966,7 +36975,7 @@
     "Switches glucose unit between US (mg/dL) and European (mmol/L) units" : {
       "comment" : "Accessibility hint for glucose unit toggle"
     },
-    "Sync cycle notes and period dates with Nightscout" : {
+    "Sync cycle days and notes with Nightscout" : {
 
     },
     "Sync now" : {

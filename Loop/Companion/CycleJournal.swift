@@ -71,6 +71,8 @@ struct CycleJournalNote: Codable, Identifiable, Equatable {
     var cycleContext: CycleNoteContext?
     /// Present only on the dedicated Nightscout period-history notes.
     var period: CyclePeriodSyncContent?
+    /// An automatically maintained calendar-day note, even without journal text.
+    var isCalendarDay: Bool?
 
     var displayText: String {
         text.isEmpty ? tags.map(\.title).joined(separator: " · ") : text
@@ -143,6 +145,7 @@ struct CycleNoteSyncState: Codable, Equatable {
 struct CycleNoteSyncSite: Codable, Equatable {
     var links: [CycleNoteSyncLink] = []
     var lastSyncedAt: Date?
+    var calendarSyncedThrough: String?
 }
 
 struct CycleNoteSyncContent: Codable, Equatable {
@@ -153,6 +156,7 @@ struct CycleNoteSyncContent: Codable, Equatable {
     var tags: [CycleNoteTag]
     var cycleContext: CycleNoteContext?
     var period: CyclePeriodSyncContent?
+    var isCalendarDay: Bool?
 
     init(_ note: CycleJournalNote) {
         day = note.day
@@ -161,6 +165,7 @@ struct CycleNoteSyncContent: Codable, Equatable {
         text = note.text; tags = note.tags
         cycleContext = note.cycleContext
         period = note.period
+        isCalendarDay = note.isCalendarDay
     }
 
     func note(id: UUID = UUID(), source: String = "nightscout") -> CycleJournalNote {
@@ -168,6 +173,7 @@ struct CycleNoteSyncContent: Codable, Equatable {
         result.id = id
         result.cycleContext = cycleContext
         result.period = period
+        result.isCalendarDay = isCalendarDay
         return result
     }
 
@@ -176,6 +182,10 @@ struct CycleNoteSyncContent: Codable, Equatable {
         if let period {
             result.text += "\n\nPeriod history conflict: " + period.startDay + " through " + (period.endDay ?? "ongoing") + ". Review period history."
             result.period = nil
+        }
+        if isCalendarDay == true {
+            result.text += "\n\nCalendar context conflict for " + day + ". " + (cycleContext?.summaryText ?? "")
+            result.isCalendarDay = nil
         }
         return result
     }
@@ -287,12 +297,15 @@ struct CycleJournalState: Codable {
     /// Internal backing records; period history is edited through the tracker.
     var periodSyncNotes: [CycleJournalNote]?
     var periodTrackerSnapshot: [CycleJournalNote]?
+    var calendarSyncNotes: [CycleJournalNote]?
+    var calendarGeneratedDays: [String]?
 
     var synchronizedNotes: [CycleJournalNote] {
-        get { notes + (periodSyncNotes ?? []) }
+        get { notes + (periodSyncNotes ?? []) + (calendarSyncNotes ?? []) }
         set {
-            notes = newValue.filter { $0.period == nil }
+            notes = newValue.filter { $0.period == nil && $0.isCalendarDay != true }
             periodSyncNotes = newValue.filter { $0.period != nil }
+            calendarSyncNotes = newValue.filter { $0.isCalendarDay == true }
         }
     }
 }
@@ -414,6 +427,38 @@ final class CycleJournalStore: ObservableObject {
         }
         guard repaired != state.notes else { return }
         try update { $0.notes = repaired }
+    }
+
+    func stageCalendarDays(_ days: [CycleJournalNote]) throws {
+        var saved = state.calendarSyncNotes ?? []
+        let generated = days.map(\.day)
+        let unsupported = Set(state.calendarGeneratedDays ?? []).subtracting(generated)
+        for index in saved.indices where unsupported.contains(saved[index].day) {
+            saved[index].cycleContext = CycleNoteContext()
+        }
+        for day in days {
+            if let index = saved.firstIndex(where: { $0.day == day.day }) {
+                // Preserve the civil time zone and any remote text/tags. Only
+                // calendar-derived timing changes when period history is corrected.
+                if saved[index].cycleContext != day.cycleContext {
+                    saved[index].cycleContext = day.cycleContext
+                    saved[index].updatedAt = Date()
+                }
+            } else { saved.append(day) }
+        }
+        guard saved != (state.calendarSyncNotes ?? []) || generated != state.calendarGeneratedDays else { return }
+        try update { $0.calendarSyncNotes = saved; $0.calendarGeneratedDays = generated }
+    }
+
+    func calendarContext(on date: Date, calendar: Calendar = .current) -> CycleNoteContext? {
+        state.calendarSyncNotes?.first { $0.day == CycleDay.key(date, calendar: calendar) }?.cycleContext
+    }
+
+    func calendarDayIsSynced(_ day: String, trackerContext: CycleNoteContext) -> Bool {
+        guard let source = state.noteSync?.enabledSourceID, let site = state.noteSync?.sites[source],
+              let note = state.calendarSyncNotes?.first(where: { $0.day == day }),
+              trackerContext.cycleDay == nil || trackerContext == note.cycleContext else { return false }
+        return site.links.contains { $0.localID == note.id && $0.acknowledged && $0.base == CycleNoteSyncContent(note) }
     }
     func notes(on date: Date) -> [CycleJournalNote] {
         state.notes.filter { $0.day == CycleDay.key(date) }.sorted { $0.occurredAt < $1.occurredAt }

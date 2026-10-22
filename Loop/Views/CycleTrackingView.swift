@@ -151,6 +151,24 @@ final class CycleTrackingStore: ObservableObject {
         }
     }
 
+    /// Backfill every supported civil day, rather than only dates with user notes.
+    func calendarHistorySyncNotes(through now: Date = Date()) -> [CycleJournalNote] {
+        guard let first = periodEntries.map(\.startDate).min() else { return [] }
+        var day = calendar.startOfDay(for: first)
+        let today = calendar.startOfDay(for: now)
+        var result: [CycleJournalNote] = []
+        while day <= today {
+            var note = CycleJournalNote(day: CycleDay.key(day, calendar: calendar), occurredAt: day,
+                timeZone: calendar.timeZone.identifier, text: "Cycle calendar day", tags: [], source: "cycle-calendar")
+            note.isCalendarDay = true
+            note.cycleContext = noteContext(on: day)
+            result.append(note)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day), next > day else { break }
+            day = next
+        }
+        return result
+    }
+
     /// Validate the complete merged history before publishing any calendar change.
     func restorePeriodHistory(from notes: [CycleJournalNote]) throws {
         var entries: [PeriodEntry] = []
@@ -836,7 +854,7 @@ struct CycleTrackingView: View {
         let isDisplayedMonth = calendar.isDate(date, equalTo: displayedMonth, toGranularity: .month)
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
         let marker = store.calendarMarker(for: date)
-        let phase = store.calendarPhase(for: date)
+        let phase = displayedPhase(for: date)
         let roundsLeadingEdge = phase.map { !phaseContinues(from: date, direction: -1, phase: $0) } ?? false
         let roundsTrailingEdge = phase.map { !phaseContinues(from: date, direction: 1, phase: $0) } ?? false
 
@@ -1055,6 +1073,17 @@ struct CycleTrackingView: View {
         }
     }
 
+    private func displayedPhase(for date: Date) -> CycleTrackingStore.Phase? {
+        if let phase = store.calendarPhase(for: date) { return phase }
+        switch journal.calendarContext(on: date)?.phase {
+        case .period: return .period
+        case .follicular: return .follicular
+        case .ovulation: return .ovulation
+        case .luteal: return .luteal
+        case nil: return nil
+        }
+    }
+
     private func phaseColor(_ phase: CycleTrackingStore.Phase) -> Color {
         let isDark = colorScheme == .dark
         switch phase {
@@ -1089,7 +1118,7 @@ struct CycleTrackingView: View {
         else {
             return false
         }
-        return store.calendarPhase(for: adjacentDate) == phase
+        return displayedPhase(for: adjacentDate) == phase
     }
 }
 

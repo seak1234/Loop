@@ -1,6 +1,6 @@
 # Cycle notes and Nightscout
 
-Enable **Cycle → tap a calendar day → Cycle journal settings → Sync cycle notes and period dates with Nightscout**. Sync starts off, independently of Mochi permissions and daily-record retention. Enabling it shares existing and new journal notes and logged period dates with the configured Nightscout site. Treatment viewers can see the shared notes. The connection needs treatment read/create/update/delete permissions.
+Enable **Cycle → tap a calendar day → Cycle journal settings → Sync cycle days and notes with Nightscout**. Sync starts off, independently of Mochi permissions and daily-record retention. Enabling it shares daily calendar context, journal notes and logged period dates with the configured Nightscout site. Treatment viewers can see the shared notes. The connection needs treatment read/create/update/delete permissions.
 
 All integration lives in Loop. Nightscout's server and the existing NightscoutService module need no changes. The app uses the existing Nightscout connection, with its credentials kept out of journal state and AI context.
 
@@ -12,9 +12,36 @@ Cycle context is a saved snapshot attached to the note. New app notes use the tr
 
 Cycle day follows the same projected-cycle calculation as the cycle calendar. Phase day starts at 1 at each of the calendar's phase boundaries. Calendar-derived follicular, ovulation and luteal phases, and projected periods, are labeled estimated. These are calendar estimates, not measured hormone levels or confirmed ovulation. Editing ordinary note context does not edit period history.
 
+## Every calendar day, including days without journal notes
+
+Sync creates a dedicated Nightscout **Note** for every day from the earliest logged period through today. Writing a journal note is not required. This backfills historical dates and adds each new day while the app is active. It uses the calendar's own calculation for cycle day, phase, phase day, and estimated/reported timing, including projected cycles in the past. Future days are not uploaded as recorded events. Daily-summary retention does not limit this calendar backup.
+
+For example, a September 26 that the tracker places in the follicular phase has a readable daily record like:
+
+```text
+[Cycle] Cycle calendar day
+
+Cycle tags:
+Cycle time zone: America/Detroit
+Cycle day: 8
+Cycle phase: follicular
+Phase day: 3
+Cycle timing: estimated
+Cycle record: day
+Cycle date: 2026-09-26
+```
+
+The numbers come from the user's logged period dates; this example is not a claim about a particular person's cycle. Calendar-day notes have stable IDs derived from site and civil date. Retries, multiple phones, and a missing list entry do not create duplicate daily records. A previously synchronized daily record missing from an exact-ID lookup is recreated with the same ID. Ordinary journal-note and period-history deletions still reconcile both ways.
+
+Daily context follows the tracker. Correcting period dates updates existing daily records, preserving text or tags added to them in Nightscout. Context that loses its period-history support is marked unknown instead of leaving an outdated phase. Correct the period-history notes to change calendar timing; direct edits to derived daily timing are refreshed from the tracker. Do not remove the daily footer or move its timestamp to a different civil date.
+
+On an empty phone, daily notes download along with period-history notes. If only daily records remain in Nightscout, their saved context still appears on the calendar and selected journal day without inventing logged period dates. Automatic backing records are separate from written journal entries and do not add journal-note dots or pattern evidence.
+
+The journal card shows **Daily cycle notes backed up through** after the daily pass completes. It shows **This day’s cycle details are saved in Nightscout** only when that date's content has been acknowledged and matches the current tracker context. A partial or failed backfill does not advance the last-success timestamp or verified-through date. If period dates change during the backfill, that pass is retried before completion is reported. Foreground backfills can take time; iOS suspension may interrupt them, and the next attempt resumes using saved links.
+
 ## Period history and empty-phone restore
 
-Every logged period, including an ongoing period, also has a dedicated **Note** in Nightscout. Existing dates upload even when no journal note was written. These notes use the same durable retry queue, site mapping, pagination, read-back verification, and edit/delete reconciliation as journal notes. Starting, ending, adding, correcting or deleting a period schedules automatic sync. The existing sync setting enables both notes and period history.
+Every logged period, including an ongoing period, also has a dedicated **Note** in Nightscout. Existing dates upload even when no journal note was written. These notes use the same durable retry queue, site mapping, pagination, read-back verification, and edit/delete reconciliation as journal notes. Starting, ending, adding, correcting or deleting a period schedules automatic sync. The existing sync setting enables daily context, notes and period history.
 
 A period note has the ordinary cycle footer followed by:
 
@@ -53,7 +80,7 @@ Preserve the footer labels and line breaks. Invalid marked notes pause syncing w
 
 ## Sync behavior
 
-The cycle journal card shows cycle-note/period-date sharing status, progress, the last successful sync time, and any sync error. **Sync now** requests a fresh attempt. When sharing is off, **Open sync settings** opens its separate setting. The empty-day message refers to saved glucose/insulin/carb summaries and does not indicate that Nightscout is disconnected.
+The cycle journal card shows cycle-day/note/period-date sharing status, progress, the last successful sync time, and any sync error. **Sync now** requests a fresh attempt. When sharing is off, **Open sync settings** opens its separate setting. The empty-day message refers to saved glucose/insulin/carb summaries and does not indicate that Nightscout is disconnected.
 
 Local changes queue durably in the journal and retry when the app is active. Sync checks on foreground/data refresh, about every five minutes while active, and after local note or period-date changes. The visible cycle screen checks periodically; **Sync now** requests an immediate attempt. iOS suspension stops this foreground workflow.
 
@@ -67,6 +94,6 @@ Nightscout's v1 API has no atomic compare-and-swap for treatment updates. Change
 
 ## Verification
 
-`Scripts/test-cycle-note-sync.sh` executes the production client/reconciler and compiles the controller's integration methods against narrow service stubs. It covers both sync directions, multi-device behavior, context fields and phase boundaries, conflicts, offline retries, lost responses, permissions, consent changes, pagination, read-back verification, legacy journals, period-history upload and empty-phone restore. It uses an in-memory HTTP transport and never contacts the user's Nightscout site.
+`Scripts/test-cycle-note-sync.sh` executes the production client/reconciler and compiles the controller's integration methods against narrow service stubs. It covers both sync directions, multi-device behavior, context fields and phase boundaries, conflicts, offline retries, lost responses, permissions, consent changes, pagination, read-back verification, legacy journals, period-history upload, daily backfill without journal notes, a September 26 follicular example, and empty-phone restore. It uses an in-memory HTTP transport and never contacts the user's Nightscout site.
 
 `Scripts/test-cycle-companion.sh` covers existing cycle/journal behavior. `Scripts/typecheck-cycle-ui.sh` checks the actual SwiftUI screens with Mac Catalyst interfaces. A full iOS build and live-site/device verification still require Xcode and a configured test site. The SDK used by the compiler must match the installed Swift toolchain; `MOCHI_TEST_SDK` selects an alternative installed SDK.

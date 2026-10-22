@@ -69,6 +69,234 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         return CycleDay.date(day, calendar: calendar)!
     }
 
+    private func calendarRecords(_ server: CycleNoteServer) throws -> [CycleNightscoutNoteClient.Record] {
+        try server.rows.values.map { try CycleNightscoutNoteClient.decode($0) }
+            .filter { $0.content.isCalendarDay == true }.sorted { $0.content.day < $1.content.day }
+    }
+
+    private func enableDailyBackfill(_ base: CycleNightscoutNoteSync, tracker: CycleTrackingStore, through day: String = "2026-09-26") -> CycleNightscoutNoteSync {
+        var sync = base
+        sync.periodTracker = tracker
+        sync.syncCalendarDays = true
+        sync.calendarNow = { self.periodDate(day) }
+        return sync
+    }
+
+    func testEveryCalendarDayUploadsWithoutJournalNotesIncludingSeptember26Follicular() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        let days = try calendarRecords(server)
+        XCTAssertEqual(days.count, 8)
+        XCTAssertEqual(days.first?.content.day, "2026-09-19")
+        XCTAssertEqual(days.last?.content.day, "2026-09-26")
+        for record in days {
+            XCTAssertEqual(record.content.cycleContext, tracker.noteContext(on: periodDate(record.content.day)))
+        }
+        let september26 = days.last!
+        XCTAssertEqual(september26.content.cycleContext, .init(cycleDay: 8, phase: .follicular, phaseDay: 3, isEstimated: true))
+        XCTAssertTrue((september26.raw["notes"] as! String).contains("Cycle phase: follicular"))
+        XCTAssertTrue((september26.raw["notes"] as! String).contains("Cycle date: 2026-09-26"))
+        XCTAssertTrue(journal.state.notes.isEmpty)
+        XCTAssertEqual(journal.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough, "2026-09-26")
+        let writes = server.writes
+        try await sync.run()
+        XCTAssertEqual(server.writes, writes)
+        XCTAssertEqual(try calendarRecords(server).count, 8)
+    }
+
+    func testDailyBackfillIncludesEveryPhaseAndProjectedDaysButNoFutureDates() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-01"), endDate: periodDate("2026-09-05"))])
+        try await enableDailyBackfill(base, tracker: tracker, through: "2026-10-01").run()
+        let days = try calendarRecords(server)
+        XCTAssertEqual(days.count, 31)
+        XCTAssertEqual(Set(days.compactMap { $0.content.cycleContext?.phase }), Set(CycleNoteContext.Phase.allCases))
+        XCTAssertEqual(days.last?.content.day, "2026-10-01")
+        XCTAssertEqual(days.last?.content.cycleContext, tracker.noteContext(on: periodDate("2026-10-01")))
+        XCTAssertTrue(days.last?.content.cycleContext?.isEstimated == true)
+        XCTAssertFalse(days.contains { $0.content.day > "2026-10-01" })
+    }
+
+    func testDailyBackfillUpdatesCorrectedPeriodContextAndPreservesRemoteText() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        let id = try calendarRecords(server).last!.id
+        server.rows[id]!["notes"] = (server.rows[id]!["notes"] as! String).replacingOccurrences(of: "Cycle calendar day", with: "Remote annotations")
+        var entry = tracker.periodEntries[0]; entry.endDate = periodDate("2026-09-26")
+        tracker.replacePeriodEntries(with: [entry])
+        try await sync.run()
+        let updated = try CycleNightscoutNoteClient.decode(server.rows[id]!)
+        XCTAssertEqual(updated.content.cycleContext?.phase, .period)
+        XCTAssertEqual(updated.content.cycleContext?.phaseDay, 8)
+        XCTAssertEqual(updated.content.cycleContext?.isEstimated, false)
+        XCTAssertEqual(updated.content.text, "Remote annotations")
+        XCTAssertEqual(try calendarRecords(server).count, 8)
+        XCTAssertTrue(journal.state.notes.isEmpty)
+    }
+
+    func testDailyRecordsRestoreOnEmptyPhoneAcrossTimeZonesWithoutDuplicateUploads() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        let writes = server.writes
+        let (second, _, _) = try fixture(); defer { cleanup(second) }
+        let (empty, clearEmpty) = periodTracker(zone: "America/Los_Angeles"); defer { clearEmpty() }
+        var restore = CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: empty)
+        restore.calendarNow = { self.periodDate("2026-09-26") }
+        try await restore.run()
+        XCTAssertEqual(empty.periodEntries.count, 1)
+        XCTAssertEqual(second.state.calendarSyncNotes?.count, 8)
+        XCTAssertEqual(second.calendarContext(on: periodDate("2026-09-26"))?.phase, .follicular)
+        XCTAssertTrue(second.state.notes.isEmpty)
+        XCTAssertEqual(server.writes, writes)
+        XCTAssertEqual(try calendarRecords(server).count, 8)
+    }
+
+    func testDailyRecordsDownloadEvenWhenNoPeriodRecordsRemainOnNightscout() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        server.rows = server.rows.filter { ($0.value["notes"] as! String).contains("Cycle record: day") }
+        let (second, _, _) = try fixture(); defer { cleanup(second) }
+        let (empty, clearEmpty) = periodTracker(); defer { clearEmpty() }
+        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: empty).run()
+        XCTAssertTrue(empty.periodEntries.isEmpty)
+        XCTAssertEqual(second.state.calendarSyncNotes?.count, 8)
+        XCTAssertEqual(second.calendarContext(on: periodDate("2026-09-26"))?.phase, .follicular)
+        XCTAssertEqual(second.calendarContext(on: periodDate("2026-09-26"))?.cycleDay, 8)
+    }
+
+    func testMissingPreviouslySyncedDailyRecordIsRecreatedWithTheSameID() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        let id = try calendarRecords(server).last!.id
+        server.rows.removeValue(forKey: id)
+        try await sync.run()
+        XCTAssertEqual(try CycleNightscoutNoteClient.decode(server.rows[id]!).content.cycleContext?.phase, .follicular)
+        XCTAssertEqual(try calendarRecords(server).count, 8)
+    }
+
+    func testDailyLostCreateResponseRetriesAfterRelaunchWithoutFalseSuccess() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        var failed = false
+        server.onRequest = { request in
+            if request.httpMethod == "POST", !failed,
+               let data = request.httpBody, let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               (body["notes"] as? String)?.contains("Cycle record: day") == true {
+                failed = true; server.loseNextWriteResponse = true
+            }
+        }
+        do { try await sync.run(); XCTFail("Expected lost daily response") } catch { }
+        XCTAssertNil(journal.state.noteSync?.sites[configuration.sourceID]?.lastSyncedAt)
+        XCTAssertNil(journal.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough)
+        let reloaded = CycleJournalStore(url: journal.url)
+        var retry = CycleNightscoutNoteSync(journal: reloaded, client: sync.client, isCurrent: { true }, periodTracker: tracker)
+        retry.calendarNow = { self.periodDate("2026-09-26") }
+        try await retry.run()
+        XCTAssertEqual(try calendarRecords(server).count, 8)
+        XCTAssertEqual(server.requests.filter { $0.httpMethod == "POST" }.count, 9)
+        XCTAssertEqual(reloaded.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough, "2026-09-26")
+    }
+
+    func testConcurrentDailyBackfillUsesStableIDsEvenWhenDiscoveryOmitsRecords() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        let writes = server.writes
+        let (second, _, _) = try fixture(); defer { cleanup(second) }
+        let (other, clearOther) = periodTracker(zone: "America/Los_Angeles"); defer { clearOther() }
+        other.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        server.omitDiscovery = true
+        var concurrent = CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other)
+        concurrent.calendarNow = { self.periodDate("2026-09-26") }
+        try await concurrent.run()
+        XCTAssertEqual(server.writes, writes)
+        XCTAssertEqual(try calendarRecords(server).count, 8)
+        XCTAssertEqual(second.state.noteSync?.conflictCopies, 0)
+    }
+
+    func testPeriodEditDuringDailyBackfillDoesNotReportACompleteSync() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        var changed = false
+        server.onRequest = { request in
+            if request.httpMethod == "POST", !changed,
+               let data = request.httpBody, let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               (body["notes"] as? String)?.contains("Cycle record: day") == true {
+                changed = true
+                var entry = tracker.periodEntries[0]; entry.endDate = self.periodDate("2026-09-26")
+                tracker.replacePeriodEntries(with: [entry])
+            }
+        }
+        do { try await sync.run(); XCTFail("Expected changed tracker cancellation") } catch is CancellationError { }
+        XCTAssertNil(journal.state.noteSync?.sites[configuration.sourceID]?.lastSyncedAt)
+        XCTAssertNil(journal.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough)
+        server.onRequest = nil
+        try await sync.run()
+        XCTAssertEqual(try calendarRecords(server).last?.content.cycleContext?.phase, .period)
+        XCTAssertEqual(journal.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough, "2026-09-26")
+    }
+
+    func testDeletingPeriodHistoryClearsUnsupportedDailyPhaseInsteadOfLeavingStaleEstimates() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        try await sync.run()
+        tracker.replacePeriodEntries(with: [])
+        try await sync.run()
+        XCTAssertTrue(tracker.periodEntries.isEmpty)
+        let records = try calendarRecords(server)
+        XCTAssertTrue(records.allSatisfy { $0.content.cycleContext == CycleNoteContext() })
+        XCTAssertNil(journal.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough)
+    }
+
+    func testSelectedDaySyncConfirmationRequiresVerifiedMatchingCalendarContext() async throws {
+        let (journal, _, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        tracker.replacePeriodEntries(with: [.init(startDate: periodDate("2026-09-19"), endDate: periodDate("2026-09-23"))])
+        let sync = enableDailyBackfill(base, tracker: tracker)
+        let context = tracker.noteContext(on: periodDate("2026-09-26"))
+        XCTAssertFalse(journal.calendarDayIsSynced("2026-09-26", trackerContext: context))
+        try await sync.run()
+        XCTAssertTrue(journal.calendarDayIsSynced("2026-09-26", trackerContext: context))
+        var entry = tracker.periodEntries[0]; entry.endDate = periodDate("2026-09-26")
+        tracker.replacePeriodEntries(with: [entry])
+        XCTAssertFalse(journal.calendarDayIsSynced("2026-09-26", trackerContext: tracker.noteContext(on: periodDate("2026-09-26"))))
+        try await sync.run()
+        XCTAssertTrue(journal.calendarDayIsSynced("2026-09-26", trackerContext: tracker.noteContext(on: periodDate("2026-09-26"))))
+    }
+
+    func testDailyBackfillDoesNotInventContextWithoutPeriodHistory() async throws {
+        let (journal, server, base) = try fixture(); defer { cleanup(journal) }
+        let (tracker, clear) = periodTracker(); defer { clear() }
+        try await enableDailyBackfill(base, tracker: tracker).run()
+        XCTAssertTrue(server.rows.isEmpty)
+        XCTAssertTrue(journal.state.calendarSyncNotes?.isEmpty ?? true)
+        XCTAssertNil(journal.state.noteSync?.sites[configuration.sourceID]?.calendarSyncedThrough)
+    }
+
     func testPeriodDatesUploadWithoutAnyJournalNotesAndRestoreAnEmptyPhone() async throws {
         let (journal, server, base) = try fixture(); defer { cleanup(journal) }
         let (tracker, clear) = periodTracker(); defer { clear() }
@@ -82,7 +310,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         XCTAssertTrue(server.rows.values.allSatisfy { ($0["notes"] as! String).contains("Cycle record: period") })
         let (second, _, _) = try fixture(); defer { cleanup(second) }
         let (empty, clearEmpty) = periodTracker(); defer { clearEmpty() }
-        let restore = CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: empty)
+        let restore = CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: empty, syncCalendarDays: false)
         try await restore.run()
         XCTAssertEqual(empty.periodHistorySyncNotes().map(\.period), tracker.periodHistorySyncNotes().map(\.period))
         XCTAssertEqual(empty.cycleLength, tracker.cycleLength)
@@ -104,7 +332,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         let (second, _, _) = try fixture(); defer { cleanup(second) }
         let (other, clearOther) = periodTracker(zone: "America/Los_Angeles"); defer { clearOther() }
         other.replacePeriodEntries(with: [.init(startDate: periodDate("2026-01-15"), endDate: periodDate("2026-01-19"))])
-        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other).run()
+        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other, syncCalendarDays: false).run()
         XCTAssertEqual(server.rows.count, 1)
         XCTAssertEqual(server.writes, 1)
         XCTAssertEqual(other.periodEntries.count, 1)
@@ -121,7 +349,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         let (other, clearOther) = periodTracker(zone: "America/Los_Angeles"); defer { clearOther() }
         other.replacePeriodEntries(with: [.init(startDate: periodDate("2026-01-15"), endDate: periodDate("2026-01-19"))])
         server.omitDiscovery = true
-        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other).run()
+        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other, syncCalendarDays: false).run()
         XCTAssertEqual(server.rows.count, 1)
         XCTAssertEqual(server.writes, 1)
         XCTAssertTrue(second.state.notes.isEmpty)
@@ -138,7 +366,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         let (second, _, _) = try fixture(); defer { cleanup(second) }
         let (other, clearOther) = periodTracker(); defer { clearOther() }
         other.replacePeriodEntries(with: [.init(startDate: periodDate("2026-01-15"), endDate: periodDate("2026-01-20"))])
-        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other).run()
+        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other, syncCalendarDays: false).run()
         XCTAssertEqual(other.periodHistorySyncNotes().first?.period?.endDay, "2026-01-19")
         XCTAssertEqual(second.state.notes.count, 1)
         XCTAssertTrue(second.state.notes[0].text.contains("2026-01-20"))
@@ -182,7 +410,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         let (second, _, _) = try fixture(); defer { cleanup(second) }
         let (other, clearOther) = periodTracker(); defer { clearOther() }
         other.replacePeriodEntries(with: [.init(startDate: periodDate("2026-01-15"), endDate: periodDate("2026-01-19"))])
-        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other).run()
+        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other, syncCalendarDays: false).run()
         XCTAssertEqual(other.periodEntries.count, 2)
         XCTAssertEqual(server.rows.count, 2)
         try await sync.run()
@@ -202,7 +430,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         do { try await sync.run(); XCTFail("Expected lost response") } catch { }
         XCTAssertEqual(server.rows.count, 1)
         let reloaded = CycleJournalStore(url: journal.url)
-        try await CycleNightscoutNoteSync(journal: reloaded, client: sync.client, isCurrent: { true }, periodTracker: tracker).run()
+        try await CycleNightscoutNoteSync(journal: reloaded, client: sync.client, isCurrent: { true }, periodTracker: tracker, syncCalendarDays: false).run()
         XCTAssertEqual(server.rows.count, 1)
         XCTAssertEqual(server.requests.filter { $0.httpMethod == "POST" }.count, 1)
         XCTAssertEqual(tracker.periodEntries.count, 1)
@@ -292,7 +520,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         let (second, _, _) = try fixture(); defer { cleanup(second) }
         let (other, clearOther) = periodTracker(zone: "America/Los_Angeles"); defer { clearOther() }
         server.add(text: "[Cycle] Restored context")
-        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other).run()
+        try await CycleNightscoutNoteSync(journal: second, client: sync.client, isCurrent: { true }, periodTracker: other, syncCalendarDays: false).run()
         XCTAssertEqual(other.periodHistorySyncNotes().first?.period, tracker.periodHistorySyncNotes().first?.period)
         XCTAssertEqual(other.periodHistorySyncNotes().first?.period?.startDay, "2026-01-15")
         XCTAssertEqual(second.state.notes.first?.cycleContext?.cycleDay, 1)
@@ -372,7 +600,7 @@ final class CycleNightscoutNoteSyncTests: XCTestCase {
         try journal.update { $0.noteSync = .init(enabledSourceID: configuration.sourceID) }
         let server = CycleNoteServer()
         let client = CycleNightscoutNoteClient(configuration: configuration, transport: server.send)
-        let sync = CycleNightscoutNoteSync(journal: journal, client: client, isCurrent: { true })
+        let sync = CycleNightscoutNoteSync(journal: journal, client: client, isCurrent: { true }, syncCalendarDays: false)
         return (journal, server, sync)
     }
     private func cleanup(_ journal: CycleJournalStore) { try? FileManager.default.removeItem(at: journal.url.deletingLastPathComponent()) }
