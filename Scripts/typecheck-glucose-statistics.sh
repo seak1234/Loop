@@ -31,6 +31,7 @@ extension UIColor {
     static var dashboardSurface: UIColor { .secondarySystemBackground }
     static var dashboardBorder: UIColor { .separator }
     static var dashboardGlucoseAccent: UIColor { .systemTeal }
+    static var dashboardInsulinAccent: UIColor { .systemOrange }
     static var dashboardGlucoseInRange: UIColor { .systemGreen }
     static var dashboardGlucoseInRangeInk: UIColor { .systemGreen }
     static var dashboardGlucoseBelowRange: UIColor { .systemRed }
