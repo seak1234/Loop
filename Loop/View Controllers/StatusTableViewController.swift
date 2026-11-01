@@ -1639,13 +1639,19 @@ final class StatusTableViewController: LoopChartsTableViewController {
     }
 
     private func updateBannerRow(animated: Bool) {
-        let warningWasVisible = tableView.numberOfRows(inSection: Section.alertWarning.rawValue) != 0
-        if !shouldShowBannerWarning && warningWasVisible {
-            tableView.deleteRows(at: [IndexPath(row: 0, section: Section.alertWarning.rawValue)], with: animated ? .top : .none)
-        } else if shouldShowBannerWarning && !warningWasVisible {
-            tableView.insertRows(at: [IndexPath(row: 0, section: Section.alertWarning.rawValue)], with: animated ? .top : .none)
-        } else {
-            tableView.reloadRows(at: [IndexPath(row: 0, section: Section.alertWarning.rawValue)], with: .none)
+        Self.updateBannerRow(in: tableView, section: Section.alertWarning.rawValue,
+                             isVisible: shouldShowBannerWarning, animated: animated)
+    }
+
+    static func updateBannerRow(in tableView: UITableView, section: Int, isVisible: Bool, animated: Bool) {
+        let warningWasVisible = tableView.numberOfRows(inSection: section) != 0
+        let indexPaths = [IndexPath(row: 0, section: section)]
+        if !isVisible && warningWasVisible {
+            tableView.deleteRows(at: indexPaths, with: animated ? .top : .none)
+        } else if isVisible && !warningWasVisible {
+            tableView.insertRows(at: indexPaths, with: animated ? .top : .none)
+        } else if isVisible {
+            tableView.reloadRows(at: indexPaths, with: .none)
         }
     }
 

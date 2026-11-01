@@ -7,6 +7,19 @@ import LoopCore
 #if canImport(UIKit)
 import UIKit
 import ImageIO
+
+@MainActor
+private final class BannerRowDataSource: NSObject, UITableViewDataSource {
+    var rowCount = 0
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        rowCount
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        UITableViewCell(style: .default, reuseIdentifier: nil)
+    }
+}
 #endif
 
 private final class UIRegressionProvider: CompanionProvider {
@@ -196,6 +209,52 @@ final class UIRegressionTests: XCTestCase {
     }
 
     #if canImport(UIKit)
+    func testDashboardBannerRefreshesWithAndWithoutAWarningRow() {
+        let dataSource = BannerRowDataSource()
+        let tableView = UITableView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), style: .plain)
+        tableView.dataSource = dataSource
+        tableView.reloadData()
+        XCTAssertEqual(tableView.numberOfRows(inSection: 0), 0)
+
+        // Bolus initiation, delivery and completion each refresh the banner, including
+        // when no warning is present. Exercise both refreshes and visibility changes.
+        for animated in [false, true] {
+            for isVisible in [false, false, true, true, false, false] {
+                dataSource.rowCount = isVisible ? 1 : 0
+                tableView.beginUpdates()
+                StatusTableViewController.updateBannerRow(in: tableView, section: 0,
+                                                         isVisible: isVisible, animated: animated)
+                tableView.endUpdates()
+                XCTAssertEqual(tableView.numberOfRows(inSection: 0), dataSource.rowCount)
+            }
+        }
+    }
+
+    func testBolusProgressCellHandlesAppearanceChangesBeforeOutletsAreConnected() {
+        let cell = BolusProgressTableViewCell(style: .default, reuseIdentifier: nil)
+        XCTAssertNil(cell.progressIndicator)
+        XCTAssertNil(cell.stopSquare)
+
+        cell.tintColor = .blue
+        cell.tintColorDidChange()
+        cell.traitCollectionDidChange(nil)
+    }
+
+    func testBolusProgressCellConfiguresColorsAndProgressAfterNibLoading() throws {
+        let nib = UINib(nibName: "BolusProgressTableViewCell", bundle: Bundle(for: BolusProgressTableViewCell.self))
+        let cell = try XCTUnwrap(nib.instantiate(withOwner: nil, options: nil).first as? BolusProgressTableViewCell)
+        cell.tintColor = .blue
+        cell.tintColorDidChange()
+        XCTAssertEqual(cell.progressIndicator.startColor, .blue)
+        XCTAssertEqual(cell.progressIndicator.endColor, .blue)
+        XCTAssertEqual(cell.stopSquare.backgroundColor, .blue)
+
+        cell.totalUnits = 1
+        cell.deliveredUnits = 0.25
+        XCTAssertEqual(cell.progressIndicator.progress, 0.25, accuracy: 0.001)
+        XCTAssertFalse(cell.progressLabel.text?.isEmpty ?? true)
+    }
+
     func testDashboardHeaderContainsBubbleBeforeAndAfterRefreshAndReuse() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

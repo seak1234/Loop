@@ -80,6 +80,11 @@ public class BolusProgressTableViewCell: UITableViewCell {
     }
 
     private func updateColors() {
+        // UIKit can notify us of tint/trait changes before the nib connects its outlets.
+        guard let progressIndicator = progressIndicator, let stopSquare = stopSquare else {
+            return
+        }
+
         progressIndicator.startColor = tintColor
         progressIndicator.endColor = tintColor
         stopSquare.backgroundColor = tintColor
